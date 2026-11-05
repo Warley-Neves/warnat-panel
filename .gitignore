@@ -1,0 +1,30 @@
+# Dependências
+node_modules/
+
+# Variáveis de ambiente e segredos
+.env
+*.env
+*.local
+*.secret
+
+# Credenciais do Google Cloud
+google-credentials.json
+automacao-agendamento-*.json
+*.key.json
+
+# Dados e memórias locais
+data/
+*.log
+npm-debug.log*
+
+# Arquivos temporários e de QR Code
+qr*.html
+qr*.png
+temp/
+tmp/
+scratch/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+Desktop.ini

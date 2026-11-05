@@ -1,0 +1,2339 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hub Multi-Tenant WhatsApp & Operações | Warnat Tech</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            },
+            dark: {
+              800: '#1e293b',
+              850: '#151f30',
+              900: '#0f172a',
+              950: '#090d16'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.85; transform: scale(0.98); }
+    }
+    .animate-pulse-slow {
+      animation: pulse-slow 3s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-dark-950 text-slate-100 min-h-screen font-sans antialiased flex flex-col">
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="fixed top-5 right-5 z-50 transform transition-all duration-300 translate-y-[-150%] opacity-0 bg-slate-800 border border-slate-700 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3">
+    <div id="toast-icon"></div>
+    <div id="toast-message" class="text-sm font-medium"></div>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- TELA DE LOGIN ADMINISTRATIVO (BLOQUEIO POR SENHA) -->
+  <!-- ============================================================================== -->
+  <div id="app-login" class="flex-1 flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-dark-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6 animate-in fade-in zoom-in duration-300">
+      
+      <div class="text-center space-y-3">
+        <div class="h-16 w-16 mx-auto rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-brand-500/20">
+          <i data-lucide="shield-lock" class="w-8 h-8"></i>
+        </div>
+        <div>
+          <h1 class="text-2xl font-extrabold text-white tracking-tight">WarNat Tech</h1>
+          <p class="text-xs text-brand-400 font-semibold tracking-wider uppercase mt-0.5">Painel Administrativo Multi-Tenant</p>
+        </div>
+        <p class="text-xs text-slate-400">Digite a senha mestra para gerenciar operações e escanear QR Codes de WhatsApp.</p>
+      </div>
+
+      <form id="form-login" onsubmit="submitAdminLogin(event)" class="space-y-4 pt-2">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Senha Administrativa</label>
+          <div class="relative flex items-center">
+            <div class="absolute left-3.5 text-slate-500">
+              <i data-lucide="key" class="w-4 h-4"></i>
+            </div>
+            <input type="password" id="input-password" required placeholder="Digite a senha administrativa..." class="w-full bg-dark-950 border border-slate-700 focus:border-brand-500 rounded-xl pl-10 pr-11 py-3 text-sm text-white focus:outline-none transition font-medium">
+            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3.5 text-slate-500 hover:text-slate-300">
+              <i id="eye-icon" data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-login" class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-brand-600/30 flex items-center justify-center space-x-2 transition">
+          <span>Acessar Painel</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+
+      <div class="text-center pt-2 border-t border-slate-800/80">
+        <p class="text-[11px] text-slate-500">
+          🔒 Senha definida no arquivo <code class="text-brand-400 font-mono">.env</code> (<span class="text-slate-400">PANEL_ADMIN_PASSWORD</span>)
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- DASHBOARD PRINCIPAL (PROTEGIDO) -->
+  <!-- ============================================================================== -->
+  <div id="app-dashboard" class="hidden flex-1 flex flex-col">
+    
+    <!-- HEADER -->
+    <header class="border-b border-slate-800 bg-dark-900/80 backdrop-blur sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+            <i data-lucide="shield-check" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-lg tracking-tight text-white">WarNat Tech</span>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20 font-semibold uppercase tracking-wider">Multi-Tenant</span>
+            </div>
+            <p class="text-xs text-slate-400">Painel de Operações & Contas WhatsApp Isoladas</p>
+          </div>
+        </div>
+
+        <!-- STATUS & ACTIONS -->
+        <div class="flex items-center space-x-3">
+          <div class="hidden sm:flex items-center space-x-3 text-xs bg-dark-850 border border-slate-800 px-3 py-1.5 rounded-lg">
+            <div class="flex items-center space-x-1.5" title="Evolution API WhatsApp Gateway">
+              <span id="badge-evolution" class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <span class="text-slate-300">Evolution API</span>
+            </div>
+            <span class="text-slate-600">|</span>
+            <div class="flex items-center space-x-1.5" title="Chatwoot CRM / Live Chat">
+              <span id="badge-chatwoot" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span class="text-slate-300">Chatwoot CRM</span>
+            </div>
+          </div>
+
+          <a href="http://localhost:3000" target="_blank" class="px-3 py-2 text-xs font-medium text-slate-200 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded-lg flex items-center space-x-1.5 transition">
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+            <span>Chatwoot</span>
+          </a>
+
+          <button onclick="openNewTenantModal()" class="px-3.5 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 rounded-lg shadow-lg shadow-brand-600/25 flex items-center space-x-1.5 transition">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>Nova Operação</span>
+          </button>
+
+          <!-- BOTÃO SAIR / LOGOUT -->
+          <button onclick="logoutAdmin()" title="Bloquear Painel / Sair" class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-950/20 border border-slate-800 hover:border-rose-900 rounded-lg transition">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
+
+      <!-- METRICS OVERVIEW -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Operações Ativas</span>
+            <div class="p-2 rounded-xl bg-brand-500/10 text-brand-400">
+              <i data-lucide="layers" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline space-x-2">
+            <span id="metric-tenants" class="text-3xl font-extrabold text-white">0</span>
+            <span class="text-xs text-slate-500">tenants</span>
+          </div>
+          <p class="mt-1 text-xs text-slate-400">Ambientes totalmente isolados</p>
+        </div>
+
+        <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">WhatsApp Online</span>
+            <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+              <i data-lucide="smartphone" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline space-x-2">
+            <span id="metric-connected" class="text-3xl font-extrabold text-emerald-400">0</span>
+            <span class="text-xs text-slate-500">conectados</span>
+          </div>
+          <p class="mt-1 text-xs text-slate-400">Comunicação em tempo real</p>
+        </div>
+
+        <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Isolamento Multi-Tenant</span>
+            <div class="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+              <i data-lucide="lock" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline space-x-2">
+            <span class="text-2xl font-bold text-purple-400">100% Blindado</span>
+          </div>
+          <p class="mt-1 text-xs text-slate-400">Zero mistura de conversas ou atendentes</p>
+        </div>
+
+        <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Segurança</span>
+            <div class="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+              <i data-lucide="key" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline space-x-2">
+            <span class="text-2xl font-bold text-amber-400">Protegido</span>
+          </div>
+          <p class="mt-1 text-xs text-slate-400">Sessão administrativa autenticada</p>
+        </div>
+      </section>
+
+      <!-- CRM & FUNIL DE VENDAS (WARNAT TECH) -->
+      <section class="space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <div class="flex items-center space-x-2">
+              <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                <i data-lucide="line-chart" class="w-5 h-5"></i>
+              </div>
+              <h2 class="text-lg font-bold text-white tracking-tight">Painel de Clientes Atendidos & Funil de Vendas</h2>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Acompanhamento de todos os clientes atendidos, visitas técnicas marcadas e instalações fechadas.
+            </p>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <button onclick="loadCrmDashboard()" class="px-3 py-1.5 text-xs text-slate-300 bg-dark-900 hover:bg-slate-800 border border-slate-800 rounded-lg flex items-center space-x-1.5 transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              <span>Atualizar Funil</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 CARDS DE MÉTRICAS DO FUNIL -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- CARD 1: TOTAL DE CLIENTES ATENDIDOS -->
+          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total de Clientes</span>
+              <div class="p-2 rounded-xl bg-brand-500/10 text-brand-400">
+                <i data-lucide="users" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-3 flex items-baseline space-x-2">
+              <span id="crm-metric-total" class="text-3xl font-extrabold text-white">0</span>
+              <span class="text-xs text-slate-500">atendidos</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-400">Todos os contatos recebidos</p>
+          </div>
+
+          <!-- CARD 2: VISITAS TÉCNICAS MARCADAS -->
+          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm border-l-4 border-l-sky-500">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-sky-400 uppercase tracking-wider">Visitas Marcadas</span>
+              <div class="p-2 rounded-xl bg-sky-500/10 text-sky-400">
+                <i data-lucide="calendar-check" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-3 flex items-baseline space-x-2">
+              <span id="crm-metric-visitas" class="text-3xl font-extrabold text-sky-400">0</span>
+              <span id="crm-conv-visitas" class="text-xs px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 font-semibold">0% conv.</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-400">Diagnóstico e orçamento no local</p>
+          </div>
+
+          <!-- CARD 3: FECHADOS PARA INSTALAÇÃO -->
+          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm border-l-4 border-l-emerald-500">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Instalações Fechadas</span>
+              <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                <i data-lucide="shield-check" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-3 flex items-baseline space-x-2">
+              <span id="crm-metric-instalacoes" class="text-3xl font-extrabold text-emerald-400">0</span>
+              <span id="crm-conv-instalacoes" class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">0% conv.</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-400">Serviço aprovado e agendado</p>
+          </div>
+
+          <!-- CARD 4: EM ATENDIMENTO / SONDAGEM -->
+          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm border-l-4 border-l-amber-500">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider">Em Sondagem</span>
+              <div class="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                <i data-lucide="message-square" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="mt-3 flex items-baseline space-x-2">
+              <span id="crm-metric-atendimento" class="text-3xl font-extrabold text-amber-400">0</span>
+              <span class="text-xs text-slate-500">em aberto</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-400">Negociando / tirando dúvidas</p>
+          </div>
+        </div>
+
+        <!-- FILTROS & TABELA DE CLIENTES ATENDIDOS -->
+        <div class="bg-dark-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+          <!-- Barra de Filtros por Etapa do Funil -->
+          <div class="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-dark-950/40">
+            <div class="flex items-center space-x-2">
+              <button onclick="filterCrmStatus('TODOS')" id="btn-filter-TODOS" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white transition">
+                Todos (<span id="count-filter-todos">0</span>)
+              </button>
+              <button onclick="filterCrmStatus('VISITA_MARCADA')" id="btn-filter-VISITA_MARCADA" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-dark-850 hover:bg-slate-800 text-sky-400 border border-sky-500/20 transition">
+                Visita Técnica (<span id="count-filter-visitas">0</span>)
+              </button>
+              <button onclick="filterCrmStatus('INSTALACAO_FECHADA')" id="btn-filter-INSTALACAO_FECHADA" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-dark-850 hover:bg-slate-800 text-emerald-400 border border-emerald-500/20 transition">
+                Instalação Fechada (<span id="count-filter-instalacoes">0</span>)
+              </button>
+              <button onclick="filterCrmStatus('EM_ATENDIMENTO')" id="btn-filter-EM_ATENDIMENTO" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-dark-850 hover:bg-slate-800 text-amber-400 border border-amber-500/20 transition">
+                Em Sondagem (<span id="count-filter-sondagem">0</span>)
+              </button>
+            </div>
+
+            <!-- Busca por nome ou telefone -->
+            <div class="relative w-full sm:w-64">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500"></i>
+              <input type="text" id="crm-search" oninput="searchCrmLeads()" placeholder="Buscar cliente ou telefone..." class="w-full bg-dark-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 font-medium">
+            </div>
+          </div>
+
+          <!-- Lista / Tabela dos Clientes -->
+          <div class="max-h-[420px] overflow-y-auto divide-y divide-slate-800/60" id="crm-leads-container">
+            <div class="py-12 text-center text-slate-500">
+              <i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2 text-brand-500"></i>
+              <p class="text-xs">Carregando funil de clientes...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HUMAN RESPONSE DELAY CARD -->
+      <section class="bg-dark-900 border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center space-x-4">
+          <div class="p-3 rounded-xl bg-amber-500/10 text-amber-400">
+            <i data-lucide="timer" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+              <span>Simulação de Atendimento Humano (Delay de Resposta)</span>
+              <span id="delay-status-badge" class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold">Ativo (2.0 min)</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Evita resposta robótica imediata. Acumula mensagens picadas do cliente e simula tempo de leitura e digitação real.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-3 w-full md:w-auto justify-end">
+          <div class="flex items-center space-x-2">
+            <label class="text-xs text-slate-400">Tempo de Espera:</label>
+            <select id="select-response-delay" onchange="updateResponseDelay(this.value)" class="bg-dark-950 border border-slate-700 text-xs text-white rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500 font-medium">
+              <option value="0">Instantâneo (0s - Robô)</option>
+              <option value="30">30 segundos</option>
+              <option value="60">1 minuto (60s)</option>
+              <option value="90">1.5 minutos (90s)</option>
+              <option value="120" selected>2 minutos (120s - Recomendado)</option>
+              <option value="180">3 minutos (180s)</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONTACTS AUTOMATION & MANUAL TAKEOVER SECTION -->
+      <section class="space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <div class="flex items-center space-x-2">
+              <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+                <i data-lucide="users" class="w-5 h-5 text-brand-400"></i>
+                <span>Contatos & Regras de Atendimento</span>
+              </h2>
+              <div class="flex items-center space-x-1.5 text-xs">
+                <span id="badge-auto-count" class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold" title="Atendidos automaticamente por IA">0 IA</span>
+                <span id="badge-manual-count" class="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-semibold" title="Atendimento manual exclusivo">0 Manual</span>
+              </div>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Por padrão, todos recebem resposta da IA. Marque um contato para <strong>"Apenas Humano"</strong> para silenciar o robô e responder você mesmo.
+            </p>
+          </div>
+
+          <div class="flex items-center space-x-2 self-start sm:self-auto">
+            <!-- Search bar -->
+            <div class="relative">
+              <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500"></i>
+              <input type="text" id="contacts-search" oninput="filterContactsList()" placeholder="Buscar nome ou telefone..." class="bg-dark-900 border border-slate-800 text-xs text-white rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:border-brand-500 w-44 sm:w-56 font-medium">
+            </div>
+
+            <button onclick="openAddManualContactModal()" class="px-3 py-1.5 text-xs text-white bg-rose-600 hover:bg-rose-500 rounded-lg flex items-center space-x-1.5 font-semibold shadow-md shadow-rose-600/20 transition">
+              <i data-lucide="user-x" class="w-3.5 h-3.5"></i>
+              <span>+ Silenciar Contato</span>
+            </button>
+
+            <button onclick="loadContacts()" title="Atualizar contatos" class="p-1.5 text-slate-400 hover:text-white bg-dark-900 hover:bg-slate-800 border border-slate-800 rounded-lg transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Contacts Table / List Container -->
+        <div class="bg-dark-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+          <div class="max-h-[360px] overflow-y-auto divide-y divide-slate-800/60" id="contacts-container">
+            <div class="py-12 text-center text-slate-500">
+              <i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto mb-2 text-brand-500"></i>
+              <p class="text-xs">Carregando contatos...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================================== -->
+      <!-- CONFIGURAÇÕES DO TENANT: HORÁRIOS, JANELAS DE VISITA, ENDEREÇO BASE E ASSISTENTE -->
+      <!-- ============================================================================== -->
+      <section id="settings-section" class="space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+              <i data-lucide="sliders-horizontal" class="w-5 h-5 text-brand-400"></i>
+              <span>Configurações da Assistente &amp; Operação</span>
+              <span id="st-badge-db" class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-semibold">banco: ...</span>
+              <span id="st-badge-open" class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-semibold">...</span>
+            </h2>
+            <p class="text-xs text-slate-400">Tudo é gravado no PostgreSQL (Docker) e passa a valer na hora, sem reiniciar. Nada de horário ou texto fixo no código.</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <label class="text-xs text-slate-400">Tenant:</label>
+            <select id="st-tenant" onchange="loadTenantSettings(this.value)" class="bg-dark-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"></select>
+            <button onclick="loadSettingsPanel()" class="px-3 py-1.5 text-xs text-slate-300 bg-dark-850 hover:bg-slate-800 border border-slate-800 rounded-lg flex items-center space-x-1.5 transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Recarregar</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="st-engine-note" class="hidden text-xs px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300"></div>
+        <div id="st-errors" class="hidden text-xs px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 space-y-1"></div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+
+          <!-- 1. IDENTIDADE E MENSAGENS -->
+          <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+            <div class="flex items-center space-x-2">
+              <i data-lucide="bot" class="w-4 h-4 text-emerald-400"></i>
+              <h3 class="text-sm font-bold text-white">Identidade e mensagens da assistente</h3>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-300 mb-1">Nome da assistente</label>
+                <input id="st-assistantName" type="text" maxlength="40" class="w-full bg-dark-950 border border-slate-700 focus:border-brand-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-300 mb-1">Nome da empresa</label>
+                <input id="st-companyName" type="text" maxlength="80" class="w-full bg-dark-950 border border-slate-700 focus:border-brand-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Saudação inicial <span class="text-slate-500 font-normal">(1ª mensagem quando o cliente só cumprimenta)</span></label>
+              <textarea id="st-greetingMessage" rows="5" class="w-full bg-dark-950 border border-slate-700 focus:border-brand-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"></textarea>
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Linha de apresentação <span class="text-slate-500 font-normal">(prefixo quando o cliente já chega com uma dúvida específica)</span></label>
+              <textarea id="st-disclosureLine" rows="2" class="w-full bg-dark-950 border border-slate-700 focus:border-brand-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"></textarea>
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Transferência para atendimento humano</label>
+              <textarea id="st-humanHandoffMessage" rows="2" class="w-full bg-dark-950 border border-slate-700 focus:border-brand-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"></textarea>
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Mensagem de fora do expediente</label>
+              <textarea id="st-outOfHoursMessage" rows="3" class="w-full bg-dark-950 border border-slate-700 focus:border-brand-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"></textarea>
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Mensagem de abertura do expediente <span class="text-slate-500 font-normal">(enviada a quem escreveu fora do horário)</span></label>
+              <textarea id="st-openingMessage" rows="3" class="w-full bg-dark-950 border border-slate-700 focus:border-brand-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none"></textarea>
+            </div>
+
+            <div class="text-[11px] text-slate-400 bg-dark-850 border border-slate-800 rounded-lg p-3 space-y-1">
+              <p class="font-semibold text-slate-300">Variáveis disponíveis:</p>
+              <p><code class="text-brand-400">{assistente}</code> <code class="text-brand-400">{empresa}</code> <code class="text-brand-400">{cliente}</code> <code class="text-brand-400">{horarios}</code> <code class="text-brand-400">{proxima_abertura}</code> <code class="text-brand-400">{saudacao}</code> <code class="text-brand-400">{endereco_base}</code></p>
+              <p class="text-amber-300">Transparência obrigatória: saudação, apresentação, fora do expediente e abertura precisam conter "assistente virtual"; saudação e apresentação precisam oferecer falar com uma pessoa da equipe.</p>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-[11px] font-semibold text-slate-300">Pré-visualização da saudação (como o cliente verá)</label>
+                <button onclick="previewSettings()" class="text-[11px] text-brand-400 hover:text-brand-300 font-semibold">Atualizar prévia</button>
+              </div>
+              <div id="st-preview-greeting" class="whitespace-pre-wrap text-sm bg-emerald-500/5 border border-emerald-500/20 text-emerald-100 rounded-xl p-3"></div>
+            </div>
+          </div>
+
+          <div class="space-y-5">
+            <!-- 2. HORARIO DE ATENDIMENTO -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="clock" class="w-4 h-4 text-sky-400"></i>
+                <h3 class="text-sm font-bold text-white">Horário de atendimento da automação</h3>
+              </div>
+              <p class="text-[11px] text-slate-400">Fora desses dias/horários a assistente avisa que está fora do expediente e retoma o atendimento quando abrir. Conversas já em andamento seguem até marcar a visita.</p>
+              <div class="flex items-center space-x-2">
+                <label class="text-[11px] text-slate-400">Fuso horário</label>
+                <input id="st-timezone" type="text" class="bg-dark-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white w-48 focus:outline-none focus:border-brand-500">
+              </div>
+              <div id="st-hours-rows" class="space-y-1.5"></div>
+              <p id="st-live-hours" class="text-[11px] text-slate-400"></p>
+            </div>
+
+            <!-- 3. JANELAS DE AGENDAMENTO -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <i data-lucide="calendar-check" class="w-4 h-4 text-purple-400"></i>
+                  <h3 class="text-sm font-bold text-white">Janelas de agendamento (visitas técnicas e instalações)</h3>
+                </div>
+                <button onclick="addBookingWindow()" class="px-2.5 py-1 text-[11px] font-semibold text-white bg-purple-600 hover:bg-purple-500 rounded-lg">+ Janela</button>
+              </div>
+              <p class="text-[11px] text-slate-400">A assistente só sugere e só marca dentro destas janelas (e apenas se o horário estiver livre no Google Calendar). Os horários são gerados automaticamente: duração da visita + intervalo.</p>
+              <div id="st-windows-rows" class="space-y-1.5"></div>
+              <div class="grid grid-cols-3 gap-3 pt-1">
+                <div>
+                  <label class="block text-[11px] text-slate-400 mb-1">Duração da visita (min)</label>
+                  <input id="st-visitDurationMinutes" type="number" min="15" max="480" class="w-full bg-dark-950 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-brand-500">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-400 mb-1">Intervalo entre visitas (min)</label>
+                  <input id="st-bufferMinutes" type="number" min="0" max="240" class="w-full bg-dark-950 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-brand-500">
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-400 mb-1">Antecedência mínima (h)</label>
+                  <input id="st-minLeadHours" type="number" min="0" max="168" class="w-full bg-dark-950 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-brand-500">
+                </div>
+              </div>
+              <p id="st-live-booking" class="text-[11px] text-slate-400"></p>
+            </div>
+
+            <!-- 4. ENDEREÇO BASE -->
+            <div class="bg-dark-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <div class="flex items-center space-x-2">
+                <i data-lucide="map-pin" class="w-4 h-4 text-rose-400"></i>
+                <h3 class="text-sm font-bold text-white">Endereço base / localização de partida</h3>
+              </div>
+              <input id="st-baseAddress" type="text" maxlength="250" placeholder="Rua, número, bairro, cidade/UF" class="w-full bg-dark-950 border border-slate-700 focus:border-brand-500 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+              <p class="text-[11px] text-slate-400">Usado como referência de atendimento: aparece na descrição de cada evento do Google Calendar e no contexto da assistente.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between bg-dark-900 border border-slate-800 rounded-2xl p-4">
+          <div class="text-[11px] text-slate-400" id="st-meta">—</div>
+          <button id="st-save-btn" onclick="saveTenantSettings()" class="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-lg shadow-emerald-600/20 flex items-center space-x-2 transition">
+            <i data-lucide="save" class="w-4 h-4"></i><span>Salvar e aplicar agora</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- TENANTS LIST SECTION -->
+      <section class="space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+              <span>Operações & Contas WhatsApp</span>
+              <span id="tenants-count-badge" class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-semibold">0</span>
+            </h2>
+            <p class="text-xs text-slate-400">Cada cartão representa uma operação independente com seu próprio WhatsApp e CRM</p>
+          </div>
+          <button onclick="loadTenants()" class="px-3 py-1.5 text-xs text-slate-300 bg-dark-850 hover:bg-slate-800 border border-slate-800 rounded-lg flex items-center space-x-1.5 transition">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Atualizar Lista</span>
+          </button>
+        </div>
+
+        <!-- CARDS CONTAINER -->
+        <div id="tenants-container" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <!-- Renderizado dinamicamente via JavaScript -->
+          <div class="col-span-full py-12 text-center text-slate-500">
+            <i data-lucide="loader" class="w-8 h-8 animate-spin mx-auto mb-2 text-brand-500"></i>
+            <p class="text-sm">Carregando operações...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ARCHITECTURE EXPLANATION CALLOUT -->
+      <section class="bg-gradient-to-r from-dark-900 to-dark-850 border border-slate-800 rounded-2xl p-6">
+        <div class="flex items-start space-x-4">
+          <div class="p-3 bg-brand-500/10 text-brand-400 rounded-xl flex-shrink-0">
+            <i data-lucide="shield-alert" class="w-6 h-6"></i>
+          </div>
+          <div class="space-y-2">
+            <h3 class="text-sm font-bold text-white">Como é garantido que os atendimentos NUNCA se misturam?</h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Nossa arquitetura foi desenhada com <strong>isolamento estrito em 3 camadas</strong>:
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+              <div class="bg-dark-950/60 p-3 rounded-xl border border-slate-800/80">
+                <span class="text-xs font-bold text-brand-400 flex items-center space-x-1">
+                  <i data-lucide="database" class="w-3.5 h-3.5 mr-1"></i> 1. Banco de Dados
+                </span>
+                <p class="text-[11px] text-slate-400 mt-1">
+                  No Chatwoot, cada operação é uma <strong>Account (Tenant)</strong> distinta. Todas as tabelas são filtradas por <code class="text-brand-300">account_id</code> no PostgreSQL.
+                </p>
+              </div>
+              <div class="bg-dark-950/60 p-3 rounded-xl border border-slate-800/80">
+                <span class="text-xs font-bold text-emerald-400 flex items-center space-x-1">
+                  <i data-lucide="hard-drive" class="w-3.5 h-3.5 mr-1"></i> 2. Sessão WhatsApp
+                </span>
+                <p class="text-[11px] text-slate-400 mt-1">
+                  Na Evolution API, cada número roda como um processo isolado com sua própria pasta de tokens e chaves criptográficas.
+                </p>
+              </div>
+              <div class="bg-dark-950/60 p-3 rounded-xl border border-slate-800/80">
+                <span class="text-xs font-bold text-purple-400 flex items-center space-x-1">
+                  <i data-lucide="git-fork" class="w-3.5 h-3.5 mr-1"></i> 3. Webhooks Dedicados
+                </span>
+                <p class="text-[11px] text-slate-400 mt-1">
+                  Quando um atendente envia uma mensagem, o webhook é roteado especificamente para a instância daquela operação.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- MODAL: NOVO TENANT / OPERAÇÃO -->
+  <!-- ============================================================================== -->
+  <div id="modal-new-tenant" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 space-y-6 my-8 animate-in fade-in zoom-in duration-200">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div class="flex items-center space-x-2.5">
+          <div class="p-2 rounded-xl bg-brand-500/10 text-brand-400">
+            <i data-lucide="building-2" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">Criar Nova Operação (Tenant)</h3>
+            <p class="text-xs text-slate-400">Provisiona ambiente isolado no WhatsApp e Chatwoot</p>
+          </div>
+        </div>
+        <button onclick="closeNewTenantModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-new-tenant" onsubmit="submitNewTenant(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Nome da Operação / Empresa *</label>
+          <input type="text" id="tenant-name" required placeholder="Ex: Clínica Odontológica Sorriso" oninput="autoGenerateSlug(this.value)" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Identificador Técnico (Slug da Instância) *</label>
+          <div class="flex items-center bg-dark-950 border border-slate-700 rounded-xl px-3.5 py-2.5">
+            <span class="text-xs text-slate-500 mr-1.5">instancia:</span>
+            <input type="text" id="tenant-slug" required placeholder="clinica-sorriso" class="bg-transparent text-sm text-brand-400 focus:outline-none flex-1 font-mono">
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Apenas letras minúsculas, números e traços.</p>
+        </div>
+
+        <!-- Atendente Dedicado (Opcional) -->
+        <div class="border-t border-slate-800/80 pt-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+              <i data-lucide="user-check" class="w-4 h-4 text-emerald-400"></i>
+              <span>Atendente Exclusivo da Operação (Opcional)</span>
+            </span>
+            <span class="text-[10px] text-slate-500">Login Chatwoot</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">E-mail do Atendente</label>
+              <input type="email" id="tenant-agent-email" placeholder="atendente@clinica.com" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Senha de Acesso</label>
+              <input type="password" id="tenant-agent-password" placeholder="Senha123!@#" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+            </div>
+          </div>
+          <p class="text-[11px] text-emerald-500/90 bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-lg">
+            🔒 Esse atendente só terá acesso às conversas dessa operação e não verá dados de outros tenants.
+          </p>
+        </div>
+
+        <!-- Automação IA / Typebot (Opcional) -->
+        <div class="border-t border-slate-800/80 pt-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+              <i data-lucide="bot" class="w-4 h-4 text-amber-400"></i>
+              <span>Automação IA (Typebot) (Opcional)</span>
+            </span>
+            <span class="text-[10px] text-slate-500">Bot Conversacional</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Slug do Bot no Typebot</label>
+              <input type="text" id="tenant-typebot-slug" placeholder="meu-bot-clinica" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">URL do Servidor Typebot</label>
+              <input type="text" id="tenant-typebot-url" value="https://typebot.co" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-4 flex items-center justify-end space-x-3 border-t border-slate-800">
+          <button type="button" onclick="closeNewTenantModal()" class="px-4 py-2 text-xs font-medium text-slate-300 hover:text-white bg-dark-800 hover:bg-slate-700 rounded-xl transition">
+            Cancelar
+          </button>
+          <button type="submit" id="btn-submit-tenant" class="px-5 py-2.5 text-xs font-bold text-white bg-brand-600 hover:bg-brand-500 rounded-xl shadow-lg shadow-brand-600/30 flex items-center space-x-2 transition">
+            <span>Criar Operação & Gerar QR Code</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- MODAL: LEITOR DE QR CODE EM TEMPO REAL -->
+  <!-- ============================================================================== -->
+  <div id="modal-qrcode" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl p-6 text-center space-y-5 animate-in fade-in zoom-in duration-200">
+      
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="text-left">
+          <h3 class="text-base font-bold text-white" id="qr-modal-title">Conectar WhatsApp</h3>
+          <p class="text-xs text-slate-400" id="qr-modal-subtitle">Instância: <span id="qr-modal-slug" class="font-mono text-brand-400"></span></p>
+        </div>
+        <button onclick="closeQrModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div id="qr-display-area" class="flex flex-col items-center justify-center py-4 space-y-4">
+        <div class="p-3 bg-white rounded-2xl shadow-xl flex items-center justify-center relative min-w-[240px] min-h-[240px]">
+          <img id="qr-image" src="" alt="QR Code WhatsApp" class="w-56 h-56 object-contain hidden">
+          
+          <div id="qr-loading" class="flex flex-col items-center justify-center text-slate-800 space-y-2">
+            <i data-lucide="loader" class="w-10 h-10 animate-spin text-brand-600"></i>
+            <span class="text-xs font-semibold">Gerando QR Code...</span>
+          </div>
+
+          <div id="qr-success" class="hidden flex flex-col items-center justify-center text-emerald-600 space-y-2 py-6">
+            <div class="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-md">
+              <i data-lucide="check" class="w-10 h-10 stroke-[3]"></i>
+            </div>
+            <span class="text-sm font-bold text-slate-800">Conectado com Sucesso!</span>
+            <span id="qr-success-phone" class="text-xs font-mono text-slate-600"></span>
+          </div>
+        </div>
+
+        <div id="qr-instructions" class="text-xs text-slate-400 space-y-1">
+          <p class="font-medium text-slate-200">1. Abra o WhatsApp no celular da operação</p>
+          <p>2. Toque em <strong>Configurações</strong> &gt; <strong>Aparelhos Conectados</strong></p>
+          <p>3. Aponte a câmera para o QR Code acima</p>
+        </div>
+
+        <div id="pairing-code-area" class="hidden text-xs bg-dark-950 border border-slate-800 px-4 py-2.5 rounded-xl w-full">
+          <span class="text-slate-400">Código de Conexão: </span>
+          <span id="pairing-code-val" class="font-mono text-brand-400 font-bold tracking-widest text-sm"></span>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-center pt-2">
+        <button onclick="closeQrModal()" class="px-6 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-dark-800 hover:bg-slate-700 rounded-xl transition">
+          Fechar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- MODAL: CONFIGURAÇÃO TYPEBOT (IA) -->
+  <!-- ============================================================================== -->
+  <div id="modal-typebot" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in duration-200">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="bot" class="w-5 h-5 text-amber-400"></i>
+          <h3 class="text-base font-bold text-white">Configurar IA / Typebot</h3>
+        </div>
+        <button onclick="closeTypebotModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-typebot" onsubmit="submitTypebotConfig(event)" class="space-y-4">
+        <input type="hidden" id="tb-modal-slug">
+
+        <div class="flex items-center justify-between bg-dark-950 p-3 rounded-xl border border-slate-800">
+          <div>
+            <span class="text-xs font-semibold text-white block">Ativar Atendente Inteligente</span>
+            <span class="text-[11px] text-slate-400">O bot responderá mensagens no WhatsApp</span>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="tb-modal-enabled" class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+          </label>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Slug do Bot no Typebot</label>
+          <input type="text" id="tb-modal-bot-slug" placeholder="ex: my-typebot-elhhw7i" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 font-mono">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">URL do Typebot</label>
+          <input type="text" id="tb-modal-url" value="https://typebot.co" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Tempo de Espera (Debounce em segundos)</label>
+          <input type="number" id="tb-modal-debounce" value="10" min="1" max="60" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          <p class="text-[10px] text-slate-500 mt-1">Tempo para aguardar o cliente enviar mensagens consecutivas antes do bot responder.</p>
+        </div>
+
+        <div class="pt-3 flex items-center justify-end space-x-2 border-t border-slate-800">
+          <button type="button" onclick="closeTypebotModal()" class="px-4 py-2 text-xs font-medium text-slate-300 hover:text-white bg-dark-800 rounded-xl">Cancelar</button>
+          <button type="submit" class="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 rounded-xl shadow-lg transition">Salvar Configuração</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADICIONAR CONTATO MANUAL EXCLUSIVO -->
+  <div id="modal-add-manual" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center space-x-2.5">
+          <div class="p-2 rounded-xl bg-rose-500/10 text-rose-400">
+            <i data-lucide="user-x" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">Silenciar Automação para Contato</h3>
+            <p class="text-xs text-slate-400">Apenas você poderá responder este contato.</p>
+          </div>
+        </div>
+        <button onclick="closeAddManualContactModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form onsubmit="submitAddManualContact(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Telefone WhatsApp (com DDD)</label>
+          <input type="text" id="manual-phone" required placeholder="Ex: 31 98357-9692 ou 553183579692" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-rose-500 font-medium">
+          <p class="text-[11px] text-slate-500 mt-1">Pode digitar com ou sem 55, com ou sem traços.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Nome ou Identificação (Opcional)</label>
+          <input type="text" id="manual-name" placeholder="Ex: Cliente VIP / Fornecedor / Carlos" class="w-full bg-dark-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-rose-500 font-medium">
+        </div>
+
+        <div class="pt-2 flex items-center justify-end space-x-2.5">
+          <button type="button" onclick="closeAddManualContactModal()" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition">
+            Cancelar
+          </button>
+          <button type="submit" id="btn-save-manual" class="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl shadow-lg shadow-rose-600/30 flex items-center space-x-1.5 transition">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Salvar Modo Manual</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR OBSERVAÇÕES & STATUS DO LEAD -->
+  <div id="modal-edit-lead" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center space-x-2.5">
+          <div class="p-2 rounded-xl bg-brand-500/10 text-brand-400">
+            <i data-lucide="edit-3" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white" id="modal-lead-title">Detalhes do Cliente</h3>
+            <p class="text-xs text-slate-400" id="modal-lead-subtitle">Atualizar status ou anotações</p>
+          </div>
+        </div>
+        <button onclick="closeEditLeadModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <input type="hidden" id="edit-lead-jid">
+      
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Status no Funil</label>
+        <select id="edit-lead-status" class="w-full bg-dark-950 border border-slate-700 text-xs text-white rounded-xl px-3 py-2.5 focus:outline-none focus:border-brand-500 font-medium">
+          <option value="EM_ATENDIMENTO">🟡 Em Atendimento / Sondagem</option>
+          <option value="VISITA_MARCADA">🔵 Visita Técnica Agendada</option>
+          <option value="INSTALACAO_FECHADA">🟢 Fechado para Instalação de Câmeras</option>
+          <option value="RECUSADO">⚪ Fora de Escopo / Cancelado</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Nome do Cliente</label>
+        <input type="text" id="edit-lead-name" class="w-full bg-dark-950 border border-slate-700 text-xs text-white rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-brand-500 font-medium">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Observações do Projeto / Visita</label>
+        <textarea id="edit-lead-notes" rows="4" placeholder="Ex: Cliente quer kit 4 câmeras HD no Barreiro, orçamento de R$ 1.850 aprovado." class="w-full bg-dark-950 border border-slate-700 text-xs text-white rounded-xl p-3 focus:outline-none focus:border-brand-500 font-medium"></textarea>
+      </div>
+
+      <div class="flex items-center justify-end space-x-2.5 pt-2 border-t border-slate-800">
+        <button type="button" onclick="closeEditLeadModal()" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white rounded-xl transition">
+          Cancelar
+        </button>
+        <button type="button" onclick="saveLeadEdit()" id="btn-save-lead-edit" class="px-4 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-500 rounded-xl shadow-lg shadow-brand-600/30 transition flex items-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Salvar Alterações</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- JAVASCRIPT LOGIC (COM AUTENTICAÇÃO) -->
+  <!-- ============================================================================== -->
+  <script>
+    const TOKEN_KEY = 'warnat_admin_session_token';
+    let activeQrPolling = null;
+
+    // Toast helper
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const msg = document.getElementById('toast-message');
+      const icon = document.getElementById('toast-icon');
+
+      msg.innerText = message;
+      if (type === 'success') {
+        icon.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>';
+      } else {
+        icon.innerHTML = '<i data-lucide="alert-triangle" class="w-5 h-5 text-rose-400"></i>';
+      }
+      lucide.createIcons();
+
+      toast.classList.remove('translate-y-[-150%]', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.add('translate-y-[-150%]', 'opacity-0');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+      }, 4000);
+    }
+
+    // Toggle Ver Senha
+    function togglePasswordVisibility() {
+      const input = document.getElementById('input-password');
+      const icon = document.getElementById('eye-icon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.setAttribute('data-lucide', 'eye-off');
+      } else {
+        input.type = 'password';
+        icon.setAttribute('data-lucide', 'eye');
+      }
+      lucide.createIcons();
+    }
+
+    // Fetch com Autenticação Automática
+    async function fetchWithAuth(url, options = {}) {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(url, { ...options, headers });
+
+      // Se der 401 (Sessão Expirada ou Incorreta)
+      if (res.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        showLoginScreen();
+        throw new Error('Sessão expirada. Por favor, faça login novamente.');
+      }
+
+      return res;
+    }
+
+    // Exibir Telas
+    function showLoginScreen() {
+      document.getElementById('app-login').classList.remove('hidden');
+      document.getElementById('app-dashboard').classList.add('hidden');
+      document.getElementById('input-password').value = '';
+      document.getElementById('input-password').focus();
+      lucide.createIcons();
+    }
+
+    function showDashboardScreen() {
+      document.getElementById('app-login').classList.add('hidden');
+      document.getElementById('app-dashboard').classList.remove('hidden');
+      lucide.createIcons();
+      checkStatus();
+      loadTenants();
+      loadResponseDelay();
+      loadContacts();
+      loadCrmDashboard();
+      loadSettingsPanel();
+    }
+
+    // Login com Senha Administrativa
+    async function submitAdminLogin(event) {
+      event.preventDefault();
+      const btn = document.getElementById('btn-login');
+      const password = document.getElementById('input-password').value;
+
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin mr-1"></i> Verificando...';
+      lucide.createIcons();
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Senha incorreta!');
+        }
+
+        localStorage.setItem(TOKEN_KEY, data.token);
+        showToast('Acesso administrativo concedido!', 'success');
+        showDashboardScreen();
+
+      } catch (e) {
+        showToast(e.message, 'error');
+        const formBox = document.getElementById('form-login');
+        formBox.classList.add('animate-bounce');
+        setTimeout(() => formBox.classList.remove('animate-bounce'), 800);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Acessar Painel</span> <i data-lucide="arrow-right" class="w-4 h-4"></i>';
+        lucide.createIcons();
+      }
+    }
+
+    // Logout / Bloquear
+    function logoutAdmin() {
+      localStorage.removeItem(TOKEN_KEY);
+      showToast('Painel bloqueado com sucesso!', 'success');
+      showLoginScreen();
+    }
+
+    // Auto slug generator
+    function autoGenerateSlug(text) {
+      const slugInput = document.getElementById('tenant-slug');
+      if (slugInput && !slugInput.dataset.manual) {
+        slugInput.value = text
+          .toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+      }
+    }
+
+    document.getElementById('tenant-slug').addEventListener('input', () => {
+      document.getElementById('tenant-slug').dataset.manual = 'true';
+    });
+
+    // Check System Status
+    async function checkStatus() {
+      try {
+        const res = await fetchWithAuth('/api/status');
+        const data = await res.json();
+        
+        const bEvo = document.getElementById('badge-evolution');
+        const bCw = document.getElementById('badge-chatwoot');
+
+        if (data.evolution) {
+          bEvo.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-ping';
+        } else {
+          bEvo.className = 'w-2 h-2 rounded-full bg-rose-500';
+        }
+
+        if (data.chatwoot) {
+          bCw.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        } else {
+          bCw.className = 'w-2 h-2 rounded-full bg-rose-500';
+        }
+      } catch (e) {
+        console.error('Status check error:', e);
+      }
+    }
+
+    // Gerenciador de Tempo de Resposta Humanizado
+    async function loadResponseDelay() {
+      try {
+        const res = await fetchWithAuth('/api/settings/response-delay');
+        if (!res.ok) return;
+        const data = await res.json();
+        const select = document.getElementById('select-response-delay');
+        const badge = document.getElementById('delay-status-badge');
+        if (select && data.delaySeconds !== undefined) {
+          select.value = data.delaySeconds.toString();
+          if (!['0', '30', '60', '90', '120', '180'].includes(data.delaySeconds.toString())) {
+            const opt = document.createElement('option');
+            opt.value = data.delaySeconds;
+            opt.textContent = `${data.delaySeconds}s (${data.delayMinutes} min)`;
+            opt.selected = true;
+            select.appendChild(opt);
+          }
+        }
+        if (badge && data.delaySeconds !== undefined) {
+          if (data.delaySeconds === 0) {
+            badge.className = 'px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-xs font-semibold';
+            badge.textContent = 'Instantâneo (0s - Robô)';
+          } else {
+            badge.className = 'px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold';
+            badge.textContent = `Ativo (${data.delayMinutes} min)`;
+          }
+        }
+        lucide.createIcons();
+      } catch (e) {
+        console.warn('Erro ao carregar delay:', e);
+      }
+    }
+
+    async function updateResponseDelay(seconds) {
+      try {
+        const res = await fetchWithAuth('/api/settings/response-delay', {
+          method: 'POST',
+          body: JSON.stringify({ delaySeconds: Number(seconds) })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          loadResponseDelay();
+        } else {
+          showToast(data.error || 'Erro ao atualizar tempo de resposta', 'error');
+        }
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    }
+
+    // ==============================================================================
+    // GERENCIADOR DE CONTATOS (AUTOMAÇÃO IA vs ATENDIMENTO MANUAL EXCLUSIVO)
+    // ==============================================================================
+    let allContactsData = [];
+
+    async function loadContacts() {
+      const container = document.getElementById('contacts-container');
+      if (!container) return;
+
+      try {
+        const res = await fetchWithAuth('/api/contacts');
+        if (!res.ok) return;
+        const data = await res.json();
+        allContactsData = data.contacts || [];
+
+        const autoEl = document.getElementById('badge-auto-count');
+        const manualEl = document.getElementById('badge-manual-count');
+        if (autoEl) autoEl.textContent = `${data.autoCount || 0} IA Ativa`;
+        if (manualEl) manualEl.textContent = `${data.manualCount || 0} Apenas Você`;
+
+        renderContacts(allContactsData);
+      } catch (e) {
+        console.warn('Erro ao carregar contatos:', e);
+      }
+    }
+
+    function renderContacts(list) {
+      const container = document.getElementById('contacts-container');
+      if (!container) return;
+
+      if (!list || list.length === 0) {
+        container.innerHTML = `
+          <div class="py-12 text-center text-slate-500 text-xs">
+            <i data-lucide="user-check" class="w-8 h-8 mx-auto mb-2 text-slate-600"></i>
+            Nenhum contato encontrado. Por padrão, todos os novos contatos receberão resposta da IA.
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = list.map(c => {
+        const isManual = !!c.isManual;
+        const avatar = c.profilePicUrl 
+          ? `<img src="${c.profilePicUrl}" class="w-9 h-9 rounded-full object-cover border border-slate-700 flex-shrink-0" alt="">`
+          : `<div class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs flex-shrink-0">${(c.name || c.phone || 'W').charAt(0).toUpperCase()}</div>`;
+
+        const statusBadge = isManual
+          ? `<span class="px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-semibold flex items-center space-x-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+              <span>Apenas Humano (Robô Pausado)</span>
+            </span>`
+          : `<span class="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold flex items-center space-x-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Automação IA Ativa</span>
+            </span>`;
+
+        const safeName = (c.name || c.phone || '').replace(/'/g, "\\'");
+        const toggleButton = isManual
+          ? `<button onclick="toggleContactMode('${c.jid}', false, '${encodeURIComponent(c.name || '')}')" class="px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:text-white bg-emerald-950/40 hover:bg-emerald-600 border border-emerald-800/60 rounded-xl flex items-center space-x-1.5 transition">
+              <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+              <span>Reativar IA</span>
+            </button>`
+          : `<button onclick="toggleContactMode('${c.jid}', true, '${encodeURIComponent(c.name || '')}')" class="px-3 py-1.5 text-xs font-semibold text-rose-400 hover:text-white bg-rose-950/30 hover:bg-rose-600 border border-rose-800/60 rounded-xl flex items-center space-x-1.5 transition">
+              <i data-lucide="user-x" class="w-3.5 h-3.5"></i>
+              <span>Pausar Robô (Atender Você)</span>
+            </button>`;
+
+        return `
+          <div class="p-3.5 hover:bg-dark-850/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition">
+            <div class="flex items-center space-x-3 min-w-0">
+              ${avatar}
+              <div class="min-w-0">
+                <div class="flex items-center space-x-2">
+                  <span class="text-xs font-bold text-white truncate">${c.name || c.phone}</span>
+                  <span class="text-[11px] text-slate-400 font-mono">${c.phone}</span>
+                </div>
+                <p class="text-[11px] text-slate-400 truncate max-w-lg mt-0.5">${c.lastMessage || 'Sem mensagens recentes'}</p>
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-2 self-end sm:self-auto flex-shrink-0">
+              ${statusBadge}
+              ${toggleButton}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function filterContactsList() {
+      const query = (document.getElementById('contacts-search')?.value || '').toLowerCase().trim();
+      if (!query) {
+        renderContacts(allContactsData);
+        return;
+      }
+      const filtered = allContactsData.filter(c => 
+        (c.name && c.name.toLowerCase().includes(query)) ||
+        (c.phone && c.phone.includes(query)) ||
+        (c.lastMessage && c.lastMessage.toLowerCase().includes(query))
+      );
+      renderContacts(filtered);
+    }
+
+    async function toggleContactMode(jid, manual, encodedName) {
+      const name = decodeURIComponent(encodedName || '');
+      try {
+        const res = await fetchWithAuth('/api/contacts/toggle', {
+          method: 'POST',
+          body: JSON.stringify({ jid, manual, name })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          loadContacts();
+        } else {
+          showToast(data.error || 'Erro ao alterar contato', 'error');
+        }
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    }
+
+    function openAddManualContactModal() {
+      document.getElementById('manual-phone').value = '';
+      document.getElementById('manual-name').value = '';
+      document.getElementById('modal-add-manual').classList.remove('hidden');
+      document.getElementById('manual-phone').focus();
+      lucide.createIcons();
+    }
+
+    function closeAddManualContactModal() {
+      document.getElementById('modal-add-manual').classList.add('hidden');
+    }
+
+    async function submitAddManualContact(e) {
+      e.preventDefault();
+      const phone = document.getElementById('manual-phone').value.trim();
+      const name = document.getElementById('manual-name').value.trim();
+      const btn = document.getElementById('btn-save-manual');
+
+      if (!phone) return;
+      btn.disabled = true;
+
+      try {
+        const res = await fetchWithAuth('/api/contacts/add-manual', {
+          method: 'POST',
+          body: JSON.stringify({ phone, name })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, 'success');
+          closeAddManualContactModal();
+          loadContacts();
+        } else {
+          showToast(data.error || 'Erro ao salvar contato', 'error');
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // ==============================================================================
+    // PAINEL DE GESTÃO DO CRM (CLIENTES ATENDIDOS, VISITAS E INSTALAÇÕES)
+    // ==============================================================================
+    let allCrmLeads = [];
+    let currentCrmFilter = 'TODOS';
+
+    async function loadCrmDashboard() {
+      const container = document.getElementById('crm-leads-container');
+      if (!container) return;
+
+      try {
+        const res = await fetchWithAuth('/api/crm/dashboard');
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        allCrmLeads = data.leads || [];
+        const m = data.metrics || {};
+
+        // Atualiza os 4 Cards de Métricas
+        document.getElementById('crm-metric-total').textContent = m.totalClients || 0;
+        document.getElementById('crm-metric-visitas').textContent = m.visitasMarcadas || 0;
+        document.getElementById('crm-conv-visitas').textContent = `${m.convVisitas || 0}% conv.`;
+        document.getElementById('crm-metric-instalacoes').textContent = m.instalacoesFechadas || 0;
+        document.getElementById('crm-conv-instalacoes').textContent = `${m.convInstalacoes || 0}% conv.`;
+        document.getElementById('crm-metric-atendimento').textContent = m.emAtendimento || 0;
+
+        // Atualiza contadores nas abas
+        document.getElementById('count-filter-todos').textContent = m.totalClients || 0;
+        document.getElementById('count-filter-visitas').textContent = m.visitasMarcadas || 0;
+        document.getElementById('count-filter-instalacoes').textContent = m.instalacoesFechadas || 0;
+        document.getElementById('count-filter-sondagem').textContent = m.emAtendimento || 0;
+
+        filterCrmStatus(currentCrmFilter);
+      } catch (e) {
+        console.warn('Erro ao carregar CRM:', e);
+      }
+    }
+
+    function filterCrmStatus(status) {
+      currentCrmFilter = status;
+
+      // Estilo dos botões de filtro
+      const filterBtns = ['TODOS', 'VISITA_MARCADA', 'INSTALACAO_FECHADA', 'EM_ATENDIMENTO'];
+      filterBtns.forEach(f => {
+        const btn = document.getElementById(`btn-filter-${f}`);
+        if (!btn) return;
+        if (f === status) {
+          btn.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-600 text-white transition';
+        } else {
+          btn.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-dark-850 hover:bg-slate-800 text-slate-300 border border-slate-800 transition';
+        }
+      });
+
+      let filtered = allCrmLeads;
+      if (status !== 'TODOS') {
+        filtered = allCrmLeads.filter(l => l.status === status);
+      }
+
+      // Aplica busca textual se houver
+      const search = (document.getElementById('crm-search')?.value || '').toLowerCase().trim();
+      if (search) {
+        filtered = filtered.filter(l => 
+          (l.name && l.name.toLowerCase().includes(search)) ||
+          (l.phone && l.phone.includes(search)) ||
+          (l.notes && l.notes.toLowerCase().includes(search)) ||
+          (l.appointment?.address && l.appointment.address.toLowerCase().includes(search))
+        );
+      }
+
+      renderCrmLeads(filtered);
+    }
+
+    function searchCrmLeads() {
+      filterCrmStatus(currentCrmFilter);
+    }
+
+    function renderCrmLeads(leads) {
+      const container = document.getElementById('crm-leads-container');
+      if (!container) return;
+
+      if (!leads || leads.length === 0) {
+        container.innerHTML = `
+          <div class="py-12 text-center text-slate-500 text-xs">
+            <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 text-slate-600"></i>
+            Nenhum cliente encontrado nesta etapa do funil.
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = leads.map(l => {
+        const isVisit = l.status === 'VISITA_MARCADA';
+        const isInstall = l.status === 'INSTALACAO_FECHADA';
+        const isSondagem = l.status === 'EM_ATENDIMENTO';
+        const isRecusado = l.status === 'RECUSADO';
+
+        // Badge de Status
+        let badgeHtml = '';
+        if (isInstall) {
+          badgeHtml = `<span class="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-bold flex items-center space-x-1">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>Instalação Fechada</span>
+          </span>`;
+        } else if (isVisit) {
+          badgeHtml = `<span class="px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[11px] font-bold flex items-center space-x-1">
+            <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+            <span>Visita Técnica Marcada</span>
+          </span>`;
+        } else if (isRecusado) {
+          badgeHtml = `<span class="px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700 text-[11px] font-semibold">
+            Cancelado / Fora de Escopo
+          </span>`;
+        } else {
+          badgeHtml = `<span class="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-semibold flex items-center space-x-1">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>Em Sondagem / Negociação</span>
+          </span>`;
+        }
+
+        // Informações do Agendamento (se houver)
+        let appointmentHtml = '';
+        if (l.appointment && l.appointment.date && l.appointment.time) {
+          const appTypeBadge = l.appointment.type === 'INSTALACAO_CFTV'
+            ? `<span class="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">Instalação</span>`
+            : `<span class="text-[10px] uppercase font-bold text-sky-400 bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-800/40">Visita Técnica</span>`;
+
+          const calLink = l.appointment.eventLink
+            ? `<a href="${l.appointment.eventLink}" target="_blank" class="inline-flex items-center space-x-1 text-[11px] text-brand-400 hover:text-brand-300 underline font-medium">
+                <i data-lucide="calendar" class="w-3 h-3"></i>
+                <span>Ver no Google Agenda</span>
+              </a>`
+            : '';
+
+          appointmentHtml = `
+            <div class="mt-2 bg-dark-950/60 border border-slate-800 rounded-xl p-2.5 space-y-1">
+              <div class="flex items-center space-x-2">
+                ${appTypeBadge}
+                <span class="text-xs font-semibold text-white">🗓️ ${l.appointment.date} às ${l.appointment.time}</span>
+              </div>
+              <p class="text-[11px] text-slate-400 truncate">📍 ${l.appointment.address || 'Endereço a confirmar'}</p>
+              ${calLink}
+            </div>
+          `;
+        }
+
+        const cleanPhoneDigits = l.phone ? l.phone.replace(/\D/g, '') : '';
+        const waLink = cleanPhoneDigits ? `https://wa.me/${cleanPhoneDigits}` : '#';
+
+        return `
+          <div class="p-4 hover:bg-dark-850/40 transition flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-full bg-dark-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-slate-200">
+                  ${(l.name || 'C').charAt(0).toUpperCase()}
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center space-x-2">
+                    <span class="text-sm font-bold text-white truncate">${l.name || l.phone}</span>
+                    <a href="${waLink}" target="_blank" title="Abrir conversa no WhatsApp" class="text-emerald-400 hover:text-emerald-300 p-1 hover:bg-emerald-950/30 rounded">
+                      <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    </a>
+                  </div>
+                  <div class="flex items-center space-x-2 text-xs text-slate-400 font-mono">
+                    <span>${l.formattedPhone || l.phone}</span>
+                    <span>•</span>
+                    <span class="text-[11px] text-slate-500">${l.updatedAt ? new Date(l.updatedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                  </div>
+                </div>
+              </div>
+
+              ${appointmentHtml}
+
+              <!-- Resumo da conversa / notas -->
+              <p class="text-xs text-slate-400 mt-2 truncate max-w-xl">
+                <span class="text-slate-500 font-medium">Última msg:</span> "${l.lastMessage || 'Sem mensagens'}"
+              </p>
+              ${l.notes ? `<p class="text-xs text-brand-300 bg-brand-950/30 border border-brand-800/30 rounded-lg px-2.5 py-1 mt-1.5 inline-block">📝 ${l.notes}</p>` : ''}
+            </div>
+
+            <!-- Coluna de Ações & Seletor de Status -->
+            <div class="flex items-center space-x-3 self-end lg:self-center flex-shrink-0">
+              ${badgeHtml}
+
+              <!-- Menu Seletor Rápido de Status -->
+              <select onchange="updateLeadStatusQuick('${l.jid}', this.value)" class="bg-dark-950 border border-slate-700 text-xs text-white rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-brand-500 font-medium">
+                <option value="EM_ATENDIMENTO" ${isSondagem ? 'selected' : ''}>🟡 Em Sondagem</option>
+                <option value="VISITA_MARCADA" ${isVisit ? 'selected' : ''}>🔵 Visita Marcada</option>
+                <option value="INSTALACAO_FECHADA" ${isInstall ? 'selected' : ''}>🟢 Fechado p/ Instalação</option>
+                <option value="RECUSADO" ${isRecusado ? 'selected' : ''}>⚪ Cancelado / Recusado</option>
+              </select>
+
+              ${l.appointment ? `
+              <!-- Botão Desmarcar Agendamento -->
+              <button onclick="cancelLeadAppointment('${l.jid}')" title="Desmarcar e remover da agenda do Google" class="p-2 text-rose-400 hover:text-white bg-dark-800 hover:bg-rose-900/50 border border-rose-800/40 rounded-xl transition">
+                <i data-lucide="calendar-x" class="w-4 h-4"></i>
+              </button>
+              ` : ''}
+
+              <!-- Botão Editar Notas -->
+              <button onclick="openEditLeadModal('${l.jid}')" title="Editar anotações do cliente" class="p-2 text-slate-400 hover:text-white bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition">
+                <i data-lucide="edit-3" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    async function updateLeadStatusQuick(jid, newStatus) {
+      try {
+        const res = await fetchWithAuth('/api/crm/update-lead', {
+          method: 'POST',
+          body: JSON.stringify({ jid, status: newStatus })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Status do cliente atualizado com sucesso!', 'success');
+          loadCrmDashboard();
+        } else {
+          showToast(data.error || 'Erro ao atualizar status', 'error');
+        }
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    }
+
+    async function cancelLeadAppointment(jid) {
+      if (!confirm('Deseja realmente desmarcar este agendamento e removê-lo do Google Calendar?')) return;
+      try {
+        const res = await fetchWithAuth('/api/crm/cancel-appointment', {
+          method: 'POST',
+          body: JSON.stringify({ jid })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Agendamento desmarcado e removido da agenda!', 'success');
+          loadCrmDashboard();
+        } else {
+          showToast(data.error || 'Erro ao desmarcar.', 'error');
+        }
+      } catch (e) {
+        showToast('Falha na comunicação: ' + e.message, 'error');
+      }
+    }
+
+    function openEditLeadModal(jid) {
+      const lead = allCrmLeads.find(l => l.jid === jid);
+      if (!lead) return;
+
+      document.getElementById('edit-lead-jid').value = lead.jid;
+      document.getElementById('edit-lead-name').value = lead.name || '';
+      document.getElementById('edit-lead-status').value = lead.status || 'EM_ATENDIMENTO';
+      document.getElementById('edit-lead-notes').value = lead.notes || '';
+      document.getElementById('modal-lead-title').textContent = lead.name || lead.phone;
+      document.getElementById('modal-lead-subtitle').textContent = lead.formattedPhone || lead.phone;
+
+      document.getElementById('modal-edit-lead').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeEditLeadModal() {
+      document.getElementById('modal-edit-lead').classList.add('hidden');
+    }
+
+    async function saveLeadEdit() {
+      const jid = document.getElementById('edit-lead-jid').value;
+      const clientName = document.getElementById('edit-lead-name').value.trim();
+      const status = document.getElementById('edit-lead-status').value;
+      const notes = document.getElementById('edit-lead-notes').value.trim();
+      const btn = document.getElementById('btn-save-lead-edit');
+
+      if (!jid) return;
+      btn.disabled = true;
+
+      try {
+        const res = await fetchWithAuth('/api/crm/update-lead', {
+          method: 'POST',
+          body: JSON.stringify({ jid, clientName, status, notes })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Cliente atualizado com sucesso!', 'success');
+          closeEditLeadModal();
+          loadCrmDashboard();
+        } else {
+          showToast(data.error || 'Erro ao salvar alterações', 'error');
+        }
+      } catch (e) {
+        showToast(e.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Load Tenants
+    async function loadTenants() {
+      const container = document.getElementById('tenants-container');
+      try {
+        const res = await fetchWithAuth('/api/tenants');
+        const data = await res.json();
+
+        document.getElementById('metric-tenants').innerText = data.totalTenants || 0;
+        document.getElementById('metric-connected').innerText = data.connectedCount || 0;
+        document.getElementById('tenants-count-badge').innerText = data.totalTenants || 0;
+
+        if (!data.tenants || data.tenants.length === 0) {
+          container.innerHTML = `
+            <div class="col-span-full py-16 text-center border-2 border-dashed border-slate-800 rounded-2xl bg-dark-900/50">
+              <i data-lucide="layers" class="w-12 h-12 mx-auto text-slate-600 mb-3"></i>
+              <h3 class="text-base font-bold text-slate-300">Nenhuma operação cadastrada</h3>
+              <p class="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">Clique no botão abaixo para adicionar a primeira conta de WhatsApp com ambiente 100% isolado.</p>
+              <button onclick="openNewTenantModal()" class="px-4 py-2 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 rounded-xl transition">
+                + Nova Operação
+              </button>
+            </div>
+          `;
+          lucide.createIcons();
+          return;
+        }
+
+        container.innerHTML = data.tenants.map(t => {
+          const isConnected = t.status === 'open';
+          const isConnecting = t.status === 'connecting';
+
+          let statusBadge = '';
+          if (isConnected) {
+            statusBadge = `
+              <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span> Conectado
+              </span>
+            `;
+          } else if (isConnecting) {
+            statusBadge = `
+              <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5 animate-spin"></span> Aguardando Leitura
+              </span>
+            `;
+          } else {
+            statusBadge = `
+              <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-slate-500 mr-1.5"></span> Desconectado
+              </span>
+            `;
+          }
+
+          const cwAccountUrl = t.chatwoot && t.chatwoot.accountId 
+            ? `http://localhost:3000/app/accounts/${t.chatwoot.accountId}/dashboard` 
+            : `http://localhost:3000/app/login`;
+
+          return `
+            <div class="bg-dark-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-6 shadow-sm transition space-y-5">
+              
+              <!-- CARD HEADER -->
+              <div class="flex items-start justify-between">
+                <div class="flex items-center space-x-3.5">
+                  <div class="relative">
+                    ${t.profilePic ? `
+                      <img src="${t.profilePic}" alt="${t.name}" class="w-12 h-12 rounded-2xl object-cover border border-slate-700">
+                    ` : `
+                      <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-slate-800 to-slate-700 flex items-center justify-center text-slate-300 font-bold text-lg border border-slate-700">
+                        ${t.name.substring(0, 2).toUpperCase()}
+                      </div>
+                    `}
+                    ${isConnected ? `
+                      <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-dark-900 rounded-full" title="WhatsApp Ativo"></div>
+                    ` : ''}
+                  </div>
+                  <div>
+                    <h3 class="text-base font-bold text-white tracking-tight">${t.name}</h3>
+                    <div class="flex items-center space-x-2 mt-0.5">
+                      <span class="text-xs font-mono text-slate-400 bg-dark-950 px-2 py-0.5 rounded border border-slate-800/80">${t.slug}</span>
+                      ${t.phone ? `<span class="text-xs text-slate-400 font-mono">+${t.phone}</span>` : ''}
+                    </div>
+                  </div>
+                </div>
+
+                <div>${statusBadge}</div>
+              </div>
+
+              <!-- STATS & CHANNELS -->
+              <div class="grid grid-cols-2 gap-3 pt-2">
+                <!-- Chatwoot Account Info -->
+                <div class="bg-dark-950/70 p-3 rounded-xl border border-slate-800/80 space-y-1">
+                  <div class="flex items-center justify-between text-xs text-slate-400">
+                    <span class="flex items-center space-x-1">
+                      <i data-lucide="message-square" class="w-3.5 h-3.5 text-brand-400"></i>
+                      <span>Chatwoot CRM</span>
+                    </span>
+                    <span class="font-bold text-brand-400">Conta #${t.chatwoot ? t.chatwoot.accountId : 'N/A'}</span>
+                  </div>
+                  <p class="text-xs font-medium text-slate-200 truncate">
+                    ${t.chatwoot ? t.chatwoot.inboxName : 'Não vinculado'}
+                  </p>
+                  <a href="${cwAccountUrl}" target="_blank" class="inline-flex items-center space-x-1 text-[11px] text-brand-400 hover:text-brand-300 pt-1">
+                    <span>Acessar Atendimento</span>
+                    <i data-lucide="arrow-up-right" class="w-3 h-3"></i>
+                  </a>
+                </div>
+
+                <!-- Typebot AI Info -->
+                <div class="bg-dark-950/70 p-3 rounded-xl border border-slate-800/80 space-y-1">
+                  <div class="flex items-center justify-between text-xs text-slate-400">
+                    <span class="flex items-center space-x-1">
+                      <i data-lucide="bot" class="w-3.5 h-3.5 text-amber-400"></i>
+                      <span>Automação IA</span>
+                    </span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded ${t.typebot && t.typebot.enabled ? 'bg-amber-500/10 text-amber-400' : 'bg-slate-800 text-slate-500'} font-semibold">
+                      ${t.typebot && t.typebot.enabled ? 'Ativo' : 'Desativado'}
+                    </span>
+                  </div>
+                  <p class="text-xs font-medium text-slate-200 truncate font-mono">
+                    ${t.typebot && t.typebot.slug ? t.typebot.slug : 'Nenhum bot configurado'}
+                  </p>
+                  <button onclick="openTypebotModal('${t.slug}', ${t.typebot ? t.typebot.enabled : false}, '${t.typebot ? (t.typebot.slug || '') : ''}', '${t.typebot ? (t.typebot.url || 'https://typebot.co') : 'https://typebot.co'}', ${t.typebot ? (t.typebot.debounce || 10) : 10})" class="inline-flex items-center space-x-1 text-[11px] text-amber-400 hover:text-amber-300 pt-1">
+                    <span>Configurar Bot</span>
+                    <i data-lucide="sliders" class="w-3 h-3"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- ACTION BUTTONS -->
+              <div class="flex items-center justify-between pt-3 border-t border-slate-800/80">
+                <div class="flex items-center space-x-2">
+                  ${!isConnected ? `
+                    <button onclick="openQrModal('${t.slug}', '${t.name}')" class="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm flex items-center space-x-1.5 transition">
+                      <i data-lucide="qr-code" class="w-3.5 h-3.5"></i>
+                      <span>Ler QR Code</span>
+                    </button>
+                  ` : `
+                    <button onclick="disconnectTenant('${t.slug}')" class="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-rose-400 bg-dark-950 hover:bg-rose-950/20 border border-slate-800 hover:border-rose-900 rounded-lg flex items-center space-x-1 transition">
+                      <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                      <span>Desconectar</span>
+                    </button>
+                  `}
+
+                  <button onclick="restartTenant('${t.slug}')" title="Reiniciar Conexão" class="p-1.5 text-slate-400 hover:text-white bg-dark-950 border border-slate-800 hover:border-slate-700 rounded-lg transition">
+                    <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+
+                <div>
+                  <button onclick="deleteTenant('${t.slug}', '${t.name}')" title="Excluir Operação" class="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-950/20 rounded-lg transition">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          `;
+        }).join('');
+
+        lucide.createIcons();
+      } catch (e) {
+        console.error('Error loading tenants:', e);
+        if (e.message.includes('Sessão expirada')) return;
+        container.innerHTML = `
+          <div class="col-span-full py-8 text-center text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
+            <p class="text-sm font-semibold">Falha ao carregar lista de operações.</p>
+            <p class="text-xs text-rose-300 mt-1">${e.message}</p>
+          </div>
+        `;
+      }
+    }
+
+    // Modal Nova Operação
+    function openNewTenantModal() {
+      document.getElementById('form-new-tenant').reset();
+      delete document.getElementById('tenant-slug').dataset.manual;
+      document.getElementById('modal-new-tenant').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeNewTenantModal() {
+      document.getElementById('modal-new-tenant').classList.add('hidden');
+    }
+
+    async function submitNewTenant(event) {
+      event.preventDefault();
+      const btn = document.getElementById('btn-submit-tenant');
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin mr-1"></i> Provisionando Operação...';
+      lucide.createIcons();
+
+      const name = document.getElementById('tenant-name').value.trim();
+      const slug = document.getElementById('tenant-slug').value.trim();
+      const agentEmail = document.getElementById('tenant-agent-email').value.trim();
+      const agentPassword = document.getElementById('tenant-agent-password').value.trim();
+      const typebotSlug = document.getElementById('tenant-typebot-slug').value.trim();
+      const typebotUrl = document.getElementById('tenant-typebot-url').value.trim();
+
+      try {
+        const res = await fetchWithAuth('/api/tenants', {
+          method: 'POST',
+          body: JSON.stringify({
+            name,
+            slug,
+            agentEmail,
+            agentPassword,
+            typebotSlug,
+            typebotUrl
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Erro ao criar operação');
+        }
+
+        showToast(`Operação ${name} provisionada com sucesso!`, 'success');
+        closeNewTenantModal();
+        await loadTenants();
+        openQrModal(slug, name);
+
+      } catch (e) {
+        showToast(e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Criar Operação & Gerar QR Code</span> <i data-lucide="arrow-right" class="w-4 h-4"></i>';
+        lucide.createIcons();
+      }
+    }
+
+    // Modal QR Code em Tempo Real
+    function openQrModal(slug, name) {
+      document.getElementById('qr-modal-title').innerText = `Conectar ${name}`;
+      document.getElementById('qr-modal-slug').innerText = slug;
+      
+      const img = document.getElementById('qr-image');
+      const loader = document.getElementById('qr-loading');
+      const success = document.getElementById('qr-success');
+      const instructions = document.getElementById('qr-instructions');
+      const pairingArea = document.getElementById('pairing-code-area');
+
+      img.classList.add('hidden');
+      loader.classList.remove('hidden');
+      success.classList.add('hidden');
+      instructions.classList.remove('hidden');
+      pairingArea.classList.add('hidden');
+
+      document.getElementById('modal-qrcode').classList.remove('hidden');
+      lucide.createIcons();
+
+      pollQrCode(slug);
+    }
+
+    function closeQrModal() {
+      if (activeQrPolling) {
+        clearInterval(activeQrPolling);
+        activeQrPolling = null;
+      }
+      document.getElementById('modal-qrcode').classList.add('hidden');
+      loadTenants();
+    }
+
+    async function pollQrCode(slug) {
+      if (activeQrPolling) clearInterval(activeQrPolling);
+
+      const check = async () => {
+        try {
+          const res = await fetchWithAuth(`/api/tenants/${slug}/qrcode`);
+          const data = await res.json();
+
+          const img = document.getElementById('qr-image');
+          const loader = document.getElementById('qr-loading');
+          const success = document.getElementById('qr-success');
+          const instructions = document.getElementById('qr-instructions');
+          const pairingArea = document.getElementById('pairing-code-area');
+
+          if (data.state === 'open') {
+            clearInterval(activeQrPolling);
+            activeQrPolling = null;
+
+            img.classList.add('hidden');
+            loader.classList.add('hidden');
+            instructions.classList.add('hidden');
+            pairingArea.classList.add('hidden');
+            success.classList.remove('hidden');
+
+            document.getElementById('qr-success-phone').innerText = 'WhatsApp Conectado!';
+            showToast('WhatsApp conectado com sucesso!', 'success');
+            setTimeout(() => {
+              closeQrModal();
+            }, 3000);
+            return;
+          }
+
+          if (data.qrcode && data.qrcode.base64) {
+            img.src = data.qrcode.base64;
+            img.classList.remove('hidden');
+            loader.classList.add('hidden');
+
+            if (data.qrcode.pairingCode) {
+              pairingArea.classList.remove('hidden');
+              document.getElementById('pairing-code-val').innerText = data.qrcode.pairingCode;
+            }
+          }
+        } catch (e) {
+          console.error('QR Poll error:', e);
+        }
+      };
+
+      await check();
+      activeQrPolling = setInterval(check, 2500);
+    }
+
+    // Modal Typebot
+    function openTypebotModal(slug, enabled, botSlug, url, debounce) {
+      document.getElementById('tb-modal-slug').value = slug;
+      document.getElementById('tb-modal-enabled').checked = enabled;
+      document.getElementById('tb-modal-bot-slug').value = botSlug;
+      document.getElementById('tb-modal-url').value = url;
+      document.getElementById('tb-modal-debounce').value = debounce;
+
+      document.getElementById('modal-typebot').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeTypebotModal() {
+      document.getElementById('modal-typebot').classList.add('hidden');
+    }
+
+    async function submitTypebotConfig(event) {
+      event.preventDefault();
+      const slug = document.getElementById('tb-modal-slug').value;
+      const enabled = document.getElementById('tb-modal-enabled').checked;
+      const botSlug = document.getElementById('tb-modal-bot-slug').value.trim();
+      const url = document.getElementById('tb-modal-url').value.trim();
+      const debounce = document.getElementById('tb-modal-debounce').value;
+
+      try {
+        const res = await fetchWithAuth(`/api/tenants/${slug}/typebot`, {
+          method: 'POST',
+          body: JSON.stringify({
+            enabled,
+            slug: botSlug,
+            url,
+            debounce
+          })
+        });
+
+        if (!res.ok) throw new Error('Falha ao salvar configuração');
+        showToast('Configuração de IA atualizada com sucesso!', 'success');
+        closeTypebotModal();
+        loadTenants();
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    }
+
+    // Ações Rápidas
+    async function disconnectTenant(slug) {
+      if (!confirm(`Deseja realmente desconectar o WhatsApp da operação "${slug}"?`)) return;
+
+      try {
+        const res = await fetchWithAuth(`/api/tenants/${slug}/disconnect`, { method: 'POST' });
+        if (!res.ok) throw new Error('Falha ao desconectar');
+        showToast('WhatsApp desconectado!', 'success');
+        loadTenants();
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    }
+
+    async function restartTenant(slug) {
+      try {
+        showToast('Reiniciando instância...', 'success');
+        const res = await fetchWithAuth(`/api/tenants/${slug}/restart`, { method: 'POST' });
+        if (!res.ok) throw new Error('Falha ao reiniciar');
+        showToast('Instância reiniciada!', 'success');
+        loadTenants();
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    }
+
+    async function deleteTenant(slug, name) {
+      if (!confirm(`ATENÇÃO: Deseja realmente excluir a operação "${name}" (${slug})?\nIsso removerá a conexão do WhatsApp.`)) return;
+
+      try {
+        const res = await fetchWithAuth(`/api/tenants/${slug}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Falha ao excluir operação');
+        showToast('Operação removida com sucesso!', 'success');
+        loadTenants();
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    }
+
+    // ==============================================================================
+    // CONFIGURAÇÕES DO TENANT (POSTGRESQL / WARNAT-TECH)
+    // ==============================================================================
+    const DAY_LABELS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+    let localBookingWindows = [];
+
+    async function loadSettingsPanel() {
+      try {
+        const res = await fetchWithAuth('/api/settings/tenants');
+        const data = await res.json();
+        const select = document.getElementById('st-tenant');
+        if (!select) return;
+
+        const currentVal = select.value;
+        select.innerHTML = '';
+        (data.tenants || []).forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          opt.textContent = `${t.name} (${t.id})`;
+          select.appendChild(opt);
+        });
+
+        const targetTenant = (data.tenants || []).find(t => t.id === currentVal) ? currentVal : (data.tenants?.[0]?.id || 'warnat-tech');
+        select.value = targetTenant;
+        await loadTenantSettings(targetTenant);
+      } catch (err) {
+        console.error('Erro ao listar tenants para configurações:', err);
+      }
+    }
+
+    async function loadTenantSettings(tenantId) {
+      if (!tenantId) return;
+      const errorsBox = document.getElementById('st-errors');
+      if (errorsBox) {
+        errorsBox.classList.add('hidden');
+        errorsBox.innerHTML = '';
+      }
+
+      try {
+        const res = await fetchWithAuth(`/api/settings/tenant/${tenantId}`);
+        if (!res.ok) throw new Error('Não foi possível carregar as configurações do tenant');
+        const data = await res.json();
+        const s = data.settings || {};
+
+        // Badges
+        const dbBadge = document.getElementById('st-badge-db');
+        if (dbBadge) {
+          const isPg = data.db?.dbOk;
+          dbBadge.textContent = isPg ? '✓ PostgreSQL (Docker)' : '⚠ Banco Indisponível';
+          dbBadge.className = isPg 
+            ? 'px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold'
+            : 'px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-semibold';
+        }
+
+        const openBadge = document.getElementById('st-badge-open');
+        if (openBadge && data.live) {
+          openBadge.textContent = data.live.openNow ? '● Em expediente' : '○ Fora do expediente';
+          openBadge.className = data.live.openNow
+            ? 'px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold'
+            : 'px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 text-xs font-semibold';
+        }
+
+        const engineNote = document.getElementById('st-engine-note');
+        if (engineNote) {
+          if (!data.db?.dbOk) {
+            engineNote.classList.remove('hidden');
+            engineNote.innerHTML = '<strong>Aviso de armazenamento:</strong> O banco PostgreSQL está inacessível no momento. O painel está usando o espelho local em disco.';
+          } else {
+            engineNote.classList.add('hidden');
+          }
+        }
+
+        // Assistant Identity & Messages
+        document.getElementById('st-assistantName').value = s.assistantName || 'Nat';
+        document.getElementById('st-companyName').value = s.companyName || 'WarNat Tech';
+        document.getElementById('st-greetingMessage').value = s.greetingMessage || '';
+        document.getElementById('st-disclosureLine').value = s.disclosureLine || '';
+        document.getElementById('st-humanHandoffMessage').value = s.humanHandoffMessage || '';
+        document.getElementById('st-outOfHoursMessage').value = s.outOfHoursMessage || '';
+        document.getElementById('st-openingMessage').value = s.openingMessage || '';
+
+        // Business Hours
+        document.getElementById('st-timezone').value = s.timezone || 'America/Sao_Paulo';
+        renderHoursRows(s.businessHours || {});
+
+        const liveHours = document.getElementById('st-live-hours');
+        if (liveHours && data.live) {
+          liveHours.textContent = `Horário formatado para clientes: "${data.live.hoursText || 'Não definido'}"`;
+        }
+
+        // Booking Windows
+        localBookingWindows = JSON.parse(JSON.stringify(s.bookingWindows || []));
+        renderWindowsRows();
+        document.getElementById('st-visitDurationMinutes').value = s.visitDurationMinutes ?? 90;
+        document.getElementById('st-bufferMinutes').value = s.bufferMinutes ?? 30;
+        document.getElementById('st-minLeadHours').value = s.minLeadHours ?? 2;
+
+        const liveBooking = document.getElementById('st-live-booking');
+        if (liveBooking && data.live) {
+          liveBooking.textContent = `Regra de agendamento: "${data.live.bookingText || 'Nenhuma janela configurada'}"`;
+        }
+
+        // Base Address
+        document.getElementById('st-baseAddress').value = s.baseAddress || '';
+
+        // Meta
+        const meta = document.getElementById('st-meta');
+        if (meta && data.meta) {
+          const dt = data.meta.updatedAt ? new Date(data.meta.updatedAt).toLocaleString('pt-BR') : 'Original';
+          meta.textContent = `Última atualização: ${dt} por ${data.meta.updatedBy || 'sistema'} (v${data.meta.version || 1})`;
+        }
+
+        if (data.preview && data.preview.greeting) {
+          const previewBox = document.getElementById('st-preview-greeting');
+          if (previewBox) previewBox.textContent = data.preview.greeting;
+        }
+
+        lucide.createIcons();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function renderHoursRows(businessHours) {
+      const container = document.getElementById('st-hours-rows');
+      if (!container) return;
+      container.innerHTML = '';
+
+      for (let dayIdx = 0; dayIdx <= 6; dayIdx++) {
+        const found = businessHours?.[dayIdx] || { enabled: dayIdx >= 1 && dayIdx <= 6, start: '08:00', end: '20:00' };
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between gap-2 p-2 rounded-lg bg-dark-950 border border-slate-800 text-xs';
+        row.innerHTML = `
+          <label class="flex items-center space-x-2 w-32 cursor-pointer">
+            <input type="checkbox" id="st-h-act-${dayIdx}" ${found.enabled ? 'checked' : ''} class="rounded border-slate-700 text-brand-500 focus:ring-0">
+            <span class="font-medium text-slate-200">${DAY_LABELS[dayIdx]}</span>
+          </label>
+          <div class="flex items-center space-x-2">
+            <span class="text-slate-500">das</span>
+            <input type="time" id="st-h-start-${dayIdx}" value="${found.start || '08:00'}" class="bg-dark-900 border border-slate-700 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-brand-500">
+            <span class="text-slate-500">às</span>
+            <input type="time" id="st-h-end-${dayIdx}" value="${found.end || '20:00'}" class="bg-dark-900 border border-slate-700 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-brand-500">
+          </div>
+        `;
+        container.appendChild(row);
+      }
+    }
+
+    function renderWindowsRows() {
+      const container = document.getElementById('st-windows-rows');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (localBookingWindows.length === 0) {
+        container.innerHTML = '<p class="text-xs text-amber-400/80 p-2 bg-amber-500/5 rounded-lg border border-amber-500/20">Nenhuma janela definida. A assistente não conseguirá sugerir horários para visita técnica.</p>';
+        return;
+      }
+
+      localBookingWindows.forEach((w, idx) => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between gap-2 p-2 rounded-lg bg-dark-950 border border-slate-800 text-xs';
+
+        let options = '';
+        DAY_LABELS.forEach((label, dayIdx) => {
+          options += `<option value="${dayIdx}" ${Number(w.day) === dayIdx ? 'selected' : ''}>${label}</option>`;
+        });
+
+        row.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <select onchange="updateBookingWindow(${idx}, 'day', Number(this.value))" class="bg-dark-900 border border-slate-700 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-purple-500">
+              ${options}
+            </select>
+            <span class="text-slate-500">das</span>
+            <input type="time" value="${w.start || '08:00'}" onchange="updateBookingWindow(${idx}, 'start', this.value)" class="bg-dark-900 border border-slate-700 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-purple-500">
+            <span class="text-slate-500">às</span>
+            <input type="time" value="${w.end || '18:00'}" onchange="updateBookingWindow(${idx}, 'end', this.value)" class="bg-dark-900 border border-slate-700 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-purple-500">
+          </div>
+          <button onclick="removeBookingWindow(${idx})" class="text-slate-500 hover:text-rose-400 p-1 transition" title="Remover janela">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        `;
+        container.appendChild(row);
+      });
+      lucide.createIcons();
+    }
+
+    function addBookingWindow() {
+      localBookingWindows.push({ day: 6, start: '08:00', end: '18:00' });
+      renderWindowsRows();
+    }
+
+    function removeBookingWindow(idx) {
+      localBookingWindows.splice(idx, 1);
+      renderWindowsRows();
+    }
+
+    function updateBookingWindow(idx, key, val) {
+      if (localBookingWindows[idx]) {
+        localBookingWindows[idx][key] = val;
+      }
+    }
+
+    function collectSettingsPayload() {
+      const bh = {};
+      for (let dayIdx = 0; dayIdx <= 6; dayIdx++) {
+        const act = document.getElementById(`st-h-act-${dayIdx}`)?.checked ?? false;
+        const start = document.getElementById(`st-h-start-${dayIdx}`)?.value || '08:00';
+        const end = document.getElementById(`st-h-end-${dayIdx}`)?.value || '20:00';
+        bh[dayIdx] = { enabled: act, start, end };
+      }
+
+      return {
+        assistantName: document.getElementById('st-assistantName')?.value?.trim() || 'Nat',
+        companyName: document.getElementById('st-companyName')?.value?.trim() || 'WarNat Tech',
+        greetingMessage: document.getElementById('st-greetingMessage')?.value?.trim() || '',
+        disclosureLine: document.getElementById('st-disclosureLine')?.value?.trim() || '',
+        humanHandoffMessage: document.getElementById('st-humanHandoffMessage')?.value?.trim() || '',
+        outOfHoursMessage: document.getElementById('st-outOfHoursMessage')?.value?.trim() || '',
+        openingMessage: document.getElementById('st-openingMessage')?.value?.trim() || '',
+        timezone: document.getElementById('st-timezone')?.value?.trim() || 'America/Sao_Paulo',
+        businessHours: bh,
+        bookingWindows: localBookingWindows,
+        visitDurationMinutes: Number(document.getElementById('st-visitDurationMinutes')?.value || 90),
+        bufferMinutes: Number(document.getElementById('st-bufferMinutes')?.value || 30),
+        minLeadHours: Number(document.getElementById('st-minLeadHours')?.value || 2),
+        baseAddress: document.getElementById('st-baseAddress')?.value?.trim() || ''
+      };
+    }
+
+    async function previewSettings() {
+      const previewBox = document.getElementById('st-preview-greeting');
+      if (!previewBox) return;
+
+      const payload = collectSettingsPayload();
+      const tenantId = document.getElementById('st-tenant')?.value || 'warnat-tech';
+
+      try {
+        const res = await fetchWithAuth('/api/settings/preview', {
+          method: 'POST',
+          body: JSON.stringify({
+            tenantId,
+            settings: payload
+          })
+        });
+        const data = await res.json();
+        if (data.preview && data.preview.greeting) {
+          previewBox.textContent = data.preview.greeting;
+        } else if (data.errors && data.errors.length) {
+          previewBox.textContent = 'Aviso: ' + data.errors.join('; ');
+        }
+      } catch (err) {
+        previewBox.textContent = 'Erro ao gerar pré-visualização: ' + err.message;
+      }
+    }
+
+    async function saveTenantSettings() {
+      const tenantId = document.getElementById('st-tenant')?.value || 'warnat-tech';
+      const saveBtn = document.getElementById('st-save-btn');
+      const errorsBox = document.getElementById('st-errors');
+      if (errorsBox) {
+        errorsBox.classList.add('hidden');
+        errorsBox.innerHTML = '';
+      }
+
+      const payload = collectSettingsPayload();
+
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Salvando...</span>';
+        lucide.createIcons();
+      }
+
+      try {
+        const res = await fetchWithAuth(`/api/settings/tenant/${tenantId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ settings: payload })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          const msgs = data.details || [data.error || 'Erro ao salvar configurações'];
+          if (errorsBox) {
+            errorsBox.classList.remove('hidden');
+            errorsBox.innerHTML = '<strong>Atenção às regras de validação:</strong><ul class="list-disc pl-4 mt-1">' + msgs.map(m => `<li>${m}</li>`).join('') + '</ul>';
+          }
+          throw new Error(msgs[0]);
+        }
+
+        showToast('Configurações salvas e aplicadas na automação!', 'success');
+        await loadTenantSettings(tenantId);
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i><span>Salvar e aplicar agora</span>';
+          lucide.createIcons();
+        }
+      }
+    }
+
+    // Inicialização com Verificação de Autenticação
+    window.addEventListener('DOMContentLoaded', async () => {
+      lucide.createIcons();
+
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (!token) {
+        showLoginScreen();
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/check', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.authenticated) {
+          showDashboardScreen();
+          setInterval(checkStatus, 15000);
+        } else {
+          localStorage.removeItem(TOKEN_KEY);
+          showLoginScreen();
+        }
+      } catch (e) {
+        showLoginScreen();
+      }
+    });
+  </script>
+</body>
+</html>

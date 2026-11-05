@@ -1,0 +1,82 @@
+### ==============================================================================
+### EVOLUTION API v2 - REQUISIÇÕES HTTP (REST CLIENT)
+### ==============================================================================
+
+@baseUrl = http://localhost:8085
+@apiKey = SUA_CHAVE_GLOBAL_AQUI_123456
+@instanceName = warnat-tech
+@instanceToken = token-interno-warnat-123
+
+### 1. Testar se a API está online (Health Check)
+GET {{baseUrl}}/
+Accept: application/json
+
+### 2. Listar todas as instâncias existentes
+GET {{baseUrl}}/instance/fetchInstances
+apikey: {{apiKey}}
+Accept: application/json
+
+### 3. Criar a Instância Warnat Tech
+POST {{baseUrl}}/instance/create
+apikey: {{apiKey}}
+Content-Type: application/json
+
+{
+  "instanceName": "{{instanceName}}",
+  "token": "{{instanceToken}}",
+  "qrcode": true,
+  "integration": "WHATSAPP-BAILEYS"
+}
+
+### 4. Obter o QR Code da Instância (Base64)
+GET {{baseUrl}}/instance/connect/{{instanceName}}
+apikey: {{apiKey}}
+Accept: application/json
+
+### 5. Checar o Estado da Conexão (open, close, connecting)
+GET {{baseUrl}}/instance/connectionState/{{instanceName}}
+apikey: {{apiKey}}
+Accept: application/json
+
+### 6. Vincular o Typebot à Instância (Configuração Completa)
+POST {{baseUrl}}/typebot/create/{{instanceName}}
+apikey: {{apiKey}}
+Content-Type: application/json
+
+{
+  "enabled": true,
+  "url": "https://typebot.co",
+  "typebot": "my-typebot-elhhw7i",
+  "triggerType": "all",
+  "expire": 20,
+  "keywordFinish": "#parar",
+  "delayMessage": 1500,
+  "unknownMessage": "Desculpe, não compreendi. Poderia repetir?",
+  "listeningFromMe": false,
+  "stopBotFromMe": true,
+  "keepOpen": false,
+  "debounceTime": 10
+}
+
+### 7. Consultar a Configuração Atual do Typebot na Instância
+GET {{baseUrl}}/typebot/find/{{instanceName}}
+apikey: {{apiKey}}
+Accept: application/json
+
+### 8. Enviar Mensagem de Texto (Simulação do Webhook de Alerta / Lead Quente)
+POST {{baseUrl}}/message/sendText/{{instanceName}}
+apikey: {{apiKey}}
+Content-Type: application/json
+
+{
+  "number": "5531999999999",
+  "text": "🚨 *NOVO AGENDAMENTO DE VISITA - WARNAT TECH*\n\n*Tipo:* Para minha empresa\n*Problema:* Rede instável e cabeamento desorganizado\n*Bairro:* Centro\n*Período:* Prefiro pela manhã\n*Dados do Cliente:* Marcos Silva - Rua Principal, 123"
+}
+
+### 9. Desconectar o Aparelho (Logout)
+DELETE {{baseUrl}}/instance/logout/{{instanceName}}
+apikey: {{apiKey}}
+
+### 10. Deletar a Instância
+DELETE {{baseUrl}}/instance/delete/{{instanceName}}
+apikey: {{apiKey}}

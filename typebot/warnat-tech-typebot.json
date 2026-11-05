@@ -1,0 +1,451 @@
+{
+  "version": "6",
+  "id": "warnat-tech-flow",
+  "name": "Warnat Tech - Atendimento Humanizado e Agendamento",
+  "events": [
+    {
+      "id": "event-start",
+      "type": "start",
+      "outgoingEdgeId": "edge-start-g1"
+    }
+  ],
+  "groups": [
+    {
+      "id": "group-acolhimento",
+      "title": "1. Acolhimento e Segmentação",
+      "graphCoordinates": {
+        "x": 80,
+        "y": 100
+      },
+      "blocks": [
+        {
+          "id": "block-wait-1",
+          "type": "Wait",
+          "options": {
+            "secondsToWaitFor": 2
+          }
+        },
+        {
+          "id": "block-text-1",
+          "type": "text",
+          "content": {
+            "richText": [
+              {
+                "type": "p",
+                "children": [
+                  {
+                    "text": "Opa, tudo bem? Aqui é da equipe técnica da Warnat Tech."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "block-wait-2",
+          "type": "Wait",
+          "options": {
+            "secondsToWaitFor": 2
+          }
+        },
+        {
+          "id": "block-text-2",
+          "type": "text",
+          "content": {
+            "richText": [
+              {
+                "type": "p",
+                "children": [
+                  {
+                    "text": "Vi sua mensagem aqui. Para eu já te direcionar certinho: você precisa de atendimento para a sua empresa ou para a sua residência?"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "block-buttons-ambiente",
+          "type": "choice input",
+          "options": {
+            "variableId": "var-ambiente",
+            "isMultipleChoice": false,
+            "buttonLabel": "Enviar"
+          },
+          "items": [
+            {
+              "id": "item-empresa",
+              "content": "Para minha empresa",
+              "outgoingEdgeId": "edge-empresa-to-cond1"
+            },
+            {
+              "id": "item-residencia",
+              "content": "Para minha residência",
+              "outgoingEdgeId": "edge-residencia-to-cond2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "group-resposta-empresa",
+      "title": "2A. Resposta Empresa",
+      "graphCoordinates": {
+        "x": 480,
+        "y": 40
+      },
+      "blocks": [
+        {
+          "id": "block-text-empresa",
+          "type": "text",
+          "content": {
+            "richText": [
+              {
+                "type": "p",
+                "children": [
+                  {
+                    "text": "Show. Ambiente corporativo exige estabilidade total para a operação não parar."
+                  }
+                ]
+              }
+            ]
+          },
+          "outgoingEdgeId": "edge-empresa-to-triagem"
+        }
+      ]
+    },
+    {
+      "id": "group-resposta-residencia",
+      "title": "2B. Resposta Residência",
+      "graphCoordinates": {
+        "x": 480,
+        "y": 200
+      },
+      "blocks": [
+        {
+          "id": "block-text-residencia",
+          "type": "text",
+          "content": {
+            "richText": [
+              {
+                "type": "p",
+                "children": [
+                  {
+                    "text": "Perfeito, com certeza conseguimos resolver isso para você."
+                  }
+                ]
+              }
+            ]
+          },
+          "outgoingEdgeId": "edge-residencia-to-triagem"
+        }
+      ]
+    },
+    {
+      "id": "group-triagem-problema",
+      "title": "3. Triagem do Problema & Áudio",
+      "graphCoordinates": {
+        "x": 880,
+        "y": 100
+      },
+      "blocks": [
+        {
+          "id": "block-input-problema",
+          "type": "text input",
+          "options": {
+            "variableId": "var-problema",
+            "labels": {
+              "placeholder": "Descreva o que está acontecendo..."
+            }
+          },
+          "content": {
+            "richText": [
+              {
+                "type": "p",
+                "children": [
+                  {
+                    "text": "Me conta resumidamente: qual serviço você precisa ou o que está acontecendo? (Ex: rede instável, cabeamento, câmeras, etc.)"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "block-wait-audio",
+          "type": "Wait",
+          "options": {
+            "secondsToWaitFor": 4
+          }
+        },
+        {
+          "id": "block-audio-consultivo",
+          "type": "audio",
+          "content": {
+            "url": "https://warnat-tech.com/audios/audio-diagnostico-warnat.mp3"
+          },
+          "outgoingEdgeId": "edge-triagem-to-bairro"
+        }
+      ]
+    },
+    {
+      "id": "group-agendamento-bairro",
+      "title": "4. Região e Ancoragem de Rota",
+      "graphCoordinates": {
+        "x": 1280,
+        "y": 100
+      },
+      "blocks": [
+        {
+          "id": "block-input-bairro",
+          "type": "text input",
+          "options": {
+            "variableId": "var-bairro",
+            "labels": {
+              "placeholder": "Ex: Centro, Savassi, Funcionários..."
+            }
+          },
+          "content": {
+            "richText": [
+              {
+                "type": "p",
+                "children": [
+                  {
+                    "text": "Qual é o seu bairro ou região aqui na cidade? Só para eu conferir a rota técnica da equipe."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "block-wait-rota",
+          "type": "Wait",
+          "options": {
+            "secondsToWaitFor": 2
+          }
+        },
+        {
+          "id": "block-text-rota",
+          "type": "text",
+          "content": {
+            "richText": [
+              {
+                "type": "p",
+                "children": [
+                  {
+                    "text": "Maravilha, estamos com atendimentos nessa região esta semana."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "block-buttons-periodo",
+          "type": "choice input",
+          "options": {
+            "variableId": "var-periodo",
+            "isMultipleChoice": false,
+            "buttonLabel": "Enviar"
+          },
+          "content": {
+            "richText": [
+              {
+                "type": "p",
+                "children": [
+                  {
+                    "text": "Consigo encaixar uma vistoria de avaliação no seu local. Para você, fica melhor na parte da manhã ou da tarde?"
+                  }
+                ]
+              }
+            ]
+          },
+          "items": [
+            {
+              "id": "item-manha",
+              "content": "Prefiro pela manhã",
+              "outgoingEdgeId": "edge-periodo-to-fechamento"
+            },
+            {
+              "id": "item-tarde",
+              "content": "Prefiro pela tarde",
+              "outgoingEdgeId": "edge-periodo-to-fechamento"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "group-fechamento-webhook",
+      "title": "5. Dados Finais e Alerta de Lead",
+      "graphCoordinates": {
+        "x": 1680,
+        "y": 100
+      },
+      "blocks": [
+        {
+          "id": "block-input-dados-finais",
+          "type": "text input",
+          "options": {
+            "variableId": "var-dados-finais",
+            "labels": {
+              "placeholder": "Nome completo e endereço com número..."
+            }
+          },
+          "content": {
+            "richText": [
+              {
+                "type": "p",
+                "children": [
+                  {
+                    "text": "Combinado. Me informe seu nome completo e o endereço (com número) para eu já reservar esse espaço na agenda técnica."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "block-text-confirmacao",
+          "type": "text",
+          "content": {
+            "richText": [
+              {
+                "type": "p",
+                "children": [
+                  {
+                    "text": "Perfeito! Já registrei aqui. O técnico responsável pela rota vai te chamar por este mesmo número em instantes só para alinhar o horário exato de chegada. Valeu!"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "block-webhook-alerta",
+          "type": "Webhook",
+          "options": {
+            "method": "POST",
+            "url": "http://SEU_IP_OU_DOMINIO:8080/message/sendText/warnat-tech",
+            "headers": [
+              {
+                "key": "apikey",
+                "value": "SUA_CHAVE_GLOBAL_AQUI_123456"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": "{\n  \"number\": \"5531999999999\",\n  \"text\": \"🚨 *NOVO AGENDAMENTO DE VISITA - WARNAT TECH*\\n\\n*Tipo:* {{ambiente}}\\n*Problema:* {{problema}}\\n*Bairro:* {{bairro}}\\n*Período:* {{periodo}}\\n*Dados do Cliente:* {{dados_finais}}\"\n}"
+          }
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-start-g1",
+      "from": {
+        "eventId": "event-start"
+      },
+      "to": {
+        "groupId": "group-acolhimento"
+      }
+    },
+    {
+      "id": "edge-empresa-to-cond1",
+      "from": {
+        "blockId": "block-buttons-ambiente",
+        "itemId": "item-empresa"
+      },
+      "to": {
+        "groupId": "group-resposta-empresa"
+      }
+    },
+    {
+      "id": "edge-residencia-to-cond2",
+      "from": {
+        "blockId": "block-buttons-ambiente",
+        "itemId": "item-residencia"
+      },
+      "to": {
+        "groupId": "group-resposta-residencia"
+      }
+    },
+    {
+      "id": "edge-empresa-to-triagem",
+      "from": {
+        "blockId": "block-text-empresa"
+      },
+      "to": {
+        "groupId": "group-triagem-problema"
+      }
+    },
+    {
+      "id": "edge-residencia-to-triagem",
+      "from": {
+        "blockId": "block-text-residencia"
+      },
+      "to": {
+        "groupId": "group-triagem-problema"
+      }
+    },
+    {
+      "id": "edge-triagem-to-bairro",
+      "from": {
+        "blockId": "block-audio-consultivo"
+      },
+      "to": {
+        "groupId": "group-agendamento-bairro"
+      }
+    },
+    {
+      "id": "edge-periodo-to-fechamento",
+      "from": {
+        "blockId": "block-buttons-periodo"
+      },
+      "to": {
+        "groupId": "group-fechamento-webhook"
+      }
+    }
+  ],
+  "variables": [
+    {
+      "id": "var-ambiente",
+      "name": "ambiente",
+      "isSessionVariable": false
+    },
+    {
+      "id": "var-problema",
+      "name": "problema",
+      "isSessionVariable": false
+    },
+    {
+      "id": "var-bairro",
+      "name": "bairro",
+      "isSessionVariable": false
+    },
+    {
+      "id": "var-periodo",
+      "name": "periodo",
+      "isSessionVariable": false
+    },
+    {
+      "id": "var-dados-finais",
+      "name": "dados_finais",
+      "isSessionVariable": false
+    }
+  ],
+  "settings": {
+    "general": {
+      "isBrandingEnabled": false
+    },
+    "typingEmulation": {
+      "enabled": true,
+      "speed": 350,
+      "maxDelay": 2
+    }
+  }
+}

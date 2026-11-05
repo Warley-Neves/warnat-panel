@@ -1,0 +1,28 @@
+================================================================================
+ROTEIRO DO ÁUDIO CONSULTIVO - WARNAT TECH (WHATSAPP PTT / NOTA DE VOZ)
+================================================================================
+
+[Instruções de Gravação para Humanização Máxima]
+1. Grave pelo próprio gravador do celular ou WhatsApp e exporte para .mp3 ou .ogg.
+2. Não use voz robótica ou excessivamente ensaiada. O tom deve ser de um especialista amigável falando com um cliente que acabou de enviar uma dúvida.
+3. Deixe um leve ruído ambiente de trabalho ao fundo (teclado sutil, ambiente técnico), pois isso quebra completamente qualquer percepção de "robô".
+4. Mantenha pausas naturais e respiração suave.
+
+--------------------------------------------------------------------------------
+TEXTO DO ROTEIRO:
+--------------------------------------------------------------------------------
+"Opa, escutei aqui o seu relato. Olha, esse tipo de diagnóstico varia muito dependendo do layout do imóvel, tipo de cabeamento e o que já tem instalado. Para não te passar nenhuma estimativa equivocada e garantir que fique tudo 100%, o ideal é um técnico nosso dar uma olhada presencial no local antes de fechar qualquer orçamento."
+
+--------------------------------------------------------------------------------
+COMO SUBIR NO TYPEBOT:
+--------------------------------------------------------------------------------
+Opção A (Recomendada):
+1. No Typebot, clique no bloco de Audio.
+2. Clique em "Upload" e selecione o arquivo de áudio gravado (.mp3 ou .ogg).
+3. O Typebot hospedará o arquivo em sua CDN própria com link direto.
+
+Opção B (Hospedagem própria):
+1. Suba o arquivo .mp3 em seu servidor / S3 / MinIO / WordPress.
+2. Cole a URL pública direta (ex: https://seudominio.com/audios/audio-warnat.mp3) no campo URL do bloco Audio.
+
+* Quando a Evolution API recebe esse bloco de áudio do Typebot, ela envia automaticamente para o WhatsApp como "PTT" (Push-To-Talk), ou seja, como se o técnico estivesse segurando o botão de microfone e gravando na hora (ícone de microfone verde no WhatsApp).

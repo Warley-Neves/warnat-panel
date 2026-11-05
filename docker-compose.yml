@@ -1,0 +1,152 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: evolution_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-evolution_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sua_senha_forte_aqui}
+      POSTGRES_DB: ${POSTGRES_DB:-evolution_db}
+    # Publicado SOMENTE em 127.0.0.1 para o Painel Admin (Node, fora do Docker) gravar as configuracoes dos tenants.
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - evolution_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-evolution_user} -d ${POSTGRES_DB:-evolution_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: evolution_chatwoot_redis
+    restart: always
+    volumes:
+      - redis_data:/data
+    networks:
+      - evolution_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  evolution-api:
+    image: evoapicloud/evolution-api:${EVOLUTION_VERSION:-v2.3.7}
+    container_name: evolution_api
+    restart: always
+    ports:
+      - "${EVOLUTION_PORT:-8085}:8080"
+    environment:
+      # Configuração básica do servidor
+      - SERVER_URL=${SERVER_URL:-http://localhost:8085}
+      - AUTHENTICATION_API_KEY=${AUTHENTICATION_API_KEY:-SUA_CHAVE_GLOBAL_AQUI_123456}
+
+      # Conexão com banco de dados PostgreSQL
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER:-evolution_user}:${POSTGRES_PASSWORD:-sua_senha_forte_aqui}@postgres:5432/${POSTGRES_DB:-evolution_db}?schema=public
+      - DATABASE_CONNECTION_CLIENT_NAME=evolution_v2
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CONTACTS=true
+      - DATABASE_SAVE_DATA_CHATS=true
+
+      # Configuração de Cache
+      - CACHE_REDIS_ENABLED=false
+      - DELAY_MESSAGE=1000
+
+      # Simulação de Presença e Comportamento Humanizado
+      - AUTO_READ_MESSAGE=false
+      - REJECT_CALLS=false
+      - CONFIG_SESSION_PHONE_CLIENT=WarnatTech
+      - CONFIG_SESSION_PHONE_NAME=Chrome
+
+      # Integrações
+      - TYPEBOT_ENABLED=false
+      - TYPEBOT_API_VERSION=${TYPEBOT_API_VERSION:-latest}
+      - CHATWOOT_ENABLED=true
+      - OPENAI_ENABLED=false
+      - OPENAI_API_KEY_GLOBAL=${OPENAI_API_KEY}
+      - WA_BUSINESS_LANGUAGE=pt_BR
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - evolution_network
+
+  chatwoot-web:
+    image: chatwoot/chatwoot:v3.14.0
+    container_name: chatwoot_web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - FRONTEND_URL=http://localhost:3000
+      - NODE_ENV=production
+      - RAILS_ENV=production
+      - INSTALLATION_ENV=docker
+      - SECRET_KEY_BASE=c5b78b87192cf3da4e2bb7648316c02fa10e75a7db5ad64a50d6f28b4937e2abf4d6d37617b73c246f40b20be3bebb4599148d4239846b0abfb0193433544c4b
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USERNAME=${POSTGRES_USER:-evolution_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sua_senha_forte_aqui}
+      - POSTGRES_DATABASE=chatwoot_production
+      - REDIS_URL=redis://redis:6379
+      - ENABLE_ACCOUNT_SIGNUP=true
+      - DEFAULT_LOCALE=en
+      - ACTIVE_STORAGE_SERVICE=local
+    command: ["/bin/sh", "-c", "rm -f /app/tmp/pids/server.pid && bundle exec rails s -p 3000 -b 0.0.0.0"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - chatwoot_storage:/app/storage
+    networks:
+      - evolution_network
+
+  chatwoot-worker:
+    image: chatwoot/chatwoot:v3.14.0
+    container_name: chatwoot_worker
+    restart: always
+    environment:
+      - FRONTEND_URL=http://localhost:3000
+      - NODE_ENV=production
+      - RAILS_ENV=production
+      - INSTALLATION_ENV=docker
+      - SECRET_KEY_BASE=c5b78b87192cf3da4e2bb7648316c02fa10e75a7db5ad64a50d6f28b4937e2abf4d6d37617b73c246f40b20be3bebb4599148d4239846b0abfb0193433544c4b
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USERNAME=${POSTGRES_USER:-evolution_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sua_senha_forte_aqui}
+      - POSTGRES_DATABASE=chatwoot_production
+      - REDIS_URL=redis://redis:6379
+      - DEFAULT_LOCALE=en
+      - ACTIVE_STORAGE_SERVICE=local
+    command: bundle exec sidekiq -C config/sidekiq.yml
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - chatwoot_storage:/app/storage
+    networks:
+      - evolution_network
+
+volumes:
+  pgdata:
+  evolution_instances:
+  redis_data:
+  chatwoot_storage:
+
+networks:
+  evolution_network:
+    driver: bridge

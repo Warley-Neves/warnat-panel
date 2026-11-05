@@ -1,0 +1,147 @@
+{
+  "info": {
+    "name": "Evolution API v2 - Warnat Tech Collection",
+    "description": "Coleção completa de requisições para controle da Evolution API v2, criação da instância Warnat Tech, integração com Typebot e disparo de alertas de lead.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8085",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "SUA_CHAVE_GLOBAL_AQUI_123456",
+      "type": "string"
+    },
+    {
+      "key": "instanceName",
+      "value": "warnat-tech",
+      "type": "string"
+    },
+    {
+      "key": "instanceToken",
+      "value": "token-interno-warnat-123",
+      "type": "string"
+    },
+    {
+      "key": "notificationPhone",
+      "value": "5531999999999",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": ["{{baseUrl}}"],
+          "path": [""]
+        }
+      }
+    },
+    {
+      "name": "2. Criar Instância (Warnat Tech)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{apiKey}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"instanceName\": \"{{instanceName}}\",\n  \"token\": \"{{instanceToken}}\",\n  \"qrcode\": true,\n  \"integration\": \"WHATSAPP-BAILEYS\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/instance/create",
+          "host": ["{{baseUrl}}"],
+          "path": ["instance", "create"]
+        }
+      }
+    },
+    {
+      "name": "3. Conectar / Obter QR Code",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "apikey", "value": "{{apiKey}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/instance/connect/{{instanceName}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["instance", "connect", "{{instanceName}}"]
+        }
+      }
+    },
+    {
+      "name": "4. Estado da Conexão",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "apikey", "value": "{{apiKey}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/instance/connectionState/{{instanceName}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["instance", "connectionState", "{{instanceName}}"]
+        }
+      }
+    },
+    {
+      "name": "5. Vincular Typebot à Instância",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{apiKey}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"enabled\": true,\n  \"url\": \"https://viewer.typebot.io\",\n  \"typebot\": \"warnat-atendimento-xyz\",\n  \"expire\": 20,\n  \"keywordFinish\": \"#parar\",\n  \"delayMessage\": 1500,\n  \"unknownMessage\": \"Desculpe, não compreendi. Poderia repetir?\",\n  \"listeningFromMe\": false,\n  \"stopBotFromMe\": true,\n  \"keepOpen\": false,\n  \"debounceTime\": 10\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/typebot/set/{{instanceName}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["typebot", "set", "{{instanceName}}"]
+        }
+      }
+    },
+    {
+      "name": "6. Consultar Typebot Configurado",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "apikey", "value": "{{apiKey}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/typebot/find/{{instanceName}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["typebot", "find", "{{instanceName}}"]
+        }
+      }
+    },
+    {
+      "name": "7. Disparar Mensagem de Notificação de Lead",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "apikey", "value": "{{apiKey}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"number\": \"{{notificationPhone}}\",\n  \"text\": \"🚨 *NOVO AGENDAMENTO DE VISITA - WARNAT TECH*\\n\\n*Tipo:* Para minha empresa\\n*Problema:* Rede instável e cabeamento desorganizado\\n*Bairro:* Centro\\n*Período:* Prefiro pela manhã\\n*Dados do Cliente:* Marcos Silva - Rua Principal, 123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/message/sendText/{{instanceName}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["message", "sendText", "{{instanceName}}"]
+        }
+      }
+    }
+  ]
+}
