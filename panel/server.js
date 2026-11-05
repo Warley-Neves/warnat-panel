@@ -12,6 +12,8 @@ const calendarService = require('../calendar/google-calendar');
 const schedulerAgent = require('../agent/whatsapp-scheduler');
 const leadsCrm = require('../crm/leads-crm');
 const settingsStore = require('../config/settings-store');
+const { handleV2Routes } = require('./routes/v2.routes');
+const webhookController = require('../controllers/webhook.controller');
 
 // Carregar variáveis de ambiente do .env
 const envPath = path.resolve(__dirname, '..', '.env');
@@ -167,8 +169,15 @@ const server = http.createServer(async (req, res) => {
 
   try {
     // --------------------------------------------------------------------------
-    // ROTAS PÚBLICAS DE AUTENTICAÇÃO
+    // ROTAS DA API V2 (MULTI-TENANT SAAS)
     // --------------------------------------------------------------------------
+    if (pathname.startsWith('/api/v2/')) {
+      const handled = await handleV2Routes(req, res, pathname, method, body);
+      if (handled !== false) return;
+    }
+
+    // --------------------------------------------------------------------------
+    // ROTAS PÚBLICAS DE AUTENTICAÇÃO LEGADA
     
     // Login com Senha Administrativa
     if (pathname === '/api/auth/login' && method === 'POST') {
@@ -228,7 +237,7 @@ const server = http.createServer(async (req, res) => {
     // --------------------------------------------------------------------------
     if (pathname === '/api/webhook/whatsapp' && method === 'POST') {
       try {
-        schedulerAgent.handleWebhookPayload(body);
+        webhookController.handleWebhook(body).catch(e => console.error('[Webhook] Async error:', e.message));
         return sendJson(200, { received: true });
       } catch (e) {
         console.error('[Panel] Erro ao processar webhook whatsapp:', e.message);
