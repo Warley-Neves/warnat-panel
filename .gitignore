@@ -8,7 +8,7 @@ node_modules/
 *.secret
 
 # Credenciais do Google Cloud
-google-credentials.json
+google-credentials*
 automacao-agendamento-*.json
 *.key.json
 
