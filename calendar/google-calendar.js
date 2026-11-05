@@ -53,7 +53,9 @@ function slotsForWindow(win, durationMinutes, bufferMinutes) {
 }
 
 // Caminho do arquivo de credenciais da Conta de Serviço do Google Cloud
-const CREDENTIALS_PATH = process.env.GOOGLE_CREDENTIALS_PATH || path.resolve(__dirname, '..', 'google-credentials.json');
+const DEFAULT_CRED_PATH = path.resolve(__dirname, '..', 'google-credentials.json');
+const RENDER_SECRET_PATH = '/etc/secrets/google-credentials.json';
+const CREDENTIALS_PATH = process.env.GOOGLE_CREDENTIALS_PATH || (fs.existsSync(RENDER_SECRET_PATH) ? RENDER_SECRET_PATH : DEFAULT_CRED_PATH);
 
 class GoogleCalendarService {
   constructor() {
