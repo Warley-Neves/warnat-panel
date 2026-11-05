@@ -14,8 +14,13 @@ class WebhookController {
     this.debounceBuffers = new Map();
     this.DEBOUNCE_DELAY_MS = 3000;
 
-    // Callback para processamento da LLM (injetado pela Engine de IA)
-    this.aiProcessor = null;
+    // Callback para processamento da LLM (injetado pela Engine de IA ou padrão)
+    try {
+      const aiEngine = require('../services/ai-engine.service');
+      this.aiProcessor = (params) => aiEngine.processTurn(params);
+    } catch (e) {
+      this.aiProcessor = null;
+    }
   }
 
   /**
