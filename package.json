@@ -12,8 +12,10 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dotenv": "^18.0.9",
     "googleapis": "^189.0.0",
+    "jsonwebtoken": "^9.0.3",
     "openai": "^7.47.0",
     "pg": "^8.23.1"
   }
