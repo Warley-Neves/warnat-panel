@@ -794,6 +794,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/status' && method === 'GET') {
       let evoOk = false;
       let cwOk = false;
+      const calOk = calendarService.isConfigured();
 
       try {
         const evoRes = await fetch(`${EVOLUTION_URL}/`);
@@ -808,6 +809,8 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, {
         evolution: evoOk,
         chatwoot: cwOk,
+        nat: true,
+        calendar: calOk,
         evolutionUrl: EVOLUTION_URL,
         chatwootUrl: CHATWOOT_URL,
         panelPort: PORT
