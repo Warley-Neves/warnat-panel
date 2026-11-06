@@ -108,7 +108,7 @@ class AuthService {
 
     const cleanEmail = email.toLowerCase().trim();
     const res = await query(
-      `SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role, u.nome, u.ativo,
+      `SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role, u.nome,
               t.nome_empresa, t.plano, t.ativo as tenant_ativo
        FROM users u
        JOIN tenants t ON t.id = u.tenant_id
@@ -117,14 +117,10 @@ class AuthService {
     );
 
     if (res.rowCount === 0) {
-      throw new Error('Credenciais inválidas.');
+      throw new Error('Credenciais inválidas: e-mail ou senha incorretos.');
     }
 
     const user = res.rows[0];
-
-    if (!user.ativo) {
-      throw new Error('Usuário desativado. Contate o administrador.');
-    }
 
     if (!user.tenant_ativo) {
       throw new Error('Empresa/Tenant desativado. Contate o suporte.');

@@ -42,8 +42,8 @@ async function seedWarNatTech() {
     if (existingUser.rowCount === 0) {
       const passwordHash = await authService.hashPassword('WarnatAdmin2026!');
       const newUser = await client.query(
-        `INSERT INTO users (tenant_id, email, password_hash, role, nome, ativo)
-         VALUES ($1, $2, $3, 'admin', 'Warley Santos', true)
+        `INSERT INTO users (tenant_id, email, password_hash, role, nome)
+         VALUES ($1, $2, $3, 'admin', 'Warley Santos')
          RETURNING id, email, role, nome`,
         [tenantId, adminEmail, passwordHash]
       );
