@@ -30,6 +30,88 @@ if (fs.existsSync(envPath)) {
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || envMap['OPENAI_API_KEY'];
 
+// Dias da semana em português (0 = Domingo, 1 = Segunda-feira, ..., 6 = Sábado)
+const DIAS_SEMANA_NOMES = [
+  'Domingo',
+  'Segunda-feira',
+  'Terça-feira',
+  'Quarta-feira',
+  'Quinta-feira',
+  'Sexta-feira',
+  'Sábado'
+];
+
+// Mapeamento dos identificadores configurados no painel
+const DIA_KEY_TO_INDEX = {
+  'domingo': 0,
+  'segunda': 1,
+  'segunda-feira': 1,
+  'terca': 2,
+  'terça': 2,
+  'terca-feira': 2,
+  'terça-feira': 2,
+  'quarta': 3,
+  'quarta-feira': 3,
+  'quinta': 4,
+  'quinta-feira': 4,
+  'sexta': 5,
+  'sexta-feira': 5,
+  'sabado': 6,
+  'sábado': 6
+};
+
+/**
+ * Cria um objeto Date seguro no meio-dia (12:00) para evitar desvio de timezone UTC-3
+ */
+function parseLocalDate(dateVal) {
+  if (!dateVal) return new Date();
+  if (dateVal instanceof Date) {
+    if (isNaN(dateVal.getTime())) return new Date();
+    return new Date(dateVal.getFullYear(), dateVal.getMonth(), dateVal.getDate(), 12, 0, 0);
+  }
+  const str = String(dateVal).trim();
+  const ymdMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymdMatch) {
+    return new Date(parseInt(ymdMatch[1], 10), parseInt(ymdMatch[2], 10) - 1, parseInt(ymdMatch[3], 10), 12, 0, 0);
+  }
+  const dmyMatch = str.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+  if (dmyMatch) {
+    const d = parseInt(dmyMatch[1], 10);
+    const m = parseInt(dmyMatch[2], 10);
+    let y = dmyMatch[3] ? parseInt(dmyMatch[3], 10) : new Date().getFullYear();
+    if (y < 100) y += 2000;
+    return new Date(y, m - 1, d, 12, 0, 0);
+  }
+  const fallback = new Date(str);
+  if (!isNaN(fallback.getTime())) {
+    if (str.includes('T')) {
+      const brStr = fallback.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      const [dd, mm, yyyy] = brStr.split('/').map(Number);
+      return new Date(yyyy, mm - 1, dd, 12, 0, 0);
+    }
+    return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate(), 12, 0, 0);
+  }
+  return new Date();
+}
+
+/**
+ * Retorna o dia da semana correto em português e a data formatada no padrão brasileiro
+ */
+function getDayOfWeekInfo(dateVal) {
+  const d = parseLocalDate(dateVal);
+  const dayIndex = d.getDay();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return {
+    dayOfWeek: DIAS_SEMANA_NOMES[dayIndex],
+    dayIndex,
+    formattedBr: `${dd}/${mm}`,
+    formattedFullBr: `${dd}/${mm}/${yyyy}`,
+    isoDate: `${yyyy}-${mm}-${dd}`
+  };
+}
+
 // ------------------------------------------------------------------------------
 // DEFINIÇÃO DAS 6 TOOLS OFICIAIS (FUNCTION CALLING)
 // ------------------------------------------------------------------------------
@@ -228,7 +310,7 @@ class AiEngineService {
   /**
    * Detecta se a mensagem do cliente confirma data/horário para agendamento
    */
-  detectBookingRequest(text, historyMessages = []) {
+  detectBookingRequest(text, historyMessages = [], aiConfig = {}) {
     if (!text) return null;
     const lower = text.toLowerCase().trim();
 
@@ -276,7 +358,7 @@ class AiEngineService {
       targetDate = `${now.getFullYear()}-${m}-${d}`;
     }
 
-    // Busca data nas últimas mensagens do assistente
+    // Busca data nas últimas mensagens do assistente (ex: Sábado (07/11))
     if (!targetDate && Array.isArray(historyMessages)) {
       for (let i = historyMessages.length - 1; i >= 0; i--) {
         const m = historyMessages[i];
@@ -284,7 +366,9 @@ class AiEngineService {
           const amMatch = m.content.match(/\b(\d{2})\/(\d{2})\b/);
           if (amMatch) {
             const now = new Date();
-            targetDate = `${now.getFullYear()}-${amMatch[2]}-${amMatch[1]}`;
+            const d = String(amMatch[1]).padStart(2, '0');
+            const mo = String(amMatch[2]).padStart(2, '0');
+            targetDate = `${now.getFullYear()}-${mo}-${d}`;
             break;
           }
         }
@@ -292,10 +376,25 @@ class AiEngineService {
     }
 
     if (!targetDate) {
-      // Data padrão: próximo sábado ou próximo dia útil
-      const d = new Date();
-      d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
-      targetDate = d.toISOString().split('T')[0];
+      // Data padrão: próximo dia permitido nas regras de agendamento do tenant
+      const r = aiConfig?.regras_agendamento || {};
+      const allowedDaysList = (Array.isArray(r.dias_atendimento) && r.dias_atendimento.length > 0)
+        ? r.dias_atendimento
+        : ((Array.isArray(r.dias) && r.dias.length > 0) ? r.dias : ['sabado']);
+      const allowedIndices = allowedDaysList.map(k => DIA_KEY_TO_INDEX[String(k).toLowerCase().trim()]).filter(v => v !== undefined);
+      const targetIdx = allowedIndices.length > 0 ? allowedIndices[0] : 6;
+
+      const now = new Date();
+      let cur = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 12, 0, 0);
+      for (let step = 0; step < 14; step++) {
+        if (cur.getDay() === targetIdx) {
+          break;
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+      targetDate = getDayOfWeekInfo(cur).isoDate;
+    } else {
+      targetDate = getDayOfWeekInfo(targetDate).isoDate;
     }
 
     return {
@@ -319,6 +418,38 @@ class AiEngineService {
       lower.includes('aguardar outro dia') ||
       lower.includes('não posso mais') ||
       lower.includes('nao posso mais')
+    );
+  }
+
+  /**
+   * Detecta se o cliente deseja consultar seus agendamentos / histórico
+   */
+  detectConsultarHistoricoRequest(text) {
+    if (!text) return false;
+    const lower = text.toLowerCase().trim();
+    return (
+      lower.includes('consultar agendamento') ||
+      lower.includes('consultar agenda') ||
+      lower.includes('meus agendamentos') ||
+      lower.includes('minhas visitas') ||
+      lower.includes('minha visita') ||
+      lower.includes('o que foi marcado') ||
+      lower.includes('o que está agendado') ||
+      lower.includes('o que esta agendado') ||
+      lower.includes('qual dia foi marcado') ||
+      lower.includes('qual horário foi marcado') ||
+      lower.includes('qual horario foi marcado') ||
+      lower.includes('quando é minha visita') ||
+      lower.includes('quando e minha visita') ||
+      lower.includes('agendamento confirmado?') ||
+      lower.includes('visita confirmada?') ||
+      lower.includes('tenho visita marcada') ||
+      lower.includes('histórico de visita') ||
+      lower.includes('historico de visita') ||
+      lower.includes('visita anterior') ||
+      lower.includes('visitas anteriores') ||
+      lower.includes('visitas cumpridas') ||
+      lower.includes('visitas canceladas')
     );
   }
 
@@ -455,71 +586,165 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       console.warn('[AIEngine] Aviso ao consultar Google Calendar:', calErr.message);
     }
 
-    // 2. Fallback de alta confiabilidade: calcula slots do tenant
+    // 2. Fallback de alta confiabilidade: calcula slots do tenant respeitando estritamente os dias e horários permitidos
     const cfgRes = await query(`SELECT regras_agendamento FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
     const aiCfg = cfgRes.rows[0]?.regras_agendamento || {};
-    const configuredSlots = Array.isArray(aiCfg.slots_agendamento) ? aiCfg.slots_agendamento : (Array.isArray(aiCfg.slots_disponiveis) ? aiCfg.slots_disponiveis : ['08:00', '10:00', '12:00', '14:00', '16:00']);
 
-    // Procura próxima data comercial válida
-    const now = new Date();
-    const target = new Date(now);
-    target.setDate(target.getDate() + 1); // a partir de amanhã
+    const configuredSlots = (Array.isArray(aiCfg.slots_agendamento) && aiCfg.slots_agendamento.length > 0)
+      ? aiCfg.slots_agendamento
+      : ((Array.isArray(aiCfg.slots_disponiveis) && aiCfg.slots_disponiveis.length > 0)
+          ? aiCfg.slots_disponiveis
+          : ['08:00', '10:00', '12:00', '14:00', '16:00']);
 
-    // Ajusta para dia útil ou sábado
-    if (target.getDay() === 0) target.setDate(target.getDate() + 1); // Se domingo, vai para segunda
+    const allowedDaysList = (Array.isArray(aiCfg.dias_atendimento) && aiCfg.dias_atendimento.length > 0)
+      ? aiCfg.dias_atendimento
+      : ((Array.isArray(aiCfg.dias) && aiCfg.dias.length > 0)
+          ? aiCfg.dias
+          : ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']);
 
-    const dStr = target.toISOString().split('T')[0];
-    const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-    const dayName = dayNames[target.getDay()];
-    const dBr = target.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const allowedIndices = allowedDaysList
+      .map(k => DIA_KEY_TO_INDEX[String(k).toLowerCase().trim()])
+      .filter(idx => idx !== undefined);
 
-    const s1 = configuredSlots[0] || '10:00';
-    const s2 = configuredSlots[1] || '14:00';
+    const normExcludeDates = (excludeDates || []).map(d => String(d).trim());
+    const normExcludeSlots = (excludeSlots || []).map(s => String(s).trim());
+
+    let cursorDate;
+    if (fromDate) {
+      cursorDate = parseLocalDate(fromDate);
+    } else {
+      const now = new Date();
+      cursorDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 12, 0, 0);
+    }
+
+    const freeSlots = [];
+    let daysChecked = 0;
+
+    while (freeSlots.length < 2 && daysChecked < 35) {
+      const info = getDayOfWeekInfo(cursorDate);
+
+      // Trava de dias de atendimento: se o dia não for permitido, pula
+      if (allowedIndices.includes(info.dayIndex)) {
+        const isExcluded = normExcludeDates.some(ex => ex === info.isoDate || ex === info.formattedBr || info.isoDate.endsWith(ex));
+        if (!isExcluded) {
+          for (const slotTime of configuredSlots) {
+            const cleanTime = slotTime.substring(0, 5);
+            const slotKey = `${info.isoDate} ${cleanTime}`;
+            if (normExcludeSlots.includes(slotKey) || normExcludeSlots.includes(cleanTime)) {
+              continue;
+            }
+
+            // Trava anti-duplicidade no banco de dados: confere se horário já está reservado
+            const slotTimestamp = new Date(`${info.isoDate}T${cleanTime}:00-03:00`);
+            const busyCheck = await query(
+              `SELECT id FROM appointments 
+               WHERE tenant_id = $1 AND data_agendada = $2 AND status = 'agendado' LIMIT 1`,
+              [tenantId, slotTimestamp]
+            );
+
+            if (busyCheck.rowCount === 0) {
+              freeSlots.push({
+                date: info.isoDate,
+                dayOfWeek: info.dayOfWeek,
+                time: cleanTime,
+                description: `${info.dayOfWeek} (${info.formattedBr}) às ${cleanTime}`
+              });
+              if (freeSlots.length >= 2) break;
+            }
+          }
+        }
+      }
+
+      cursorDate.setDate(cursorDate.getDate() + 1);
+      daysChecked++;
+    }
 
     return {
       success: true,
-      totalFound: 2,
+      totalFound: freeSlots.length,
       instruction: instructionMsg,
-      slots: [
-        { date: dStr, dayOfWeek: dayName, time: s1, description: `${dayName} (${dBr}) às ${s1}` },
-        { date: dStr, dayOfWeek: dayName, time: s2, description: `${dayName} (${dBr}) às ${s2}` }
-      ]
+      slots: freeSlots
     };
   }
 
   /**
    * Executa Tool: check_specific_slot_availability
    */
-  async executeCheckSlotTool({ date, time }) {
-    try {
-      if (calendarService.isConfigured && calendarService.isConfigured()) {
-        const dayAvail = await calendarService.getDayAvailability(date);
-        const isSlotInDay = dayAvail.availableSlots && dayAvail.availableSlots.includes(time);
+  async executeCheckSlotTool({ tenantId, date, time }) {
+    const info = getDayOfWeekInfo(date);
+    const cleanTime = (time || '08:00').substring(0, 5);
+    const slotTimestamp = new Date(`${info.isoDate}T${cleanTime}:00-03:00`);
 
-        if (isSlotInDay) {
-          const startTime = calendarService.parseDateTime(date, time);
-          const endTime = new Date(startTime.getTime() + (90 * 60 * 1000));
-          const isFree = await calendarService.isSlotAvailable(startTime, endTime);
+    const cfgRes = await query(`SELECT regras_agendamento FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
+    const aiCfg = cfgRes.rows[0]?.regras_agendamento || {};
 
-          if (isFree) {
-            return {
-              available: true,
-              date,
-              time,
-              message: `O horário das ${time} no dia ${date} está 100% LIVRE para agendamento.`
-            };
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[AIEngine] Falha ao verificar slot no calendário:', e.message);
+    const allowedDaysList = (Array.isArray(aiCfg.dias_atendimento) && aiCfg.dias_atendimento.length > 0)
+      ? aiCfg.dias_atendimento
+      : ((Array.isArray(aiCfg.dias) && aiCfg.dias.length > 0)
+          ? aiCfg.dias
+          : ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']);
+
+    const allowedIndices = allowedDaysList
+      .map(k => DIA_KEY_TO_INDEX[String(k).toLowerCase().trim()])
+      .filter(idx => idx !== undefined);
+    const allowedDaysNames = allowedIndices.map(idx => DIAS_SEMANA_NOMES[idx]);
+
+    // 1. Trava de dia da semana permitido
+    if (!allowedIndices.includes(info.dayIndex)) {
+      const nextSlots = await this.executeGetSlotsTool({
+        tenantId,
+        historyMessages: [{ role: 'user', content: 'nova instalação' }],
+        args: {}
+      });
+
+      return {
+        available: false,
+        date: info.isoDate,
+        dayOfWeek: info.dayOfWeek,
+        formattedBr: info.formattedBr,
+        time: cleanTime,
+        reason: 'dia_nao_permitido',
+        allowedDays: allowedDaysNames,
+        message: `Não realizamos visitas técnicas às ${info.dayOfWeek.toLowerCase()}s. Nossos atendimentos são realizados exclusivamente em: ${allowedDaysNames.join(', ')}.`,
+        suggestedSlots: nextSlots.slots || [],
+        instruction: `Atenção obrigatória: O dia solicitado (${info.dayOfWeek}, ${info.formattedBr}) NÃO é um dia de atendimento permitido pelo tenant! Explique com simpatia e clareza que as visitas técnicas ocorrem exclusivamente nos dias autorizados (${allowedDaysNames.join(', ')}). Em seguida, ofereça os horários livres sugeridos em suggestedSlots!`
+      };
+    }
+
+    // 2. Trava de horário ocupado / anti-choque no banco
+    const busyCheck = await query(
+      `SELECT id, servico FROM appointments 
+       WHERE tenant_id = $1 AND data_agendada = $2 AND status = 'agendado' LIMIT 1`,
+      [tenantId, slotTimestamp]
+    );
+
+    if (busyCheck.rowCount > 0) {
+      const nextSlots = await this.executeGetSlotsTool({
+        tenantId,
+        historyMessages: [{ role: 'user', content: 'nova instalação' }],
+        args: { excludeSlots: [`${info.isoDate} ${cleanTime}`, cleanTime] }
+      });
+
+      return {
+        available: false,
+        date: info.isoDate,
+        dayOfWeek: info.dayOfWeek,
+        formattedBr: info.formattedBr,
+        time: cleanTime,
+        reason: 'horario_ocupado',
+        message: `O horário das ${cleanTime} no dia ${info.dayOfWeek} (${info.formattedBr}) já está reservado.`,
+        suggestedSlots: nextSlots.slots || [],
+        instruction: `Atenção: O horário das ${cleanTime} no dia ${info.dayOfWeek} (${info.formattedBr}) já está OCUPADO na agenda! Não confirme este horário. Explique cordialmente que a vaga já foi preenchida e ofereça os horários livres alternativos em suggestedSlots!`
+      };
     }
 
     return {
       available: true,
-      date,
-      time,
-      message: `Horário das ${time} no dia ${date} confirmado como disponível.`
+      date: info.isoDate,
+      dayOfWeek: info.dayOfWeek,
+      formattedBr: `${info.formattedBr} (${info.dayOfWeek})`,
+      time: cleanTime,
+      message: `Horário das ${cleanTime} de ${info.dayOfWeek} (${info.formattedBr}) confirmado como 100% LIVRE.`
     };
   }
 
@@ -529,36 +754,80 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
   async executeBookAppointmentTool({ tenantId, sessionId, remoteJid, pushName, args }) {
     const { date, time, clientName, address = 'Endereço a confirmar', appointmentType = 'VISITA_TECNICA', serviceType, notes = '' } = args;
 
-    const phone = remoteJid.replace(/@.*$/, '').replace(/\D/g, '');
-    const finalClientName = (clientName && clientName !== 'Cliente') ? clientName : (pushName || 'Cliente WhatsApp');
-    const finalServiceType = serviceType || (appointmentType === 'INSTALACAO_CFTV' ? 'Instalação de Câmeras de Segurança' : 'Visita Técnica Gratuita');
-
-    console.log(`[AIEngine] Agendando ${appointmentType} para ${finalClientName} (${date} às ${time})...`);
-
-    let googleRes = { success: false };
-    if (calendarService.isConfigured && calendarService.isConfigured()) {
-      try {
-        googleRes = await calendarService.bookAppointment({
-          date,
-          time,
-          clientName: finalClientName,
-          phone,
-          address,
-          serviceType: finalServiceType,
-          appointmentType,
-          notes
-        });
-      } catch (err) {
-        console.warn('[AIEngine] Falha ao registrar no Google Calendar:', err.message);
-      }
-    }
-
-    // Grava no banco de dados na tabela appointments garantindo timezone oficial de Brasília (UTC-3)
-    const cleanDate = date.split('T')[0];
+    const info = getDayOfWeekInfo(date);
+    const cleanDate = info.isoDate;
     const cleanTime = (time || '08:00').substring(0, 5);
     const apptDate = new Date(`${cleanDate}T${cleanTime}:00-03:00`);
 
-    // Evita duplicidade de agenda para o mesmo serviço
+    const finalClientName = (clientName && clientName !== 'Cliente') ? clientName : (pushName || 'Cliente WhatsApp');
+    const finalServiceType = serviceType || (appointmentType === 'INSTALACAO_CFTV' ? 'Instalação de Câmeras de Segurança' : 'Visita Técnica Gratuita');
+
+    // 1. Validação de Dias Permitidos do Tenant
+    const cfgRes = await query(`SELECT regras_agendamento FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
+    const aiCfg = cfgRes.rows[0]?.regras_agendamento || {};
+
+    const allowedDaysList = (Array.isArray(aiCfg.dias_atendimento) && aiCfg.dias_atendimento.length > 0)
+      ? aiCfg.dias_atendimento
+      : ((Array.isArray(aiCfg.dias) && aiCfg.dias.length > 0)
+          ? aiCfg.dias
+          : ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']);
+
+    const allowedIndices = allowedDaysList
+      .map(k => DIA_KEY_TO_INDEX[String(k).toLowerCase().trim()])
+      .filter(idx => idx !== undefined);
+    const allowedDaysNames = allowedIndices.map(idx => DIAS_SEMANA_NOMES[idx]);
+
+    if (!allowedIndices.includes(info.dayIndex)) {
+      console.warn(`[AIEngine] Bloqueio book_appointment: ${info.dayOfWeek} (${cleanDate}) não é permitido para este tenant.`);
+      const nextSlots = await this.executeGetSlotsTool({
+        tenantId,
+        historyMessages: [{ role: 'user', content: 'nova instalação' }],
+        args: {}
+      });
+
+      return {
+        success: false,
+        error: 'dia_nao_permitido',
+        date: cleanDate,
+        dayOfWeek: info.dayOfWeek,
+        formattedBr: `${info.dayOfWeek} (${info.formattedBr})`,
+        allowedDays: allowedDaysNames,
+        message: `Não realizamos visitas técnicas às ${info.dayOfWeek.toLowerCase()}s. Nossos dias de atendimento são: ${allowedDaysNames.join(', ')}.`,
+        suggestedSlots: nextSlots.slots || [],
+        instruction: `Atenção: O agendamento para ${info.dayOfWeek} (${info.formattedBr}) foi recusado pelo sistema porque a equipe só atende em: ${allowedDaysNames.join(', ')}. Explique educadamente ao cliente e ofereça os horários em suggestedSlots!`
+      };
+    }
+
+    // 2. Trava Anti-Choque: Verifica se outra pessoa já agendou esse horário exato
+    const occupiedCheck = await query(
+      `SELECT id, remote_jid FROM appointments 
+       WHERE tenant_id = $1 AND data_agendada = $2 AND status = 'agendado' AND remote_jid != $3 LIMIT 1`,
+      [tenantId, apptDate, remoteJid]
+    );
+
+    if (occupiedCheck.rowCount > 0) {
+      console.warn(`[AIEngine] Bloqueio book_appointment: horário ${cleanDate} às ${cleanTime} já ocupado por outro cliente.`);
+      const nextSlots = await this.executeGetSlotsTool({
+        tenantId,
+        historyMessages: [{ role: 'user', content: 'nova instalação' }],
+        args: { excludeSlots: [`${cleanDate} ${cleanTime}`, cleanTime] }
+      });
+
+      return {
+        success: false,
+        error: 'horario_ocupado',
+        date: cleanDate,
+        dayOfWeek: info.dayOfWeek,
+        time: cleanTime,
+        message: `O horário das ${cleanTime} no dia ${info.dayOfWeek} (${info.formattedBr}) já está reservado para outro cliente.`,
+        suggestedSlots: nextSlots.slots || [],
+        instruction: `Atenção: Este horário já está OCUPADO por outro cliente! Não confirme. Informe educadamente que a vaga foi preenchida e ofereça os horários sugeridos em suggestedSlots!`
+      };
+    }
+
+    console.log(`[AIEngine] Agendando ${appointmentType} para ${finalClientName} (${cleanDate} às ${cleanTime})...`);
+
+    // Evita duplicidade de agenda para o mesmo serviço do mesmo cliente
     const existingApptRes = await query(
       `SELECT id, data_agendada, status FROM appointments 
        WHERE tenant_id = $1 AND remote_jid = $2 AND servico = $3 AND status = 'agendado'
@@ -581,19 +850,9 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
         console.log(`[AIEngine] Reagendando visita existente (${existing.id}) para ${apptDate.toISOString()} sem duplicidade.`);
         await query(
           `UPDATE appointments 
-           SET data_agendada = $1, tipo_agendamento = $2, endereco = COALESCE($3, endereco),
-               google_event_id = COALESCE($4, google_event_id), google_event_link = COALESCE($5, google_event_link),
-               observacoes = $6
-           WHERE id = $7`,
-          [
-            apptDate,
-            appointmentType,
-            address,
-            googleRes.eventId || null,
-            googleRes.eventLink || null,
-            notes,
-            existing.id
-          ]
+           SET data_agendada = $1, tipo_agendamento = $2, endereco = COALESCE($3, endereco), observacoes = $4
+           WHERE id = $5`,
+          [apptDate, appointmentType, address, notes, existing.id]
         );
         apptId = existing.id;
         isReschedule = true;
@@ -601,25 +860,14 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
     } else {
       const apptDbRes = await query(
         `INSERT INTO appointments (
-           tenant_id, remote_jid, servico, data_agendada, status, tipo_agendamento, endereco, google_event_id, google_event_link, observacoes
-         ) VALUES ($1, $2, $3, $4, 'agendado', $5, $6, $7, $8, $9)
-         RETURNING id, data_agendada, status`,
-        [
-          tenantId,
-          remoteJid,
-          finalServiceType,
-          apptDate,
-          appointmentType,
-          address,
-          googleRes.eventId || null,
-          googleRes.eventLink || null,
-          notes
-        ]
+           tenant_id, remote_jid, servico, data_agendada, status, tipo_agendamento, endereco, observacoes
+         ) VALUES ($1, $2, $3, $4, 'agendado', $5, $6, $7)
+         RETURNING id`,
+        [tenantId, remoteJid, finalServiceType, apptDate, appointmentType, address, notes]
       );
       apptId = apptDbRes.rows[0].id;
     }
 
-    // Atualiza chat_sessions
     await query(
       `UPDATE chat_sessions 
        SET etapa_funil = 'agendado', client_name = COALESCE($1, client_name), last_interaction = now()
@@ -627,34 +875,19 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       [finalClientName, sessionId]
     );
 
-    // Registra no CRM em memória se ativo
-    try {
-      leadsCrm.recordAppointment({
-        jid: remoteJid,
-        clientName: finalClientName,
-        phone,
-        appointmentType,
-        date,
-        time,
-        address,
-        notes,
-        eventLink: googleRes.eventLink || '',
-        eventId: googleRes.eventId || '',
-        serviceType: finalServiceType
-      });
-    } catch (e) {}
-
     return {
       success: true,
       appointmentId: apptId,
-      date,
-      time,
+      date: cleanDate,
+      dayOfWeek: info.dayOfWeek,
+      formattedBr: `${info.dayOfWeek} (${info.formattedBr})`,
+      time: cleanTime,
       clientName: finalClientName,
       appointmentType,
       isReschedule,
       message: isReschedule
-        ? `Reagendamento de ${finalServiceType} confirmado com sucesso para ${date} às ${time}!`
-        : `Agendamento de ${finalServiceType} confirmado com sucesso para ${date} às ${time}!`
+        ? `Reagendamento de ${finalServiceType} confirmado com sucesso para ${info.dayOfWeek} (${info.formattedBr}) às ${cleanTime}!`
+        : `Agendamento de ${finalServiceType} confirmado com sucesso para ${info.dayOfWeek} (${info.formattedBr}) às ${cleanTime}!`
     };
   }
 
@@ -764,7 +997,7 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       `SELECT id, servico, data_agendada, status, tipo_agendamento, endereco, observacoes
        FROM appointments 
        WHERE tenant_id = $1 AND remote_jid = $2
-       ORDER BY data_agendada DESC LIMIT 10`,
+       ORDER BY data_agendada DESC LIMIT 20`,
       [tenantId, remoteJid]
     );
 
@@ -775,39 +1008,62 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       [tenantId, remoteJid]
     );
 
-    const active = [];
-    const past = [];
+    const agendasMarcadas = [];
+    const agendasCumpridas = [];
+    const agendasCanceladas = [];
 
     apptsRes.rows.forEach(a => {
-      const d = new Date(a.data_agendada);
-      const dataStr = !isNaN(d.getTime())
-        ? d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }) + ' às ' + d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
-        : String(a.data_agendada);
+      const info = getDayOfWeekInfo(a.data_agendada);
+      const timeStr = !isNaN(new Date(a.data_agendada).getTime())
+        ? new Date(a.data_agendada).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+        : '08:00';
 
       const item = {
         id: a.id,
         servico: a.servico,
-        data_agendada: dataStr,
+        data: info.isoDate,
+        dia_da_semana: info.dayOfWeek,
+        horario: timeStr,
+        descricao_formatada: `${info.dayOfWeek} (${info.formattedBr}) às ${timeStr}`,
         status: a.status,
-        endereco: a.endereco || 'A confirmar'
+        tipo_agendamento: a.tipo_agendamento,
+        endereco: a.endereco || 'A confirmar',
+        observacoes: a.observacoes || ''
       };
 
       if (a.status === 'agendado') {
-        active.push(item);
-      } else {
-        past.push(item);
+        agendasMarcadas.push(item);
+      } else if (a.status === 'concluido') {
+        agendasCumpridas.push(item);
+      } else if (a.status === 'cancelado') {
+        agendasCanceladas.push(item);
       }
     });
+
+    let instruction = '';
+    if (agendasMarcadas.length > 0) {
+      instruction += `O cliente possui ${agendasMarcadas.length} agenda(s) marcada(s) e ativa(s): ${agendasMarcadas.map(a => `${a.servico} em ${a.descricao_formatada}`).join(', ')}. `;
+    } else {
+      instruction += 'O cliente não possui nenhuma visita técnica agendada ativa no momento. ';
+    }
+    if (agendasCumpridas.length > 0) {
+      instruction += `Já realizou ${agendasCumpridas.length} visita(s) técnica(s) cumprida(s)/concluída(s) no passado (${agendasCumpridas.map(a => `${a.servico} em ${a.descricao_formatada}`).join(', ')}). `;
+    }
+    if (agendasCanceladas.length > 0) {
+      instruction += `Possui ${agendasCanceladas.length} agendamento(s) cancelado(s) anteriormente (${agendasCanceladas.map(a => `${a.servico} em ${a.descricao_formatada}`).join(', ')}). `;
+    }
+    instruction += 'Responda com total clareza, simpatia e precisão, informando dia da semana e horário corretos!';
 
     return {
       success: true,
       cliente: profileRes.rows[0]?.nome || 'Cliente',
       endereco_cadastrado: profileRes.rows[0]?.endereco_completo || 'Não informado',
-      agendamentos_ativos: active,
-      historico_passado: past,
-      instruction: active.length > 0 
-        ? `O cliente possui ${active.length} agendamento(s) ativo(s): ${active.map(a => `${a.servico} em ${a.data_agendada}`).join(', ')}. Responda cordialmente com essas informações e, se ele quiser cancelar ou alterar, use cancel_appointment ou informe a remarcação.`
-        : 'O cliente não possui nenhum agendamento ativo no momento.'
+      agendas_marcadas_ativas: agendasMarcadas,
+      agendas_cumpridas_concluidas: agendasCumpridas,
+      agendas_canceladas: agendasCanceladas,
+      agendamentos_ativos: agendasMarcadas,
+      historico_passado: [...agendasCumpridas, ...agendasCanceladas],
+      instruction
     };
   }
 
@@ -829,19 +1085,19 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
     const profileRes = await query(`SELECT * FROM customer_profiles WHERE tenant_id = $1 AND remote_jid = $2`, [tenantId, remoteJid]);
     const customerProfile = profileRes.rows[0] || null;
 
-    const apptsRes = await query(`SELECT * FROM appointments WHERE tenant_id = $1 AND remote_jid = $2 ORDER BY created_at DESC LIMIT 3`, [tenantId, remoteJid]);
+    const apptsRes = await query(`SELECT * FROM appointments WHERE tenant_id = $1 AND remote_jid = $2 ORDER BY created_at DESC LIMIT 15`, [tenantId, remoteJid]);
     const appointments = apptsRes.rows;
 
     // 2. Compila System Prompt Dinâmico de Alto Nível
     const systemPrompt = promptCompiler.compileSystemPrompt(tenant, aiConfig, session, customerProfile, appointments);
 
-    // 3. Carrega Histórico Recente limitado estritamente a 10 mensagens
+    // 3. Carrega Histórico Recente expandido (até 50 mensagens para leitura completa do contexto)
     const historyRes = await query(
       `SELECT role, content 
        FROM chat_messages 
        WHERE session_id = $1 
        ORDER BY created_at DESC 
-       LIMIT 10`,
+       LIMIT 50`,
       [sessionId]
     );
 
@@ -875,7 +1131,8 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
     // GATILHOS PROATIVOS DE FERRAMENTAS (GARANTE DISPARO SEM ALUCINAÇÃO)
     // ============================================================================
     const isCancel = this.detectCancelRequest(userMessage);
-    const bookingReq = this.detectBookingRequest(userMessage, historyMessages);
+    const bookingReq = this.detectBookingRequest(userMessage, historyMessages, aiConfig);
+    const isConsultar = this.detectConsultarHistoricoRequest(userMessage);
 
     if (isCancel) {
       console.log(`[AIEngine] Gatilho proativo: Intenção de cancelamento detectada para ${remoteJid}.`);
@@ -942,6 +1199,30 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
         tool_call_id: 'call_proactive_book',
         content: JSON.stringify(bookResult)
       });
+    } else if (isConsultar) {
+      console.log(`[AIEngine] Gatilho proativo: Consulta de histórico/agendamentos solicitada por ${remoteJid}.`);
+      const historicoResult = await this.executeConsultarHistoricoTool({
+        tenantId,
+        remoteJid
+      });
+
+      messagesToSend.push({
+        role: 'assistant',
+        content: null,
+        tool_calls: [{
+          id: 'call_proactive_consultar',
+          type: 'function',
+          function: {
+            name: 'consultar_historico_cliente',
+            arguments: JSON.stringify({})
+          }
+        }]
+      });
+      messagesToSend.push({
+        role: 'tool',
+        tool_call_id: 'call_proactive_consultar',
+        content: JSON.stringify(historicoResult)
+      });
     }
 
     // 3. Gatilho Proativo de Horários Livres (evita adiamento ou "vou verificar a agenda... um momento")
@@ -949,7 +1230,7 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
     const isClearlyNew = allUserText.includes('nova instala') || allUserText.includes('instalar do zero') || allUserText.includes('câmeras novas') || allUserText.includes('não tenho câmera') || allUserText.includes('nao tenho camera') || allUserText.includes('instalação nova') || allUserText.includes('projeto novo') || allUserText.includes('quero instalar');
     const isClearlyMaintenance = allUserText.includes('manuten') || allUserText.includes('consert') || allUserText.includes('repar') || allUserText.includes('parou de') || allUserText.includes('câmera queim') || allUserText.includes('arrumar') || allUserText.includes('já tenho câmera') || allUserText.includes('ja tenho');
 
-    const needsSlots = (isClearlyNew || isClearlyMaintenance) && !isCancel && !bookingReq;
+    const needsSlots = (isClearlyNew || isClearlyMaintenance) && !isCancel && !bookingReq && !isConsultar;
 
     if (needsSlots) {
       console.log(`[AIEngine] Gatilho proativo: Cliente qualificado para horários. Consultando agenda em tempo real...`);
@@ -1025,7 +1306,7 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
               args: fnArgs
             });
           } else if (fnName === 'check_specific_slot_availability') {
-            toolResult = await this.executeCheckSlotTool(fnArgs);
+            toolResult = await this.executeCheckSlotTool({ ...fnArgs, tenantId });
           } else if (fnName === 'book_appointment') {
             toolResult = await this.executeBookAppointmentTool({
               tenantId,

@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS appointments (
 CREATE INDEX IF NOT EXISTS idx_appointments_lookup ON appointments(tenant_id, remote_jid, data_agendada DESC);
 
 -- Migrações seguras idempotentes para appointments
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS client_name VARCHAR(150);
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS tipo_agendamento VARCHAR(50) DEFAULT 'VISITA_TECNICA';
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS endereco TEXT;
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS google_event_id VARCHAR(255);

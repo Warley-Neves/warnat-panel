@@ -11,7 +11,68 @@ import {
   Appointment
 } from '../types/database.types';
 
+const DIAS_SEMANA_NOMES = [
+  'Domingo',
+  'Segunda-feira',
+  'Terça-feira',
+  'Quarta-feira',
+  'Quinta-feira',
+  'Sexta-feira',
+  'Sábado'
+];
+
+function parseLocalDate(dateVal: any): Date {
+  if (!dateVal) return new Date();
+  if (dateVal instanceof Date) {
+    if (isNaN(dateVal.getTime())) return new Date();
+    return new Date(dateVal.getFullYear(), dateVal.getMonth(), dateVal.getDate(), 12, 0, 0);
+  }
+  const str = String(dateVal).trim();
+  const ymdMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymdMatch) {
+    return new Date(parseInt(ymdMatch[1], 10), parseInt(ymdMatch[2], 10) - 1, parseInt(ymdMatch[3], 10), 12, 0, 0);
+  }
+  const dmyMatch = str.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+  if (dmyMatch) {
+    const d = parseInt(dmyMatch[1], 10);
+    const m = parseInt(dmyMatch[2], 10);
+    let y = dmyMatch[3] ? parseInt(dmyMatch[3], 10) : new Date().getFullYear();
+    if (y < 100) y += 2000;
+    return new Date(y, m - 1, d, 12, 0, 0);
+  }
+  const fallback = new Date(str);
+  if (!isNaN(fallback.getTime())) {
+    if (str.includes('T')) {
+      const brStr = fallback.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      const [dd, mm, yyyy] = brStr.split('/').map(Number);
+      return new Date(yyyy, mm - 1, dd, 12, 0, 0);
+    }
+    return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate(), 12, 0, 0);
+  }
+  return new Date();
+}
+
+function getDayOfWeekInfo(dateVal: any) {
+  const d = parseLocalDate(dateVal);
+  const dayIndex = d.getDay();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return {
+    dayOfWeek: DIAS_SEMANA_NOMES[dayIndex],
+    dayIndex,
+    formattedBr: `${dd}/${mm}`,
+    formattedFullBr: `${dd}/${mm}/${yyyy}`,
+    isoDate: `${yyyy}-${mm}-${dd}`
+  };
+}
+
+export { DIAS_SEMANA_NOMES, parseLocalDate, getDayOfWeekInfo };
+
 export class PromptCompilerService {
+  public getDayOfWeekInfo = getDayOfWeekInfo;
+  public parseLocalDate = parseLocalDate;
+  public DIAS_SEMANA_NOMES = DIAS_SEMANA_NOMES;
   /**
    * Compila o System Prompt dinâmico personalizado para um tenant específico
    */
@@ -103,21 +164,48 @@ export class PromptCompilerService {
     // 4. Histórico de agendamentos anteriores e status no banco de dados
     let agendamentosTexto = '';
     if (appointments && appointments.length > 0) {
-      const listaAppts = appointments.map((a) => {
-        const d = new Date(a.data_agendada);
-        const dataStr = !isNaN(d.getTime())
-          ? d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }) + ' às ' + d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
-          : String(a.data_agendada);
-        return `- ID: ${a.id} | Serviço: *${a.servico || a.tipo_agendamento || 'Visita'}* | Data: *${dataStr}* | Status: *${(a.status || 'agendado').toUpperCase()}* | Endereço: ${a.endereco || 'A confirmar'}`;
-      }).join('\n');
+      const marcadas: string[] = [];
+      const cumpridas: string[] = [];
+      const canceladas: string[] = [];
+
+      appointments.forEach((a) => {
+        const info = getDayOfWeekInfo(a.data_agendada);
+        let timePart = '08:00';
+        try {
+          if (a.data_agendada) {
+            timePart = new Date(a.data_agendada).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+          }
+        } catch (e) {}
+
+        const dataStr = `${info.dayOfWeek}, ${info.formattedFullBr} às ${timePart}`;
+        const linha = `- ID: ${a.id} | Serviço: *${a.servico || a.tipo_agendamento || 'Visita'}* | Data: *${dataStr}* | Endereço: ${a.endereco || 'A confirmar'}`;
+
+        const st = (a.status || 'agendado').toLowerCase();
+        if (st === 'agendado') {
+          marcadas.push(linha);
+        } else if (st === 'concluido' || st === 'realizado') {
+          cumpridas.push(linha);
+        } else if (st === 'cancelado') {
+          canceladas.push(linha);
+        }
+      });
+
       agendamentosTexto = `
 ================================================================================
-HISTÓRICO E AGENDAMENTOS DESTE CLIENTE NO BANCO DE DADOS:
-${listaAppts}
+CONSULTA DE AGENDAMENTOS DESTE CLIENTE NO BANCO DE DADOS:
 ================================================================================
-DIRETRIZES DE CONSULTA, CANCELAMENTO E EVITAR DUPLICIDADE:
+🟢 AGENDAS MARCADAS (ATIVAS):
+${marcadas.length > 0 ? marcadas.join('\n') : 'Nenhum agendamento ativo no momento.'}
+
+🔵 AGENDAS CUMPRIDAS (CONCLUÍDAS):
+${cumpridas.length > 0 ? cumpridas.join('\n') : 'Nenhuma visita concluída anteriormente.'}
+
+🔴 AGENDAS CANCELADAS:
+${canceladas.length > 0 ? canceladas.join('\n') : 'Nenhum agendamento cancelado.'}
+================================================================================
+DIRETRIZES DE CONSULTA DE HISTÓRICO, CANCELAMENTO E EVITAR DUPLICIDADE:
 - O sistema já consultou o banco de dados e localizou os agendamentos acima para o número deste WhatsApp.
-- Se o cliente perguntar sobre seu agendamento (dia, horário, o que foi combinado): responda com base nos dados reais acima.
+- Se o cliente perguntar sobre seus agendamentos (dia, horário, o que foi marcado, se foi cancelado ou se já foi concluído): responda detalhadamente com base nos dados reais acima.
 - Se o cliente solicitar CANCELAR, DESMARCAR ou ADIAR um agendamento:
   1. Identifique o agendamento ativo com status AGENDADO.
   2. Invoque IMEDIATAMENTE a ferramenta "cancel_appointment" para registrar o cancelamento DEFINITIVAMENTE no banco de dados.

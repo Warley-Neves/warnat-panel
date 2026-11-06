@@ -397,6 +397,167 @@ async function runTestSuite() {
   const totalActives = parseInt(dupCheckRes.rows[0].total, 10);
   assert(totalActives === 1, 'Evitou duplicidade: apenas 1 agendamento ativo mantido no banco');
 
+  // ----------------------------------------------------------------------------
+  // TESTE 9: Cálculo Exato de Data e Dia da Semana (Anti-fuso UTC-3)
+  // ----------------------------------------------------------------------------
+  console.log('\n--- TESTE 9: Cálculo Exato de Data e Dia da Semana ---');
+  const saturdayInfo = promptCompiler.getDayOfWeekInfo('2026-11-07');
+  assert(saturdayInfo.dayOfWeek === 'Sábado', '2026-11-07 retorna estritamente Sábado (não Sexta-feira)');
+  assert(saturdayInfo.formattedBr === '07/11', '2026-11-07 formata 07/11 em padrão brasileiro');
+
+  const wednesdayInfo = promptCompiler.getDayOfWeekInfo('2026-11-11');
+  assert(wednesdayInfo.dayOfWeek === 'Quarta-feira', '2026-11-11 retorna Quarta-feira');
+  assert(wednesdayInfo.formattedBr === '11/11', '2026-11-11 formata 11/11 em padrão brasileiro');
+
+  // ----------------------------------------------------------------------------
+  // TESTE 10: Trava de Dias Permitidos de Atendimento (Tenant somente Sábado)
+  // ----------------------------------------------------------------------------
+  console.log('\n--- TESTE 10: Trava de Dias Permitidos de Atendimento (Tenant somente Sábado) ---');
+  const checkWednesdayRes = await aiEngine.executeCheckSlotTool({
+    tenantId: tenant.id,
+    date: '2026-11-11',
+    time: '10:00'
+  });
+
+  assert(checkWednesdayRes.available === false, 'Quarta-feira é recusada para tenant configurado somente aos sábados');
+  assert(checkWednesdayRes.reason === 'dia_nao_permitido', 'Motivo é dia_nao_permitido');
+  assert(checkWednesdayRes.suggestedSlots.length > 0, 'Sugere horários alternativos nos dias válidos');
+  assert(checkWednesdayRes.suggestedSlots[0].dayOfWeek === 'Sábado', 'Horários sugeridos são exclusivamente no Sábado');
+
+  // Tentativa de book direto em dia não permitido
+  const bookWednesdayRes = await aiEngine.executeBookAppointmentTool({
+    tenantId: tenant.id,
+    sessionId: testSessionId,
+    remoteJid: testJid,
+    pushName: 'Warley',
+    args: {
+      date: '2026-11-11',
+      time: '10:00',
+      clientName: 'Warley Santos',
+      appointmentType: 'VISITA_TECNICA'
+    }
+  });
+
+  assert(bookWednesdayRes.success === false, 'BookAppointment recusa agendamento na quarta-feira');
+  assert(bookWednesdayRes.error === 'dia_nao_permitido', 'Retorna erro dia_nao_permitido');
+
+  // ----------------------------------------------------------------------------
+  // TESTE 11: Trava Anti-Choque / Anti-Colisão de Horários Ocupados
+  // ----------------------------------------------------------------------------
+  console.log('\n--- TESTE 11: Trava Anti-Choque de Horários Ocupados ---');
+  const otherClientJid = '5531977776666@s.whatsapp.net';
+  const targetSaturday = '2026-11-07';
+  const targetSlot = '10:00';
+
+  // Cadastra agendamento para o cliente 1 no sábado às 10:00
+  await aiEngine.executeBookAppointmentTool({
+    tenantId: tenant.id,
+    sessionId: testSessionId,
+    remoteJid: otherClientJid,
+    pushName: 'Cliente 1',
+    args: {
+      date: targetSaturday,
+      time: targetSlot,
+      clientName: 'Cliente 1',
+      appointmentType: 'VISITA_TECNICA'
+    }
+  });
+
+  // Cliente 2 verifica disponibilidade do sábado às 10:00 (já ocupado)
+  const collisionCheck = await aiEngine.executeCheckSlotTool({
+    tenantId: tenant.id,
+    date: targetSaturday,
+    time: targetSlot
+  });
+
+  assert(collisionCheck.available === false, 'Detecta que sábado às 10:00 já está ocupado');
+  assert(collisionCheck.reason === 'horario_ocupado', 'Motivo é horario_ocupado');
+  assert(collisionCheck.suggestedSlots.every(s => !(s.date === targetSaturday && s.time === targetSlot)), 'Sugestões excluem horário ocupado');
+
+  // Cliente 2 tenta forçar o agendamento no mesmo horário
+  const collisionBook = await aiEngine.executeBookAppointmentTool({
+    tenantId: tenant.id,
+    sessionId: testSessionId,
+    remoteJid: testJid,
+    pushName: 'Cliente 2',
+    args: {
+      date: targetSaturday,
+      time: targetSlot,
+      clientName: 'Cliente 2',
+      appointmentType: 'VISITA_TECNICA'
+    }
+  });
+
+  assert(collisionBook.success === false, 'Bloqueia book_appointment em horário já ocupado por outro cliente');
+  assert(collisionBook.error === 'horario_ocupado', 'Retorna erro horario_ocupado');
+
+  // Limpeza do agendamento de teste
+  await query(`DELETE FROM appointments WHERE remote_jid = $1`, [otherClientJid]);
+
+  // ----------------------------------------------------------------------------
+  // TESTE 12: Consulta Completa Categorizada de Agendamentos (Marcadas, Cumpridas, Canceladas)
+  // ----------------------------------------------------------------------------
+  console.log('\n--- TESTE 12: Consulta Categorizada de Agendamentos ---');
+  await query(`DELETE FROM appointments WHERE remote_jid = $1`, [testJid]);
+
+  await query(
+    `INSERT INTO appointments (tenant_id, remote_jid, servico, data_agendada, status, endereco)
+     VALUES 
+     ($1, $2, 'Nova Instalação CFTV', '2026-11-07 08:00:00-03', 'agendado', 'Rua Alfa, 100'),
+     ($1, $2, 'Troca de Câmera Queimada', '2026-10-10 14:00:00-03', 'concluido', 'Rua Alfa, 100'),
+     ($1, $2, 'Avaliação de Ponto Cego', '2026-10-03 10:00:00-03', 'cancelado', 'Rua Alfa, 100')`,
+    [tenant.id, testJid]
+  );
+
+  const historicoRes = await aiEngine.executeConsultarHistoricoTool({
+    tenantId: tenant.id,
+    remoteJid: testJid
+  });
+
+  assert(historicoRes.success === true, 'Consulta de histórico executada com sucesso');
+  assert(historicoRes.agendas_marcadas_ativas.length === 1, 'Identificou 1 agenda marcada e ativa');
+  assert(historicoRes.agendas_marcadas_ativas[0].dia_da_semana === 'Sábado', 'Agenda ativa indica corretamente dia da semana Sábado');
+  assert(historicoRes.agendas_cumpridas_concluidas.length === 1, 'Identificou 1 agenda cumprida/concluída');
+  assert(historicoRes.agendas_canceladas.length === 1, 'Identificou 1 agenda cancelada');
+
+  // Testa compilação do System Prompt com as 3 seções
+  const sessionMock = { id: testSessionId, etapa_funil: 'agendado' };
+  const profileMock = { nome: 'Warley Santos', endereco_completo: 'Rua Alfa, 100' };
+  const allAppts = (await query(`SELECT * FROM appointments WHERE remote_jid = $1 ORDER BY data_agendada DESC`, [testJid])).rows;
+  const promptWithHistory = promptCompiler.compileSystemPrompt(tenant, aiConfig, sessionMock, profileMock, allAppts);
+
+  assert(promptWithHistory.includes('AGENDAS MARCADAS (ATIVAS)'), 'System Prompt contém seção de Agendas Marcadas');
+  assert(promptWithHistory.includes('AGENDAS CUMPRIDAS (CONCLUÍDAS)'), 'System Prompt contém seção de Agendas Cumpridas');
+  assert(promptWithHistory.includes('AGENDAS CANCELADAS'), 'System Prompt contém seção de Agendas Canceladas');
+
+  // Limpeza
+  await query(`DELETE FROM appointments WHERE remote_jid = $1`, [testJid]);
+
+  // ----------------------------------------------------------------------------
+  // TESTE 13: Leitura Completa de Contexto (Histórico Expandido até 50 Mensagens)
+  // ----------------------------------------------------------------------------
+  console.log('\n--- TESTE 13: Leitura Completa de Contexto (50 Mensagens) ---');
+  await query(`DELETE FROM chat_messages WHERE session_id = $1`, [testSessionId]);
+
+  for (let i = 1; i <= 20; i++) {
+    const role = (i % 2 === 1) ? 'user' : 'assistant';
+    const content = i === 1 
+      ? 'Meu comércio fica no Barreiro de Cima perto da praça' 
+      : (role === 'user' ? `Mensagem de esclarecimento número ${i}` : `Resposta da Nat ${i}`);
+    await query(
+      `INSERT INTO chat_messages (session_id, tenant_id, role, content, message_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [testSessionId, tenant.id, role, content, `msg-hist-${i}-${Date.now()}`]
+    );
+  }
+
+  const historyQuery = await query(
+    `SELECT role, content FROM chat_messages WHERE session_id = $1 ORDER BY created_at DESC LIMIT 50`,
+    [testSessionId]
+  );
+  assert(historyQuery.rowCount === 20, 'Banco recuperou todas as 20 mensagens sem corte prematuro');
+  assert(historyQuery.rows.some(m => m.content.includes('Barreiro de Cima')), 'Contexto antigo da mensagem 1 permanece preservado');
+
   // Limpeza
   await query(`DELETE FROM appointments WHERE remote_jid = $1`, [testJid]);
   await query(`DELETE FROM chat_messages WHERE session_id = $1`, [testSessionId]);
