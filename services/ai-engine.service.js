@@ -203,6 +203,17 @@ const TOOLS_DEFINITIONS = [
         }
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'consultar_historico_cliente',
+      description: 'Consulta no banco de dados o histórico completo deste cliente (visitas agendadas, concluídas, canceladas, endereço e perfil cadastrado). Chame sempre que o cliente perguntar sobre seus agendamentos, quiser verificar o que foi marcado ou detalhes de atendimentos anteriores.',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
   }
 ];
 
@@ -535,27 +546,71 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       }
     }
 
-    // Grava no banco de dados na tabela appointments
-    const dataHoraStr = `${date}T${time}:00`;
-    const apptDate = new Date(dataHoraStr);
+    // Grava no banco de dados na tabela appointments garantindo timezone oficial de Brasília (UTC-3)
+    const cleanDate = date.split('T')[0];
+    const cleanTime = (time || '08:00').substring(0, 5);
+    const apptDate = new Date(`${cleanDate}T${cleanTime}:00-03:00`);
 
-    const apptDbRes = await query(
-      `INSERT INTO appointments (
-         tenant_id, remote_jid, servico, data_agendada, status, tipo_agendamento, endereco, google_event_id, google_event_link, observacoes
-       ) VALUES ($1, $2, $3, $4, 'agendado', $5, $6, $7, $8, $9)
-       RETURNING id, data_agendada, status`,
-      [
-        tenantId,
-        remoteJid,
-        finalServiceType,
-        apptDate,
-        appointmentType,
-        address,
-        googleRes.eventId || null,
-        googleRes.eventLink || null,
-        notes
-      ]
+    // Evita duplicidade de agenda para o mesmo serviço
+    const existingApptRes = await query(
+      `SELECT id, data_agendada, status FROM appointments 
+       WHERE tenant_id = $1 AND remote_jid = $2 AND servico = $3 AND status = 'agendado'
+       ORDER BY data_agendada DESC LIMIT 1`,
+      [tenantId, remoteJid, finalServiceType]
     );
+
+    let apptId;
+    let isReschedule = false;
+
+    if (existingApptRes.rowCount > 0) {
+      const existing = existingApptRes.rows[0];
+      const existingTime = new Date(existing.data_agendada).getTime();
+      const newTime = apptDate.getTime();
+
+      if (Math.abs(existingTime - newTime) < 60000) {
+        console.log(`[AIEngine] Agendamento já existente identificado (${existing.id}). Evitando duplicata.`);
+        apptId = existing.id;
+      } else {
+        console.log(`[AIEngine] Reagendando visita existente (${existing.id}) para ${apptDate.toISOString()} sem duplicidade.`);
+        await query(
+          `UPDATE appointments 
+           SET data_agendada = $1, tipo_agendamento = $2, endereco = COALESCE($3, endereco),
+               google_event_id = COALESCE($4, google_event_id), google_event_link = COALESCE($5, google_event_link),
+               observacoes = $6
+           WHERE id = $7`,
+          [
+            apptDate,
+            appointmentType,
+            address,
+            googleRes.eventId || null,
+            googleRes.eventLink || null,
+            notes,
+            existing.id
+          ]
+        );
+        apptId = existing.id;
+        isReschedule = true;
+      }
+    } else {
+      const apptDbRes = await query(
+        `INSERT INTO appointments (
+           tenant_id, remote_jid, servico, data_agendada, status, tipo_agendamento, endereco, google_event_id, google_event_link, observacoes
+         ) VALUES ($1, $2, $3, $4, 'agendado', $5, $6, $7, $8, $9)
+         RETURNING id, data_agendada, status`,
+        [
+          tenantId,
+          remoteJid,
+          finalServiceType,
+          apptDate,
+          appointmentType,
+          address,
+          googleRes.eventId || null,
+          googleRes.eventLink || null,
+          notes
+        ]
+      );
+      apptId = apptDbRes.rows[0].id;
+    }
 
     // Atualiza chat_sessions
     await query(
@@ -584,12 +639,15 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
 
     return {
       success: true,
-      appointmentId: apptDbRes.rows[0].id,
+      appointmentId: apptId,
       date,
       time,
       clientName: finalClientName,
       appointmentType,
-      message: `Agendamento de ${finalServiceType} confirmado com sucesso para ${date} às ${time}!`
+      isReschedule,
+      message: isReschedule
+        ? `Reagendamento de ${finalServiceType} confirmado com sucesso para ${date} às ${time}!`
+        : `Agendamento de ${finalServiceType} confirmado com sucesso para ${date} às ${time}!`
     };
   }
 
@@ -691,6 +749,62 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
   }
 
   /**
+   * Executa Tool: consultar_historico_cliente
+   */
+  async executeConsultarHistoricoTool({ tenantId, remoteJid }) {
+    console.log(`[AIEngine] Consultando histórico no banco de dados para ${remoteJid}...`);
+    const apptsRes = await query(
+      `SELECT id, servico, data_agendada, status, tipo_agendamento, endereco, observacoes
+       FROM appointments 
+       WHERE tenant_id = $1 AND remote_jid = $2
+       ORDER BY data_agendada DESC LIMIT 10`,
+      [tenantId, remoteJid]
+    );
+
+    const profileRes = await query(
+      `SELECT nome, endereco_completo, perfil_resumo 
+       FROM customer_profiles 
+       WHERE tenant_id = $1 AND remote_jid = $2 LIMIT 1`,
+      [tenantId, remoteJid]
+    );
+
+    const active = [];
+    const past = [];
+
+    apptsRes.rows.forEach(a => {
+      const d = new Date(a.data_agendada);
+      const dataStr = !isNaN(d.getTime())
+        ? d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }) + ' às ' + d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+        : String(a.data_agendada);
+
+      const item = {
+        id: a.id,
+        servico: a.servico,
+        data_agendada: dataStr,
+        status: a.status,
+        endereco: a.endereco || 'A confirmar'
+      };
+
+      if (a.status === 'agendado') {
+        active.push(item);
+      } else {
+        past.push(item);
+      }
+    });
+
+    return {
+      success: true,
+      cliente: profileRes.rows[0]?.nome || 'Cliente',
+      endereco_cadastrado: profileRes.rows[0]?.endereco_completo || 'Não informado',
+      agendamentos_ativos: active,
+      historico_passado: past,
+      instruction: active.length > 0 
+        ? `O cliente possui ${active.length} agendamento(s) ativo(s): ${active.map(a => `${a.servico} em ${a.data_agendada}`).join(', ')}. Responda cordialmente com essas informações e, se ele quiser cancelar ou alterar, use cancel_appointment ou informe a remarcação.`
+        : 'O cliente não possui nenhum agendamento ativo no momento.'
+    };
+  }
+
+  /**
    * Processa a rodada de atendimento (turn) da IA para a mensagem do cliente
    */
   async processTurn({ tenantId, instanceName, sessionId, remoteJid, pushName, userMessage }) {
@@ -734,6 +848,14 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       { role: 'system', content: systemPrompt },
       ...historyMessages
     ];
+
+    const isFirstAssistantTurn = !historyMessages.some(m => m.role === 'assistant');
+    if (isFirstAssistantTurn) {
+      messagesToSend.push({
+        role: 'system',
+        content: `LEMBRETE OBRIGATÓRIO (PRIMEIRA MENSAGEM): Esta é a sua primeira mensagem neste atendimento. Você DEVE se apresentar como a Nat, assistente virtual da ${tenant.nome_empresa || 'WarNat Tech'}, e avisar com simpatia que se o cliente preferir pode solicitar o atendimento por um atendente/especialista humano a qualquer momento.`
+      });
+    }
 
     const lastMsg = messagesToSend[messagesToSend.length - 1];
     if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== userMessage) {
@@ -918,6 +1040,11 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
               sessionId,
               remoteJid,
               args: fnArgs
+            });
+          } else if (fnName === 'consultar_historico_cliente') {
+            toolResult = await this.executeConsultarHistoricoTool({
+              tenantId,
+              remoteJid
             });
           }
 

@@ -484,11 +484,12 @@
                 <th class="px-6 py-4">Endereço</th>
                 <th class="px-6 py-4">Valor Estimado</th>
                 <th class="px-6 py-4">Status</th>
+                <th class="px-6 py-4 text-right">Ação / Detalhes</th>
               </tr>
             </thead>
             <tbody id="appointmentsTableBody" class="divide-y divide-slate-800 text-slate-300">
               <tr>
-                <td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando agendamentos...</td>
+                <td colspan="7" class="px-6 py-12 text-center text-slate-500">Carregando agendamentos...</td>
               </tr>
             </tbody>
           </table>
@@ -552,7 +553,7 @@
             <!-- NOME DA ASSISTENTE -->
             <div>
               <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Nome da Assistente Virtual</label>
-              <input type="text" id="aiNomeAssistente" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="Ex: Natália">
+              <input type="text" id="aiNomeAssistente" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="Ex: Nat">
             </div>
 
             <!-- RESPONSÁVEL TÉCNICO -->
@@ -994,6 +995,135 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
+  <!-- MODAL DE DETALHES DO AGENDAMENTO (FICHA COMPLETA) -->
+  <!-- ============================================================================ -->
+  <div id="appointmentDetailsModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl fade-in overflow-hidden">
+      <!-- HEADER DO MODAL -->
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-400 flex items-center justify-center border border-brand-500/20">
+            <i data-lucide="calendar-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h4 class="font-bold text-white text-base">Ficha do Agendamento</h4>
+              <span id="apptModalStatusBadge" class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border bg-blue-500/10 text-blue-400 border-blue-500/20">Agendado</span>
+            </div>
+            <p id="apptModalSubTitle" class="text-xs text-slate-400 mt-0.5">Visita técnica confirmada</p>
+          </div>
+        </div>
+        <button onclick="closeAppointmentModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- CORPO DOS DETALHES -->
+      <div class="p-6 overflow-y-auto flex-1 space-y-4 text-xs text-slate-300 custom-scrollbar">
+        <!-- BLOCO DATA E HORÁRIO EM DESTAQUE -->
+        <div class="p-4 rounded-xl bg-dark-900 border border-slate-800 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <i data-lucide="clock" class="w-6 h-6 text-brand-400"></i>
+            <div>
+              <p class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Data & Horário Confirmado</p>
+              <h5 id="apptModalDateTime" class="text-base font-bold text-white font-mono mt-0.5">-</h5>
+            </div>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700">Brasília (UTC-3)</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- CLIENTE -->
+          <div class="p-3 bg-dark-800/80 rounded-xl border border-slate-700/80">
+            <label class="block text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Cliente</label>
+            <p id="apptModalClientName" class="text-sm font-semibold text-white">-</p>
+            <p id="apptModalClientPhone" class="text-xs text-slate-400 font-mono mt-0.5">-</p>
+          </div>
+
+          <!-- SERVIÇO -->
+          <div class="p-3 bg-dark-800/80 rounded-xl border border-slate-700/80">
+            <label class="block text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Serviço Solicitado</label>
+            <p id="apptModalService" class="text-sm font-semibold text-white">-</p>
+            <p id="apptModalType" class="text-xs text-brand-400 font-medium mt-0.5">Visita Técnica</p>
+          </div>
+        </div>
+
+        <!-- ENDEREÇO DA VISITA -->
+        <div class="p-3.5 bg-dark-800/80 rounded-xl border border-slate-700/80">
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Endereço da Visita Técnica</label>
+            <a id="apptModalMapsLink" href="#" target="_blank" class="text-[11px] text-brand-400 hover:text-brand-300 inline-flex items-center space-x-1">
+              <span>Abrir no Maps</span>
+              <i data-lucide="external-link" class="w-3 h-3"></i>
+            </a>
+          </div>
+          <p id="apptModalAddress" class="text-xs text-slate-200 font-medium whitespace-pre-wrap leading-relaxed">-</p>
+        </div>
+
+        <!-- VALOR & OBSERVAÇÕES -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="p-3 bg-dark-800/80 rounded-xl border border-slate-700/80">
+            <label class="block text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Valor Estimado / Taxa</label>
+            <p id="apptModalValue" class="text-sm font-bold text-emerald-400">R$ 0,00</p>
+          </div>
+
+          <div class="p-3 bg-dark-800/80 rounded-xl border border-slate-700/80">
+            <label class="block text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Registro no Sistema</label>
+            <p id="apptModalCreatedAt" class="text-xs text-slate-400 font-mono mt-0.5">-</p>
+          </div>
+        </div>
+
+        <!-- OBSERVAÇÕES -->
+        <div class="p-3 bg-dark-800/80 rounded-xl border border-slate-700/80">
+          <label class="block text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Observações & Anotações</label>
+          <p id="apptModalNotes" class="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">Nenhuma observação registrada.</p>
+        </div>
+
+        <!-- GOOGLE CALENDAR -->
+        <div id="apptModalGoogleCalendarBox" class="p-3 bg-dark-800/80 rounded-xl border border-slate-700/80 flex items-center justify-between">
+          <div class="flex items-center space-x-2 text-slate-300">
+            <i data-lucide="calendar" class="w-4 h-4 text-brand-400"></i>
+            <span>Google Calendar:</span>
+            <span id="apptModalGoogleStatus" class="text-slate-400 font-mono text-[11px]">Sincronizado</span>
+          </div>
+          <a id="apptModalGoogleLink" href="#" target="_blank" class="hidden px-2.5 py-1 rounded bg-dark-700 hover:bg-dark-600 text-brand-300 text-[11px] font-semibold border border-slate-600 inline-flex items-center space-x-1">
+            <span>Ver no Google</span>
+            <i data-lucide="external-link" class="w-3 h-3"></i>
+          </a>
+        </div>
+      </div>
+
+      <!-- FOOTER COM AÇÕES RÁPIDAS -->
+      <div class="p-4 border-t border-slate-800 bg-dark-850 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center space-x-2">
+          <button id="apptModalBtnConcluir" onclick="changeApptStatus('concluido')" class="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center space-x-1 transition">
+            <i data-lucide="check" class="w-3.5 h-3.5"></i>
+            <span>Concluir</span>
+          </button>
+          <button id="apptModalBtnCancelar" onclick="changeApptStatus('cancelado')" class="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center space-x-1 transition">
+            <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+            <span>Cancelar</span>
+          </button>
+          <button id="apptModalBtnReabrir" onclick="changeApptStatus('agendado')" class="px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-semibold flex items-center space-x-1 transition">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            <span>Reabrir</span>
+          </button>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <button id="apptModalBtnOpenChat" onclick="openChatFromApptModal()" class="px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center space-x-1 transition">
+            <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+            <span>Chat</span>
+          </button>
+          <button onclick="closeAppointmentModal()" class="px-3.5 py-1.5 rounded-xl border border-slate-700 hover:bg-dark-800 text-slate-300 text-xs font-medium transition">
+            Fechar
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1761,27 +1891,40 @@
     }
 
     // --------------------------------------------------------------------------
-    // 4. AGENDA & VISITAS TÉCNICAS
+    // 4. AGENDA & VISITAS TÉCNICAS (COM MODAL DE DETALHES E STATUS)
     // --------------------------------------------------------------------------
+    let allAppointmentsCache = [];
+    let currentApptModalItem = null;
+
+    function formatAppointmentDateTime(dateVal) {
+      if (!dateVal) return '-';
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return String(dateVal);
+      const datePart = d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
+      const timePart = d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+      return `${datePart} às ${timePart}`;
+    }
+
     async function loadAppointments() {
       const tbody = document.getElementById('appointmentsTableBody');
-      tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando agenda de visitas...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-slate-500">Carregando agenda de visitas...</td></tr>';
 
       try {
         const res = await apiFetch('/api/v2/tenant/appointments');
         if (!res.ok || !Array.isArray(res.data?.appointments)) {
-          tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-rose-400">Falha ao carregar agendamentos.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-rose-400">Falha ao carregar agendamentos.</td></tr>';
           return;
         }
 
-        const list = res.data.appointments;
-        if (list.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">Nenhum agendamento de visita registrado no momento.</td></tr>';
+        allAppointmentsCache = res.data.appointments;
+        if (allAppointmentsCache.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-slate-500">Nenhum agendamento de visita registrado no momento.</td></tr>';
           return;
         }
 
-        tbody.innerHTML = list.map(a => {
-          const dateStr = new Date(a.data_agendada).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        tbody.innerHTML = allAppointmentsCache.map(a => {
+          // Usa o horário formatado oficial de Brasília retornado do banco ou calcula localmente
+          const dateStr = a.data_formatada_br || formatAppointmentDateTime(a.data_agendada);
           const statusColors = {
             'agendado': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
             'concluido': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -1789,27 +1932,134 @@
           };
           const badgeClass = statusColors[a.status] || statusColors['agendado'];
 
+          const valorNum = parseFloat(a.valor_estimado || 0);
+          const valorFormatado = valorNum > 0 ? `R$ ${valorNum.toFixed(2).replace('.', ',')}` : 'Gratuito (Avaliação)';
+
           return `
-            <tr class="hover:bg-dark-800/50 transition">
-              <td class="px-6 py-4 font-mono font-bold text-brand-400 text-xs">${dateStr}</td>
+            <tr class="hover:bg-dark-800/50 transition cursor-pointer" onclick="openAppointmentModal('${a.id}')">
+              <td class="px-6 py-4 font-mono font-bold text-brand-400 text-xs whitespace-nowrap">${dateStr}</td>
               <td class="px-6 py-4">
                 <div class="font-medium text-white">${a.client_name}</div>
                 <div class="text-xs text-slate-400 font-mono">+${a.telefone || a.remote_jid.replace(/@.*$/, '')}</div>
               </td>
-              <td class="px-6 py-4 text-slate-200">${a.servico}</td>
-              <td class="px-6 py-4 text-slate-300 text-xs">${a.endereco_completo || a.observacoes || '-'}</td>
-              <td class="px-6 py-4 font-medium text-emerald-400">R$ ${parseFloat(a.valor_estimado || 0).toFixed(2)}</td>
-              <td class="px-6 py-4">
+              <td class="px-6 py-4 text-slate-200">
+                <div class="font-medium">${a.servico}</div>
+                <div class="text-[11px] text-slate-400">${a.tipo_agendamento || 'Visita Técnica'}</div>
+              </td>
+              <td class="px-6 py-4 text-slate-300 text-xs max-w-xs truncate">${a.endereco_completo || a.endereco || a.observacoes || '-'}</td>
+              <td class="px-6 py-4 font-medium text-emerald-400 text-xs whitespace-nowrap">${valorFormatado}</td>
+              <td class="px-6 py-4 whitespace-nowrap">
                 <span class="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${badgeClass}">
                   ${a.status}
                 </span>
+              </td>
+              <td class="px-6 py-4 text-right space-x-2 whitespace-nowrap" onclick="event.stopPropagation()">
+                <button onclick="openAppointmentModal('${a.id}')" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border border-brand-500/30 inline-flex items-center space-x-1 transition" title="Consultar detalhes completos deste agendamento">
+                  <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                  <span>Detalhes</span>
+                </button>
               </td>
             </tr>
           `;
         }).join('');
         lucide.createIcons();
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-rose-400">Erro ao carregar dados.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-rose-400">Erro ao carregar dados.</td></tr>';
+      }
+    }
+
+    function openAppointmentModal(apptId) {
+      const a = allAppointmentsCache.find(item => item.id === apptId);
+      if (!a) return;
+      currentApptModalItem = a;
+
+      const dateStr = a.data_formatada_br || formatAppointmentDateTime(a.data_agendada);
+      const statusColors = {
+        'agendado': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+        'concluido': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+        'cancelado': 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+      };
+
+      const badge = document.getElementById('apptModalStatusBadge');
+      badge.textContent = (a.status || 'agendado').toUpperCase();
+      badge.className = `text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${statusColors[a.status] || statusColors['agendado']}`;
+
+      document.getElementById('apptModalSubTitle').textContent = `Agendamento #${a.id.substring(0, 8)}`;
+      document.getElementById('apptModalDateTime').textContent = dateStr;
+      document.getElementById('apptModalClientName').textContent = a.client_name || 'Cliente';
+      document.getElementById('apptModalClientPhone').textContent = `+${a.telefone || a.remote_jid.replace(/@.*$/, '')}`;
+      document.getElementById('apptModalService').textContent = a.servico || 'Visita Técnica';
+      document.getElementById('apptModalType').textContent = a.tipo_agendamento || 'Visita Técnica';
+
+      const endereco = a.endereco_completo || a.endereco || 'Endereço a confirmar';
+      document.getElementById('apptModalAddress').textContent = endereco;
+      const mapsLink = document.getElementById('apptModalMapsLink');
+      if (endereco && endereco !== 'A confirmar' && endereco !== 'Endereço a confirmar') {
+        mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco)}`;
+        mapsLink.classList.remove('hidden');
+      } else {
+        mapsLink.classList.add('hidden');
+      }
+
+      const valorNum = parseFloat(a.valor_estimado || 0);
+      document.getElementById('apptModalValue').textContent = valorNum > 0 ? `R$ ${valorNum.toFixed(2).replace('.', ',')}` : 'Gratuito (Visita de Nova Instalação)';
+      document.getElementById('apptModalCreatedAt').textContent = a.created_at ? new Date(a.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '-';
+      document.getElementById('apptModalNotes').textContent = a.observacoes || 'Nenhuma observação adicional.';
+
+      const googleStatus = document.getElementById('apptModalGoogleStatus');
+      const googleLink = document.getElementById('apptModalGoogleLink');
+      if (a.google_event_link) {
+        googleStatus.textContent = 'Sincronizado';
+        googleLink.href = a.google_event_link;
+        googleLink.classList.remove('hidden');
+      } else {
+        googleStatus.textContent = a.google_event_id ? `ID: ${a.google_event_id}` : 'Registrado localmente no PostgreSQL';
+        googleLink.classList.add('hidden');
+      }
+
+      // Alterna botões conforme status atual
+      document.getElementById('apptModalBtnConcluir').style.display = a.status === 'concluido' ? 'none' : 'inline-flex';
+      document.getElementById('apptModalBtnCancelar').style.display = a.status === 'cancelado' ? 'none' : 'inline-flex';
+      document.getElementById('apptModalBtnReabrir').style.display = a.status === 'agendado' ? 'none' : 'inline-flex';
+
+      document.getElementById('appointmentDetailsModal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeAppointmentModal() {
+      document.getElementById('appointmentDetailsModal').classList.add('hidden');
+      currentApptModalItem = null;
+    }
+
+    async function changeApptStatus(newStatus) {
+      if (!currentApptModalItem) return;
+      try {
+        const res = await apiFetch(`/api/v2/tenant/appointments/${currentApptModalItem.id}/status`, {
+          method: 'PUT',
+          body: JSON.stringify({ status: newStatus })
+        });
+        if (res.ok) {
+          currentApptModalItem.status = newStatus;
+          await loadAppointments();
+          openAppointmentModal(currentApptModalItem.id);
+        } else {
+          alert('Falha ao atualizar status do agendamento: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (err) {
+        alert('Erro ao atualizar status.');
+      }
+    }
+
+    function openChatFromApptModal() {
+      if (!currentApptModalItem) return;
+      const phone = currentApptModalItem.telefone || currentApptModalItem.remote_jid.replace(/@.*$/, '');
+      const lead = allLeadsCache.find(l => l.remote_jid === currentApptModalItem.remote_jid);
+      closeAppointmentModal();
+      if (lead) {
+        const isManual = lead.is_manual || lead.is_paused || lead.status_atendimento === 'manual' || lead.status_atendimento === 'pausa_humana';
+        openChatModal(lead.id, lead.client_name, phone, lead.remote_jid, isManual);
+      } else {
+        openChatModal('new-temp', currentApptModalItem.client_name, phone, currentApptModalItem.remote_jid, true);
       }
     }
 

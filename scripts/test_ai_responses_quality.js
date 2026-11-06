@@ -48,7 +48,7 @@ async function runTestSuite() {
   console.log('--- TESTE 1: Validação Estrutural do System Prompt ---');
   const compiledPrompt = promptCompiler.compileSystemPrompt(tenant, aiConfig);
 
-  assert(compiledPrompt.includes('Natália'), 'Contém nome da assistente Natália');
+  assert(compiledPrompt.includes('Nat'), 'Contém nome da assistente Nat');
   assert(compiledPrompt.includes('Warley Santos'), 'Contém responsável técnico Warley Santos');
   assert(compiledPrompt.includes('Belo Horizonte, Barreiro'), 'Contém região de atendimento Barreiro/BH');
   assert(compiledPrompt.includes('140,00'), 'Contém a taxa de manutenção de R$ 140,00');
@@ -58,6 +58,7 @@ async function runTestSuite() {
   assert(compiledPrompt.includes('PASSO 4'), 'Contém diretriz explícita do PASSO 4 (Recusa)');
   assert(compiledPrompt.includes('Parece que você não mencionou nada específico'), 'Lista frases proibidas robóticas');
   assert(compiledPrompt.includes('Como posso ajudar você hoje'), 'Proíbe "Como posso ajudar você hoje?"');
+  assert(compiledPrompt.includes('REGRA CRÍTICA DA PRIMEIRA MENSAGEM'), 'Contém regra obrigatória da primeira mensagem');
   assert(compiledPrompt.includes('salvar_lead_qualificado'), 'Exige qualificação e tool calling');
   console.log('');
 
@@ -65,18 +66,22 @@ async function runTestSuite() {
   // TESTE 2: Cenário A - Pergunta Genérica de Preço / Visita (PASSO 1)
   // O cliente pergunta preço sem dizer se tem câmeras ou quer novas.
   // ----------------------------------------------------------------------------
-  console.log('--- TESTE 2: Cenário A - Pergunta Genérica de Preço / Visita ---');
+  console.log('--- TESTE 2: Cenário A - Pergunta Genérica de Preço / Visita (Primeira Mensagem) ---');
   console.log('Cliente: "Quanto custa a visita técnica?"');
 
   const scenarioAMessages = [
     { role: 'system', content: compiledPrompt },
+    {
+      role: 'system',
+      content: `LEMBRETE OBRIGATÓRIO (PRIMEIRA MENSAGEM): Esta é a sua primeira mensagem neste atendimento. Você DEVE se apresentar como a Nat, assistente virtual da ${tenant.nome_empresa || 'WarNat Tech'}, e avisar com simpatia que se o cliente preferir pode solicitar o atendimento por um atendente/especialista humano a qualquer momento.`
+    },
     { role: 'user', content: 'Quanto custa a visita técnica?' }
   ];
 
   const respA = await aiEngine.openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: scenarioAMessages,
-    tools: aiEngine.constructor ? require('../services/ai-engine.service').TOOLS_DEFINITIONS : [],
+    tools: require('../services/ai-engine.service').TOOLS_DEFINITIONS,
     tool_choice: 'auto',
     temperature: 0.3
   });
@@ -84,6 +89,14 @@ async function runTestSuite() {
   const replyA = respA.choices[0].message.content || '';
   console.log(`Resposta IA:\n"${replyA}"\n`);
 
+  assert(
+    replyA.includes('Nat'),
+    'Apresenta-se como Nat na primeira mensagem'
+  );
+  assert(
+    replyA.toLowerCase().includes('humano') || replyA.toLowerCase().includes('atendente') || replyA.toLowerCase().includes('agente') || replyA.toLowerCase().includes('especialista'),
+    'Informa opção de atendimento por atendente/agente humano'
+  );
   assert(
     replyA.toLowerCase().includes('nova instalação') || replyA.toLowerCase().includes('nova instalacao'),
     'Pergunta se é nova instalação'
@@ -222,7 +235,7 @@ async function runTestSuite() {
     'Apresenta com clareza a taxa de R$ 140,00'
   );
   assert(
-    replyC.toLowerCase().includes('abatido') || replyC.toLowerCase().includes('aproveitado') || replyC.toLowerCase().includes('cobre o serviço'),
+    replyC.toLowerCase().includes('abatid') || replyC.toLowerCase().includes('aproveitad') || replyC.toLowerCase().includes('cobre o serviço') || replyC.toLowerCase().includes('não paga nenhum valor adicional'),
     'Explica que os R$ 140,00 são 100% aproveitados/abatidos no conserto'
   );
   console.log('');
@@ -300,6 +313,93 @@ async function runTestSuite() {
   );
 
   console.log(`Resposta capturada no Turn:\n"${capturedMessage}"\n`);
+
+  // ----------------------------------------------------------------------------
+  // TESTE 7: Consulta ao Histórico do Contato & Cancelamento de Agendamento
+  // ----------------------------------------------------------------------------
+  console.log('--- TESTE 7: Consulta ao Histórico & Cancelamento de Agendamento ---');
+  // 1. Cadastra agendamento ativo prévio para o cliente
+  const apptDateTz = new Date('2026-11-07T10:00:00-03:00');
+  await query(
+    `INSERT INTO appointments (tenant_id, remote_jid, servico, data_agendada, status, endereco)
+     VALUES ($1, $2, 'Instalação de Câmeras CFTV', $3, 'agendado', 'Rua das Flores, 123 - Barreiro')`,
+    [tenant.id, testJid, apptDateTz]
+  );
+
+  let cancelCapturedMessage = '';
+  evolutionService.sendTextMessage = async (instance, to, text) => {
+    cancelCapturedMessage = text;
+    return { success: true, messageId: `msg-cancel-${Date.now()}` };
+  };
+
+  const cancelTurnRes = await aiEngine.processTurn({
+    tenantId: tenant.id,
+    instanceName: 'warnat-tech',
+    sessionId: testSessionId,
+    remoteJid: testJid,
+    pushName: 'Warley',
+    userMessage: 'Olá, infelizmente vou precisar cancelar meu agendamento de sábado.'
+  });
+
+  assert(cancelTurnRes.success === true, 'Turn de cancelamento executado com sucesso');
+
+  // Verifica no banco de dados se o agendamento foi cancelado
+  const checkCancelRes = await query(
+    `SELECT status FROM appointments WHERE remote_jid = $1 ORDER BY created_at DESC LIMIT 1`,
+    [testJid]
+  );
+  assert(checkCancelRes.rows[0].status === 'cancelado', 'Agendamento anterior cancelado com sucesso no PostgreSQL');
+  console.log(`Resposta IA no Cancelamento:\n"${cancelCapturedMessage}"\n`);
+
+  // ----------------------------------------------------------------------------
+  // TESTE 8: Prevenção de Duplicidade de Agenda para o Mesmo Serviço
+  // ----------------------------------------------------------------------------
+  console.log('--- TESTE 8: Prevenção de Duplicidade de Agenda para o Mesmo Serviço ---');
+  await query(`DELETE FROM appointments WHERE remote_jid = $1`, [testJid]);
+
+  // Primeiro agendamento
+  await aiEngine.executeBookAppointmentTool({
+    tenantId: tenant.id,
+    sessionId: testSessionId,
+    remoteJid: testJid,
+    pushName: 'Warley',
+    args: {
+      clientName: 'Warley Santos',
+      date: '2026-11-07',
+      time: '10:00',
+      serviceType: 'Instalação de Câmeras CFTV',
+      address: 'Barreiro'
+    }
+  });
+
+  // Segundo agendamento tentando criar duplicata para o mesmo serviço (reagendamento para 14:00)
+  await aiEngine.executeBookAppointmentTool({
+    tenantId: tenant.id,
+    sessionId: testSessionId,
+    remoteJid: testJid,
+    pushName: 'Warley',
+    args: {
+      clientName: 'Warley Santos',
+      date: '2026-11-07',
+      time: '14:00',
+      serviceType: 'Instalação de Câmeras CFTV',
+      address: 'Barreiro'
+    }
+  });
+
+  const dupCheckRes = await query(
+    `SELECT count(*) as total FROM appointments 
+     WHERE remote_jid = $1 AND servico = 'Instalação de Câmeras CFTV' AND status = 'agendado'`,
+    [testJid]
+  );
+
+  const totalActives = parseInt(dupCheckRes.rows[0].total, 10);
+  assert(totalActives === 1, 'Evitou duplicidade: apenas 1 agendamento ativo mantido no banco');
+
+  // Limpeza
+  await query(`DELETE FROM appointments WHERE remote_jid = $1`, [testJid]);
+  await query(`DELETE FROM chat_messages WHERE session_id = $1`, [testSessionId]);
+  await query(`DELETE FROM chat_sessions WHERE id = $1`, [testSessionId]);
 
   console.log('====================================================================');
   console.log(`📊 RESULTADO FINAL: ${passed} PASSOU / ${failed} FALHOU`);

@@ -138,7 +138,7 @@ export async function seedWarNatTech(): Promise<SeedResult> {
          updated_at = NOW();`,
       [
         tenantId,
-        'Natália',
+        'Nat',
         'Warley Santos',
         'Belo Horizonte, Barreiro e Grande BH',
         140.00,
@@ -164,17 +164,20 @@ export async function seedWarNatTech(): Promise<SeedResult> {
     });
     console.log(`✅ [Seed] Dossiê permanente do cliente homologado (ID: ${profile.id}).`);
 
-    // 6. Cadastra Agendamento Exemplo em appointments
+    // 6. Cadastra Agendamento Exemplo em appointments com timezone oficial de Brasília (-03:00)
     const proximoSabado = new Date();
     proximoSabado.setDate(proximoSabado.getDate() + ((6 - proximoSabado.getDay() + 7) % 7 || 7));
-    proximoSabado.setHours(10, 0, 0, 0);
+    const yyyy = proximoSabado.getFullYear();
+    const mm = String(proximoSabado.getMonth() + 1).padStart(2, '0');
+    const dd = String(proximoSabado.getDate()).padStart(2, '0');
+    const proximoSabadoTz = new Date(`${yyyy}-${mm}-${dd}T10:00:00-03:00`);
 
     await client.query(
       `INSERT INTO appointments (
          tenant_id, customer_id, remote_jid, servico, data_agendada, status, valor_estimado, observacoes
        ) VALUES ($1, $2, $3, $4, $5, 'agendado', 350.00, 'Visita técnica de homologação WarNat Tech.')
        ON CONFLICT DO NOTHING;`,
-      [tenantId, profile.id, homologJid, 'Instalação de Câmeras CFTV', proximoSabado]
+      [tenantId, profile.id, homologJid, 'Instalação de Câmeras CFTV', proximoSabadoTz]
     );
     console.log(`✅ [Seed] Histórico de agendamento registrado para o próximo sábado.`);
 

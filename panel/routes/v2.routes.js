@@ -628,15 +628,22 @@ async function handleV2Routes(req, res, pathname, method, body) {
            a.remote_jid, 
            a.servico, 
            a.data_agendada, 
+           TO_CHAR(a.data_agendada AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY às HH24:MI') as data_formatada_br,
+           TO_CHAR(a.data_agendada AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY') as data_dia_br,
+           TO_CHAR(a.data_agendada AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI') as horario_br,
            a.status, 
+           a.tipo_agendamento,
            a.valor_estimado, 
+           COALESCE(a.endereco, c.endereco_completo, 'A confirmar') as endereco_completo,
            a.observacoes, 
+           a.google_event_id,
+           a.google_event_link,
            a.created_at,
-           COALESCE(c.nome, 'Cliente') as client_name,
-           c.telefone,
-           c.endereco_completo
+           COALESCE(c.nome, s.client_name, 'Cliente') as client_name,
+           COALESCE(c.telefone, REPLACE(REPLACE(a.remote_jid, '@s.whatsapp.net', ''), '@c.us', '')) as telefone
          FROM appointments a
          LEFT JOIN customer_profiles c ON c.tenant_id = a.tenant_id AND c.remote_jid = a.remote_jid
+         LEFT JOIN chat_sessions s ON s.tenant_id = a.tenant_id AND s.remote_jid = a.remote_jid
          WHERE a.tenant_id = $1
          ORDER BY a.data_agendada DESC`,
         [tenantId]
@@ -645,6 +652,34 @@ async function handleV2Routes(req, res, pathname, method, body) {
       return sendJson(200, {
         success: true,
         appointments: apptRes.rows
+      });
+    }
+
+    // Atualizar status de agendamento (concluido, cancelado, agendado)
+    const matchApptStatus = pathname.match(/^\/api\/v2\/tenant\/appointments\/([a-zA-Z0-9_-]+)\/status$/);
+    if (matchApptStatus && method === 'PUT') {
+      const apptId = matchApptStatus[1];
+      const { status } = body;
+      const validStatuses = ['agendado', 'concluido', 'cancelado'];
+      if (!validStatuses.includes(status)) {
+        return sendJson(400, { error: 'Status inválido. Use agendado, concluido ou cancelado.' });
+      }
+
+      const updRes = await query(
+        `UPDATE appointments 
+         SET status = $1 
+         WHERE id = $2 AND tenant_id = $3
+         RETURNING id, status, data_agendada, servico`,
+        [status, apptId, tenantId]
+      );
+
+      if (updRes.rowCount === 0) {
+        return sendJson(404, { error: 'Agendamento não encontrado.' });
+      }
+
+      return sendJson(200, {
+        success: true,
+        appointment: updRes.rows[0]
       });
     }
 

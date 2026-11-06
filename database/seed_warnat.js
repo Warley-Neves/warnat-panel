@@ -120,7 +120,7 @@ async function seedWarNatTech() {
       [
         tenantId,
         'automacao',
-        'Natália',
+        'Nat',
         'Warley Santos',
         'Belo Horizonte, Barreiro e Grande BH',
         140.00,

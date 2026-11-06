@@ -430,6 +430,14 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
       ...historyMessages
     ];
 
+    const isFirstAssistantTurn = !historyMessages.some(m => m.role === 'assistant');
+    if (isFirstAssistantTurn) {
+      messagesToSend.push({
+        role: 'system',
+        content: `LEMBRETE OBRIGATÓRIO (PRIMEIRA MENSAGEM): Esta é a sua primeira mensagem neste atendimento. Você DEVE se apresentar como a Nat, assistente virtual da ${tenant.nome_empresa || 'WarNat Tech'}, e avisar com simpatia que se o cliente preferir pode solicitar o atendimento por um atendente/especialista humano a qualquer momento.`
+      });
+    }
+
     const lastMsg = messagesToSend[messagesToSend.length - 1];
     if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== userMessage) {
       messagesToSend.push({ role: 'user', content: userMessage });
@@ -498,25 +506,50 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
                   message: `Horário das ${fnArgs.time} no dia ${fnArgs.date} confirmado como disponível.`
                 };
               } else if (fnName === 'book_appointment') {
-                await query(
-                  `INSERT INTO appointments (tenant_id, remote_jid, servico, data_agendada, tipo_agendamento, endereco, status)
-                   VALUES ($1, $2, $3, $4, $5, $6, 'agendado');`,
-                  [
-                    tenantId,
-                    remoteJid,
-                    fnArgs.serviceType || 'Visita Técnica',
-                    new Date(`${fnArgs.date}T${fnArgs.time}:00`),
-                    fnArgs.appointmentType || 'VISITA_TECNICA',
-                    fnArgs.address || 'A confirmar'
-                  ]
+                const cleanDate = (fnArgs.date || '').split('T')[0];
+                const cleanTime = (fnArgs.time || '08:00').substring(0, 5);
+                const apptDate = new Date(`${cleanDate}T${cleanTime}:00-03:00`);
+                const srv = fnArgs.serviceType || 'Instalação de Câmeras CFTV';
+
+                // Checa duplicidade de agendamento ativo para o mesmo serviço
+                const existingRes = await query(
+                  `SELECT id, data_agendada FROM appointments 
+                   WHERE tenant_id = $1 AND remote_jid = $2 AND servico = $3 AND status = 'agendado'
+                   ORDER BY data_agendada DESC LIMIT 1;`,
+                  [tenantId, remoteJid, srv]
                 );
+
+                if (existingRes.rowCount && existingRes.rowCount > 0) {
+                  const existing = existingRes.rows[0];
+                  console.log(`[AIEngine] Reagendando visita existente (${existing.id}) para ${apptDate.toISOString()} sem duplicar.`);
+                  await query(
+                    `UPDATE appointments 
+                     SET data_agendada = $1, tipo_agendamento = $2, endereco = COALESCE($3, endereco)
+                     WHERE id = $4;`,
+                    [apptDate, fnArgs.appointmentType || 'VISITA_TECNICA', fnArgs.address || 'A confirmar', existing.id]
+                  );
+                } else {
+                  await query(
+                    `INSERT INTO appointments (tenant_id, remote_jid, servico, data_agendada, tipo_agendamento, endereco, status)
+                     VALUES ($1, $2, $3, $4, $5, $6, 'agendado');`,
+                    [
+                      tenantId,
+                      remoteJid,
+                      srv,
+                      apptDate,
+                      fnArgs.appointmentType || 'VISITA_TECNICA',
+                      fnArgs.address || 'A confirmar'
+                    ]
+                  );
+                }
+
                 await query(
                   `UPDATE chat_sessions SET etapa_funil = 'agendado', client_name = COALESCE($1, client_name), last_interaction = NOW() WHERE id = $2;`,
                   [fnArgs.clientName, sessionId]
                 );
                 toolResult = {
                   success: true,
-                  message: `Agendamento confirmado para ${fnArgs.date} às ${fnArgs.time}!`
+                  message: `Agendamento confirmado para ${cleanDate} às ${cleanTime}!`
                 };
               } else if (fnName === 'save_client_details') {
                 if (fnArgs.address) {
@@ -536,8 +569,17 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
                 );
                 toolResult = {
                   success: true,
-                  message: 'Agendamento cancelado. Horários alternativos sugeridos.',
+                  message: 'Agendamento cancelado com sucesso no banco de dados. Horários alternativos sugeridos.',
                   suggestedSlots: ['10:00', '14:00']
+                };
+              } else if (fnName === 'consultar_historico_cliente') {
+                const apptsRes = await query(
+                  `SELECT id, servico, data_agendada, status, endereco FROM appointments WHERE tenant_id = $1 AND remote_jid = $2 ORDER BY data_agendada DESC LIMIT 5;`,
+                  [tenantId, remoteJid]
+                );
+                toolResult = {
+                  success: true,
+                  agendamentos: apptsRes.rows
                 };
               }
 

@@ -34,7 +34,7 @@ export class PromptCompilerService {
     });
 
     const nomeEmpresa = tenant.nome_empresa || 'WarNat Tech';
-    const nomeAssistente = aiConfig.nome_assistente || 'Natália';
+    const nomeAssistente = aiConfig.nome_assistente || 'Nat';
     const responsavelTecnico = aiConfig.responsavel_tecnico || 'Warley Santos';
     const regiaoAtendimento = aiConfig.regiao_atendimento || 'Belo Horizonte, Barreiro e Grande BH';
     const taxaManutencaoNum = Number(aiConfig.taxa_manutencao_reais) || 140.00;
@@ -100,14 +100,29 @@ export class PromptCompilerService {
       }
     }
 
-    // 4. Histórico de agendamentos anteriores
+    // 4. Histórico de agendamentos anteriores e status no banco de dados
     let agendamentosTexto = '';
     if (appointments && appointments.length > 0) {
-      const listaAppts = appointments.slice(0, 3).map((a) => {
-        const dataStr = new Date(a.data_agendada).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-        return `- ${a.servico || a.tipo_agendamento || 'Visita'} em ${dataStr} (Status: ${a.status})`;
+      const listaAppts = appointments.map((a) => {
+        const d = new Date(a.data_agendada);
+        const dataStr = !isNaN(d.getTime())
+          ? d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }) + ' às ' + d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })
+          : String(a.data_agendada);
+        return `- ID: ${a.id} | Serviço: *${a.servico || a.tipo_agendamento || 'Visita'}* | Data: *${dataStr}* | Status: *${(a.status || 'agendado').toUpperCase()}* | Endereço: ${a.endereco || 'A confirmar'}`;
       }).join('\n');
-      agendamentosTexto = `\nÚLTIMOS AGENDAMENTOS DO CLIENTE NO SISTEMA:\n${listaAppts}`;
+      agendamentosTexto = `
+================================================================================
+HISTÓRICO E AGENDAMENTOS DESTE CLIENTE NO BANCO DE DADOS:
+${listaAppts}
+================================================================================
+DIRETRIZES DE CONSULTA, CANCELAMENTO E EVITAR DUPLICIDADE:
+- O sistema já consultou o banco de dados e localizou os agendamentos acima para o número deste WhatsApp.
+- Se o cliente perguntar sobre seu agendamento (dia, horário, o que foi combinado): responda com base nos dados reais acima.
+- Se o cliente solicitar CANCELAR, DESMARCAR ou ADIAR um agendamento:
+  1. Identifique o agendamento ativo com status AGENDADO.
+  2. Invoque IMEDIATAMENTE a ferramenta "cancel_appointment" para registrar o cancelamento DEFINITIVAMENTE no banco de dados.
+  3. Confirme o cancelamento com acolhimento e ofereça novos horários para outro dia se ele desejar remarcar.
+- Se o cliente já tiver um agendamento com status AGENDADO para o mesmo serviço, o sistema evita duplicidade atualizando a data/horário caso ele queira reagendar.`;
     }
 
     // 5. Dados de lead coletados na sessão atual
@@ -124,13 +139,27 @@ Você conversa no WhatsApp de forma natural, acolhedora, profissional, educada e
 DATA E HORA ATUAL DO SISTEMA: ${dateTimeStr}
 
 ================================================================================
+REGRA CRÍTICA DA PRIMEIRA MENSAGEM: APRESENTAÇÃO COMO "NAT" E OPÇÃO DE HUMANO
+================================================================================
+- Na PRIMEIRA mensagem de qualquer novo atendimento (ou quando estiver abrindo a conversa sem mensagens anteriores suas):
+  1. É OBRIGATÓRIO se apresentar com o nome de "${nomeAssistente}", assistente virtual da ${nomeEmpresa}.
+  2. É OBRIGATÓRIO avisar com cordialidade que a pessoa está conversando com uma assistente virtual e que, se ela preferir, pode solicitar a qualquer momento o atendimento por um atendente / agente humano da equipe.
+  3. Em seguida, avance com foco no funil para entender o que ela precisa: se é para uma *nova instalação de câmeras* ou para *manutenção / conserto* de câmeras que já possui.
+
+Exemplo de abertura para a primeira mensagem:
+"Olá! Sou a ${nomeAssistente}, assistente virtual da ${nomeEmpresa}. 😊 Antes de começarmos, já te aviso que se você preferir ser atendido por um de nossos atendentes humanos, é só me falar a qualquer momento, tá bom?
+
+Para eu te orientar da melhor forma: você precisa de uma *nova instalação de câmeras* ou de *manutenção / conserto* em câmeras que você já tem no local?"
+
+- Nas mensagens seguintes (a partir da segunda mensagem da conversa), NÃO repita a apresentação inicial nem o aviso de humano; continue direto respondendo ao que o cliente falou.
+
+================================================================================
 TRANSPARÊNCIA OBRIGATÓRIA (CDC / LGPD): VOCÊ É UMA ASSISTENTE VIRTUAL
 ================================================================================
 - Você é a ${nomeAssistente}, uma ASSISTENTE VIRTUAL (sistema automatizado). NUNCA se passe por uma pessoa física real, NUNCA diga que é humana e NUNCA invente um cargo humano.
 - Se o cliente perguntar se você é robô, IA ou pessoa: confirme com naturalidade que é a assistente virtual da ${nomeEmpresa} e ofereça o atendimento com uma pessoa da equipe.
-- Se o cliente pedir para falar com uma pessoa/atendente/humano: diga que vai transferir imediatamente para a equipe técnica.
+- Se o cliente pedir para falar com uma pessoa/atendente/humano: diga que vai transferir imediatamente para a equipe técnica e silencie para o operador responder.
 - Dados pessoais (nome, endereço) são pedidos apenas para a visita técnica/instalação; NUNCA peça CPF, documentos sensíveis ou dados bancários.
-- A apresentação como assistente virtual na primeira mensagem é feita pelo sistema; NÃO repita apresentações burocráticas nas mensagens seguintes.
 
 ================================================================================
 TOM NATURAL (SEM LINGUAGEM ROBÓTICA!)
