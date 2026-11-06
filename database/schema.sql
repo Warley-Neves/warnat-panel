@@ -59,15 +59,27 @@ CREATE INDEX IF NOT EXISTS idx_instances_tenant_id ON tenant_whatsapp_instances(
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tenant_ai_configs (
     tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+    nome_assistente VARCHAR(60) DEFAULT 'Natália',
+    responsavel_tecnico VARCHAR(100) DEFAULT 'Warley Santos',
+    regiao_atendimento VARCHAR(150) DEFAULT 'Belo Horizonte, Barreiro e Grande BH',
+    taxa_manutencao_reais NUMERIC(10,2) DEFAULT 140.00,
     tom_de_voz VARCHAR(50) DEFAULT 'profissional_amigavel',
     sobre_empresa TEXT NOT NULL,
     servicos_oferecidos JSONB NOT NULL DEFAULT '[]', -- [{ "nome": "...", "faixa_preco": "...", "detalhes": "..." }]
     servicos_recusados TEXT,
     regras_agendamento JSONB DEFAULT '{}',
+    instrucoes_personalizadas TEXT,
     whatsapp_notificacao_humana VARCHAR(25),
     pausa_automatica_minutos INT DEFAULT 45,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migrações seguras idempotentes para tenant_ai_configs
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS nome_assistente VARCHAR(60) DEFAULT 'Natália';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS responsavel_tecnico VARCHAR(100) DEFAULT 'Warley Santos';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS regiao_atendimento VARCHAR(150) DEFAULT 'Belo Horizonte, Barreiro e Grande BH';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS taxa_manutencao_reais NUMERIC(10,2) DEFAULT 140.00;
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS instrucoes_personalizadas TEXT;
 
 -- ------------------------------------------------------------------------------
 -- 5. Dossiê Permanente do Cliente Final (Memória de Longo Prazo)
@@ -98,11 +110,21 @@ CREATE TABLE IF NOT EXISTS appointments (
     servico VARCHAR(150) NOT NULL,
     data_agendada TIMESTAMPTZ NOT NULL,
     status VARCHAR(30) DEFAULT 'agendado', -- 'agendado', 'concluido', 'cancelado'
+    tipo_agendamento VARCHAR(50) DEFAULT 'VISITA_TECNICA',
+    endereco TEXT,
+    google_event_id VARCHAR(255),
+    google_event_link TEXT,
     valor_estimado NUMERIC(10, 2),
     observacoes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_appointments_lookup ON appointments(tenant_id, remote_jid, data_agendada DESC);
+
+-- Migrações seguras idempotentes para appointments
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS tipo_agendamento VARCHAR(50) DEFAULT 'VISITA_TECNICA';
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS endereco TEXT;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS google_event_id VARCHAR(255);
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS google_event_link TEXT;
 
 -- ------------------------------------------------------------------------------
 -- 7. Sessões de Atendimento e Human-in-the-Loop

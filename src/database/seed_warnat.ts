@@ -109,6 +109,10 @@ export async function seedWarNatTech(): Promise<SeedResult> {
     await client.query(
       `INSERT INTO tenant_ai_configs (
          tenant_id,
+         nome_assistente,
+         responsavel_tecnico,
+         regiao_atendimento,
+         taxa_manutencao_reais,
          tom_de_voz,
          sobre_empresa,
          servicos_oferecidos,
@@ -117,9 +121,13 @@ export async function seedWarNatTech(): Promise<SeedResult> {
          whatsapp_notificacao_humana,
          pausa_automatica_minutos,
          updated_at
-       ) VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, $7, $8, NOW())
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12, NOW())
        ON CONFLICT (tenant_id)
        DO UPDATE SET
+         nome_assistente = EXCLUDED.nome_assistente,
+         responsavel_tecnico = EXCLUDED.responsavel_tecnico,
+         regiao_atendimento = EXCLUDED.regiao_atendimento,
+         taxa_manutencao_reais = EXCLUDED.taxa_manutencao_reais,
          tom_de_voz = EXCLUDED.tom_de_voz,
          sobre_empresa = EXCLUDED.sobre_empresa,
          servicos_oferecidos = EXCLUDED.servicos_oferecidos,
@@ -130,7 +138,11 @@ export async function seedWarNatTech(): Promise<SeedResult> {
          updated_at = NOW();`,
       [
         tenantId,
-        'profissional_amigavel',
+        'Natália',
+        'Warley Santos',
+        'Belo Horizonte, Barreiro e Grande BH',
+        140.00,
+        'profissional_humanizado',
         'A WarNat Tech é uma empresa especializada em Sistemas de Câmeras de Segurança e CFTV (Residencial, Comercial e Condominial) em Belo Horizonte, Barreiro e Grande BH, liderada pelo especialista técnico Warley Santos.',
         JSON.stringify(servicosOferecidos),
         'Não atendemos pintura, alarmes veiculares, decorações, buffet, pedreiro ou conserto de eletrodomésticos. Nosso foco é 100% exclusivo em câmeras de segurança e CFTV.',

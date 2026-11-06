@@ -77,15 +77,21 @@ async function seedWarNatTech() {
 
     const regrasAgendamento = {
       dias_semana: 'Segunda a Sábado',
+      dias_atendimento: ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'],
       horario_inicio: '08:00',
       horario_fim: '20:00',
-      politica_visita_gratuita: 'A visita técnica de diagnóstico é 100% gratuita exclusivamente para NOVAS INSTALAÇÕES de câmeras.',
-      taxa_manutencao: 'Para manutenção em câmeras existentes, a taxa de visita técnica é de R$ 140,00, valor que é 100% aproveitado e abatido no conserto.'
+      slots_agendamento: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00'],
+      politica_visita_gratuita: 'A visita técnica de diagnóstico e avaliação de pontos cegos é 100% gratuita e sem compromisso exclusivamente para NOVAS INSTALAÇÕES de câmeras.',
+      taxa_manutencao: 'Para manutenção ou reparo em câmeras existentes, a taxa de visita técnica é de R$ 140,00, valor integralmente aproveitado e abatido no conserto.'
     };
 
     await client.query(
       `INSERT INTO tenant_ai_configs (
          tenant_id,
+         nome_assistente,
+         responsavel_tecnico,
+         regiao_atendimento,
+         taxa_manutencao_reais,
          tom_de_voz,
          sobre_empresa,
          servicos_oferecidos,
@@ -94,9 +100,13 @@ async function seedWarNatTech() {
          whatsapp_notificacao_humana,
          pausa_automatica_minutos,
          updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
        ON CONFLICT (tenant_id)
        DO UPDATE SET
+         nome_assistente = EXCLUDED.nome_assistente,
+         responsavel_tecnico = EXCLUDED.responsavel_tecnico,
+         regiao_atendimento = EXCLUDED.regiao_atendimento,
+         taxa_manutencao_reais = EXCLUDED.taxa_manutencao_reais,
          tom_de_voz = EXCLUDED.tom_de_voz,
          sobre_empresa = EXCLUDED.sobre_empresa,
          servicos_oferecidos = EXCLUDED.servicos_oferecidos,
@@ -107,6 +117,10 @@ async function seedWarNatTech() {
          updated_at = now()`,
       [
         tenantId,
+        'Natália',
+        'Warley Santos',
+        'Belo Horizonte, Barreiro e Grande BH',
+        140.00,
         'profissional_humanizado',
         'Especialistas em Sistemas de Câmeras de Segurança e CFTV (Residencial, Comercial e Condominial) em Belo Horizonte, Barreiro e Grande BH, liderados pelo especialista técnico Warley Santos.',
         JSON.stringify(servicosOferecidos),

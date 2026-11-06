@@ -64,11 +64,16 @@ export interface ServiceOffering {
 
 export interface TenantAiConfig {
   tenant_id: string; // PK/FK -> tenants.id
+  nome_assistente?: string | null; // e.g. 'Natália'
+  responsavel_tecnico?: string | null; // e.g. 'Warley Santos'
+  regiao_atendimento?: string | null; // e.g. 'Belo Horizonte, Barreiro e Grande BH'
+  taxa_manutencao_reais?: number | null; // e.g. 140.00
   tom_de_voz: string; // default 'profissional_amigavel'
   sobre_empresa: string;
   servicos_oferecidos: ServiceOffering[];
   servicos_recusados?: string | null;
   regras_agendamento: Record<string, unknown>;
+  instrucoes_personalizadas?: string | null;
   whatsapp_notificacao_humana?: string | null;
   pausa_automatica_minutos: number; // default 45
   updated_at: Date;
@@ -103,6 +108,10 @@ export interface Appointment {
   servico: string;
   data_agendada: Date;
   status: AppointmentStatus;
+  tipo_agendamento?: string | null;
+  endereco?: string | null;
+  google_event_id?: string | null;
+  google_event_link?: string | null;
   valor_estimado?: number | null;
   observacoes?: string | null;
   created_at: Date;
