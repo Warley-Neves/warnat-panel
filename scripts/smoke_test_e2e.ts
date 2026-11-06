@@ -216,7 +216,7 @@ async function runSmokeTestE2E() {
     });
 
     assert(qualifResult.success === true, 'Tool salvar_lead_qualificado executada com sucesso');
-    assert(qualifResult.notifSent === true, 'Alerta enviado para o WhatsApp do responsável técnico (+5531983579692)');
+    assert(qualifResult.notifSent === true, 'Alerta enviado para o WhatsApp do responsável técnico (+5531983525816)');
 
     // Valida dados_lead salvos no banco
     const sessionLead = (await query<{ dados_lead: any }>(

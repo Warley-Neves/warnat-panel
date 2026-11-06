@@ -31,7 +31,7 @@ async function testPhase4() {
       $2,
       'Não trabalhamos com instalação de cerca elétrica e nem rastreamento veicular.',
       $3,
-      '5531983579692',
+      '5531983525816',
       45
     ) RETURNING *`,
     [

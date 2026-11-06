@@ -109,10 +109,12 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     remote_jid VARCHAR(60) NOT NULL,
+    client_name VARCHAR(150),
     status_atendimento VARCHAR(30) DEFAULT 'ia_ativa', -- 'ia_ativa', 'pausa_humana', 'transbordado'
     paused_until TIMESTAMPTZ,
     dados_lead JSONB DEFAULT '{}',
     last_interaction TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT uk_tenant_session UNIQUE(tenant_id, remote_jid)
 );
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_tenant_jid ON chat_sessions(tenant_id, remote_jid);
@@ -158,5 +160,20 @@ BEGIN
         WHERE table_name = 'chat_messages' AND column_name = 'message_id'
     ) THEN
         ALTER TABLE chat_messages ADD COLUMN message_id VARCHAR(150);
+    END IF;
+
+    -- Garante colunas client_name e created_at em chat_sessions
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'chat_sessions' AND column_name = 'client_name'
+    ) THEN
+        ALTER TABLE chat_sessions ADD COLUMN client_name VARCHAR(150);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'chat_sessions' AND column_name = 'created_at'
+    ) THEN
+        ALTER TABLE chat_sessions ADD COLUMN created_at TIMESTAMPTZ DEFAULT NOW();
     END IF;
 END $$;

@@ -218,21 +218,22 @@ async function handleV2Routes(req, res, pathname, method, body) {
     if (pathname === '/api/v2/tenant/leads' && method === 'GET') {
       const leadsRes = await query(
         `SELECT 
-           id, 
-           remote_jid, 
-           client_name, 
-           status_atendimento, 
-           paused_until, 
-           dados_lead, 
-           last_interaction, 
-           created_at,
+           s.id, 
+           s.remote_jid, 
+           COALESCE(s.client_name, c.nome, s.dados_lead->>'nome', 'Cliente') as client_name, 
+           s.status_atendimento, 
+           s.paused_until, 
+           s.dados_lead, 
+           s.last_interaction, 
+           COALESCE(s.created_at, s.last_interaction, now()) as created_at,
            CASE 
-             WHEN paused_until IS NOT NULL AND paused_until > now() THEN true 
+             WHEN s.paused_until IS NOT NULL AND s.paused_until > now() THEN true 
              ELSE false 
            END as is_paused
-         FROM chat_sessions 
-         WHERE tenant_id = $1 
-         ORDER BY last_interaction DESC`,
+         FROM chat_sessions s
+         LEFT JOIN customer_profiles c ON c.tenant_id = s.tenant_id AND c.remote_jid = s.remote_jid
+         WHERE s.tenant_id = $1 
+         ORDER BY s.last_interaction DESC`,
         [tenantId]
       );
 

@@ -33,7 +33,7 @@ async function testPhase5() {
 
   const sessionRes = await query(
     `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, dados_lead) 
-     VALUES ($1, '5531983579692@s.whatsapp.net', 'Maria Souza', $2) 
+     VALUES ($1, '5531983525816@s.whatsapp.net', 'Maria Souza', $2) 
      RETURNING id`,
     [tenant.id, JSON.stringify({ nome: 'Maria Souza', servico: 'Câmeras CFTV', bairro_cidade: 'Barreiro / BH', urgencia: 'alta' })]
   );
@@ -117,7 +117,7 @@ async function testPhase5() {
     const saveAiRes = await request('/api/v2/tenant/ai-config', 'PUT', {
       tom_de_voz: 'consultivo_especialista',
       pausa_automatica_minutos: 60,
-      whatsapp_notificacao_humana: '5531983579692',
+      whatsapp_notificacao_humana: '5531983525816',
       sobre_empresa: 'Líder em segurança eletrônica.',
       servicos_oferecidos: ['CFTV 4K', 'Alarmes Perimetrais']
     }, token);

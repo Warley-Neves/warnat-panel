@@ -62,15 +62,16 @@ export async function seedWarNatTech(): Promise<SeedResult> {
     await client.query(
       `INSERT INTO tenant_whatsapp_instances (
          tenant_id, instance_name, instance_token, numero_telefone, status, webhook_url
-       ) VALUES ($1, $2, 'token-interno-warnat-123', '5531983579692', 'open', 'https://api.warnattech.com.br/api/webhook/whatsapp')
+       ) VALUES ($1, $2, 'token-interno-warnat-123', '5531983525816', 'open', 'https://api.warnattech.com.br/api/webhook/whatsapp')
        ON CONFLICT (instance_name)
        DO UPDATE SET
          tenant_id = EXCLUDED.tenant_id,
+         numero_telefone = EXCLUDED.numero_telefone,
          status = 'open',
          updated_at = NOW();`,
       [tenantId, instanceName]
     );
-    console.log(`✅ [Seed] Instância WhatsApp "${instanceName}" vinculada ao tenant WarNat Tech.`);
+    console.log(`✅ [Seed] Instância WhatsApp "${instanceName}" vinculada ao tenant WarNat Tech com número (31) 98352-5816.`);
 
     // 4. Cadastra Configurações de IA Comerciais da WarNat Tech
     const servicosOferecidos = [
@@ -134,19 +135,19 @@ export async function seedWarNatTech(): Promise<SeedResult> {
         JSON.stringify(servicosOferecidos),
         'Não atendemos pintura, alarmes veiculares, decorações, buffet, pedreiro ou conserto de eletrodomésticos. Nosso foco é 100% exclusivo em câmeras de segurança e CFTV.',
         JSON.stringify(regrasAgendamento),
-        '5531983579692',
+        '5531983525816',
         45
       ]
     );
-    console.log(`✅ [Seed] Regras da IA e políticas comerciais da WarNat Tech configuradas no banco.`);
+    console.log(`✅ [Seed] Regras da IA e políticas comerciais da WarNat Tech configuradas no banco com notificação em 5531983525816.`);
 
     // 5. Cadastra Dossiê Permanente de Homologação em customer_profiles
-    const homologJid = '5531983579692@s.whatsapp.net';
+    const homologJid = '5531983525816@s.whatsapp.net';
     const profile = await CustomerService.findOrCreateProfile(tenantId, homologJid, {
-      nome: 'Warley Santos (Homologação)',
-      telefone: '5531983579692',
+      nome: 'Warley Santos (Administrador)',
+      telefone: '5531983525816',
       endereco_completo: 'Bairro Barreiro - Belo Horizonte / MG',
-      perfil_resumo: 'Cliente VIP e Administrador do Sistema. Realizou testes de homologação com sucesso.',
+      perfil_resumo: 'Cliente VIP e Administrador do Sistema. Responsável Técnico pela WarNat Tech.',
       metadados: { cliente_vip: true, canal: 'whatsapp_oficial' }
     });
     console.log(`✅ [Seed] Dossiê permanente do cliente homologado (ID: ${profile.id}).`);

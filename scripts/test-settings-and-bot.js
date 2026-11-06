@@ -7,7 +7,7 @@ const settingsStore = require('../config/settings-store');
 const calendarService = require('../calendar/google-calendar');
 const schedulerAgent = require('../agent/whatsapp-scheduler');
 
-const HOMOLOGATION_PHONE = (process.env.HOMOLOGATION_PHONE || '5531983579692').replace(/\D/g, '');
+const HOMOLOGATION_PHONE = (process.env.HOMOLOGATION_PHONE || '5531983525816').replace(/\D/g, '');
 const HOMOLOGATION_JID = `${HOMOLOGATION_PHONE}@s.whatsapp.net`;
 
 async function runTests() {

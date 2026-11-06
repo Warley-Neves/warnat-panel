@@ -57,15 +57,16 @@ async function seedWarNatTech() {
     await client.query(
       `INSERT INTO tenant_whatsapp_instances (
          tenant_id, instance_name, instance_token, numero_telefone, status, webhook_url
-       ) VALUES ($1, $2, 'token-interno-warnat-123', '5531983579692', 'open', 'https://api.warnattech.com.br/api/webhook/whatsapp')
+       ) VALUES ($1, $2, 'token-interno-warnat-123', '5531983525816', 'open', 'https://api.warnattech.com.br/api/webhook/whatsapp')
        ON CONFLICT (instance_name)
        DO UPDATE SET
          tenant_id = EXCLUDED.tenant_id,
+         numero_telefone = EXCLUDED.numero_telefone,
          status = 'open',
          updated_at = now()`,
       [tenantId, instanceName]
     );
-    console.log(`✅ Instância WhatsApp "${instanceName}" vinculada ao tenant WarNat Tech.`);
+    console.log(`✅ Instância WhatsApp "${instanceName}" vinculada ao tenant WarNat Tech com número (31) 98352-5816.`);
 
     // 4. Cadastrar Regras da IA e Prompt Compiler Dinâmico
     const servicosOferecidos = [
@@ -111,11 +112,34 @@ async function seedWarNatTech() {
         JSON.stringify(servicosOferecidos),
         'Não atendemos pintura, alarmes veiculares, decorações, buffet, pedreiro ou conserto de eletrodomésticos. Nosso foco é 100% exclusivo em câmeras de segurança e CFTV.',
         JSON.stringify(regrasAgendamento),
-        '5531983579692',
+        '5531983525816',
         45
       ]
     );
-    console.log(`✅ Regras da IA e políticas comerciais da WarNat Tech configuradas no banco.`);
+    console.log(`✅ Regras da IA e políticas comerciais da WarNat Tech configuradas no banco com notificação em 5531983525816.`);
+
+    // 5. Cadastrar Dossiê Permanente em customer_profiles
+    const homologJid = '5531983525816@s.whatsapp.net';
+    await client.query(
+      `INSERT INTO customer_profiles (
+         tenant_id, remote_jid, nome, telefone, endereco_completo, perfil_resumo, metadados
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (tenant_id, remote_jid)
+       DO UPDATE SET
+         nome = EXCLUDED.nome,
+         telefone = EXCLUDED.telefone,
+         updated_at = now()`,
+      [
+        tenantId,
+        homologJid,
+        'Warley Santos (Administrador)',
+        '5531983525816',
+        'Belo Horizonte / MG',
+        'Administrador e Proprietário da WarNat Tech.',
+        JSON.stringify({ admin: true, canal: 'whatsapp_oficial' })
+      ]
+    );
+    console.log(`✅ Dossiê permanente do administrador Warley Santos provisionado.`);
 
     await client.query('COMMIT');
     console.log('------------------------------------------------------------');

@@ -115,10 +115,12 @@ export interface ChatSession {
   id: string; // UUID
   tenant_id: string; // FK -> tenants.id
   remote_jid: string;
+  client_name?: string | null;
   status_atendimento: SessionStatus;
   paused_until?: Date | null;
   dados_lead: Record<string, unknown>;
   last_interaction: Date;
+  created_at?: Date;
 }
 
 /**
