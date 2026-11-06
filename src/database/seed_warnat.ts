@@ -120,8 +120,11 @@ export async function seedWarNatTech(): Promise<SeedResult> {
          regras_agendamento,
          whatsapp_notificacao_humana,
          pausa_automatica_minutos,
+         atender_chamadas,
+         responder_com_audio,
+         voz_ia,
          updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12, NOW())
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12, $13, $14, $15, NOW())
        ON CONFLICT (tenant_id)
        DO UPDATE SET
          nome_assistente = EXCLUDED.nome_assistente,
@@ -135,6 +138,9 @@ export async function seedWarNatTech(): Promise<SeedResult> {
          regras_agendamento = EXCLUDED.regras_agendamento,
          whatsapp_notificacao_humana = EXCLUDED.whatsapp_notificacao_humana,
          pausa_automatica_minutos = EXCLUDED.pausa_automatica_minutos,
+         atender_chamadas = COALESCE(tenant_ai_configs.atender_chamadas, EXCLUDED.atender_chamadas),
+         responder_com_audio = COALESCE(tenant_ai_configs.responder_com_audio, EXCLUDED.responder_com_audio),
+         voz_ia = COALESCE(tenant_ai_configs.voz_ia, EXCLUDED.voz_ia),
          updated_at = NOW();`,
       [
         tenantId,
@@ -148,7 +154,10 @@ export async function seedWarNatTech(): Promise<SeedResult> {
         'Não atendemos pintura, alarmes veiculares, decorações, buffet, pedreiro ou conserto de eletrodomésticos. Nosso foco é 100% exclusivo em câmeras de segurança e CFTV.',
         JSON.stringify(regrasAgendamento),
         '5531983525816',
-        45
+        45,
+        true,
+        'texto',
+        'nova'
       ]
     );
     console.log(`✅ [Seed] Regras da IA e políticas comerciais da WarNat Tech configuradas no banco com notificação em 5531983525816.`);

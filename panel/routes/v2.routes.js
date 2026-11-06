@@ -7,6 +7,7 @@ const authService = require('../../database/auth.service');
 const { query } = require('../../database/db');
 const evolutionService = require('../../services/evolution.service');
 const webhookController = require('../../controllers/webhook.controller');
+const messageCache = require('../../services/message-cache.service');
 
 async function handleV2Routes(req, res, pathname, method, body) {
   const sendJson = (statusCode, data) => {
@@ -309,7 +310,9 @@ async function handleV2Routes(req, res, pathname, method, body) {
              ELSE false 
            END as is_paused,
            (SELECT content FROM chat_messages m WHERE m.session_id = s.id ORDER BY m.created_at DESC LIMIT 1) as ultima_mensagem,
-           (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id)::int as total_mensagens
+           (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id)::int as total_mensagens,
+           (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id AND (m.media_type LIKE 'call_%' OR m.content LIKE '%[Chamada%'))::int as total_chamadas,
+           (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id AND (m.media_type = 'audio' OR m.content LIKE '[audio]%'))::int as total_audios
          FROM chat_sessions s
          LEFT JOIN customer_profiles c ON c.tenant_id = s.tenant_id AND c.remote_jid = s.remote_jid
          LEFT JOIN users u ON u.id = s.atendente_id
@@ -334,6 +337,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
         total: leads.length,
         ia_ativa: leads.filter(l => !l.is_manual).length,
         manual: leads.filter(l => l.is_manual).length,
+        chamadas: leads.filter(l => (parseInt(l.total_chamadas, 10) || 0) > 0).length,
+        audios: leads.filter(l => (parseInt(l.total_audios, 10) || 0) > 0).length,
         agendados: leads.filter(l => l.etapa_funil === 'agendado' || (l.dados_lead && l.dados_lead.servico && (l.dados_lead.data_agendada || l.dados_lead.horario))).length,
         concluidos: leads.filter(l => l.etapa_funil === 'concluido').length,
         qualificados: leads.filter(l => l.dados_lead && l.dados_lead.servico).length
@@ -504,12 +509,14 @@ async function handleV2Routes(req, res, pathname, method, body) {
       });
     }
 
-    // Enviar Mensagem Manual do Atendente pelo Painel para o WhatsApp
+    // Enviar Mensagem Manual do Atendente pelo Painel para o WhatsApp (Texto ou Áudio)
     if (messagesMatch && method === 'POST') {
       const sessionId = messagesMatch[1];
-      const { message } = body;
-      if (!message || !message.trim()) {
-        return sendJson(400, { success: false, error: 'O conteúdo da mensagem é obrigatório.' });
+      const { message, audio, mediaType } = body;
+
+      const isAudio = mediaType === 'audio' || !!audio;
+      if (!isAudio && (!message || !message.trim())) {
+        return sendJson(400, { success: false, error: 'O conteúdo da mensagem ou áudio é obrigatório.' });
       }
 
       // 1. Busca a sessão e o JID do cliente
@@ -531,28 +538,39 @@ async function handleV2Routes(req, res, pathname, method, body) {
       // 2. Dispara a mensagem via Evolution API se a instância estiver configurada
       if (session.instance_name) {
         try {
-          const sent = await evolutionService.sendTextMessage(session.instance_name, session.remote_jid, message.trim());
-          messageId = sent?.messageId || null;
+          if (isAudio && audio) {
+            const sent = await evolutionService.sendWhatsAppAudio(session.instance_name, session.remote_jid, audio);
+            messageId = sent?.messageId || null;
+          } else {
+            const sent = await evolutionService.sendTextMessage(session.instance_name, session.remote_jid, message.trim());
+            messageId = sent?.messageId || null;
+          }
+          if (messageId) {
+            await messageCache.setBotSent(messageId, 60);
+          }
         } catch (evErr) {
           console.warn('[SendMsg] Falha ao enviar para o WhatsApp:', evErr.message);
         }
       }
 
+      const finalContent = isAudio ? (message && message.trim() ? message.trim() : '[Áudio enviado pelo atendente]') : message.trim();
+      const finalMediaType = isAudio ? 'audio' : 'text';
+
       // 3. Salva no banco de dados com role assistant
       const msgRes = await query(
-        `INSERT INTO chat_messages (session_id, tenant_id, role, content, message_id)
-         VALUES ($1, $2, 'assistant', $3, $4)
-         RETURNING id, role, content, message_id, created_at`,
-        [sessionId, tenantId, message.trim(), messageId]
+        `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, media_url, message_id)
+         VALUES ($1, $2, 'assistant', $3, $4, $5, $6)
+         RETURNING id, role, content, media_type, media_url, message_id, created_at`,
+        [sessionId, tenantId, finalContent, finalMediaType, isAudio ? audio : null, messageId]
       );
 
-      // 4. Ativa pausa humana de 45 min para o operador continuar conversando sem a IA interferir
-      const pausedUntil = new Date(Date.now() + 45 * 60 * 1000);
+      // 4. Ativa atendimento manual para o operador continuar conversando sem a IA interferir
+      const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
       await query(
         `UPDATE chat_sessions 
-         SET status_atendimento = 'pausa_humana', paused_until = $1, etapa_funil = 'manual', atendente_id = $2, last_interaction = now()
+         SET status_atendimento = 'manual', paused_until = $1, etapa_funil = 'manual', atendente_id = $2, last_interaction = now()
          WHERE id = $3`,
-        [pausedUntil, decodedUser.userId, sessionId]
+        [farFuture, decodedUser.userId, sessionId]
       );
 
       return sendJson(200, {

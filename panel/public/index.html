@@ -198,25 +198,32 @@
         <span>Dashboard & CRM</span>
       </button>
 
-      <!-- ABA 2: AGENDA & VISITAS TÉCNICAS -->
+      <!-- ABA 2: CENTRAL DE ATENDIMENTOS (NOVA TELA DEDICADA A TODOS OS ATENDIMENTOS) -->
+      <button onclick="switchTab('atendimentos')" id="tabBtn-atendimentos" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
+        <i data-lucide="headset" class="w-4 h-4 text-emerald-400"></i>
+        <span>Central de Atendimentos</span>
+        <span id="navAtendimentosBadge" class="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-bold border border-slate-700">0</span>
+      </button>
+
+      <!-- ABA 3: AGENDA & VISITAS TÉCNICAS -->
       <button onclick="switchTab('appointments')" id="tabBtn-appointments" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
         <i data-lucide="calendar-days" class="w-4 h-4"></i>
         <span>Agenda & Visitas</span>
       </button>
 
-      <!-- ABA 3: REGRAS DA IA & HORÁRIOS COMERCIAIS (ADMIN/SUPERVISOR) -->
+      <!-- ABA 4: REGRAS DA IA & HORÁRIOS COMERCIAIS (ADMIN/SUPERVISOR) -->
       <button onclick="switchTab('ai')" id="tabBtn-ai" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
         <i data-lucide="sliders" class="w-4 h-4"></i>
         <span>Regras da IA & Horários</span>
       </button>
 
-      <!-- ABA 4: CONEXÃO WHATSAPP (ADMIN/SUPERVISOR) -->
+      <!-- ABA 5: CONEXÃO WHATSAPP (ADMIN/SUPERVISOR) -->
       <button onclick="switchTab('whatsapp')" id="tabBtn-whatsapp" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
         <i data-lucide="qr-code" class="w-4 h-4"></i>
         <span>Conexão WhatsApp</span>
       </button>
 
-      <!-- ABA 5: GESTÃO DA EQUIPE & USUÁRIOS (ADMIN/SUPERVISOR) -->
+      <!-- ABA 6: GESTÃO DA EQUIPE & USUÁRIOS (ADMIN/SUPERVISOR) -->
       <button onclick="switchTab('team')" id="tabBtn-team" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
         <i data-lucide="users-round" class="w-4 h-4"></i>
         <span>Equipe & Usuários</span>
@@ -457,7 +464,195 @@
     </section>
 
     <!-- ======================================================================== -->
-    <!-- ABA 2: AGENDA & VISITAS TÉCNICAS -->
+    <!-- ABA NOVA: CENTRAL DE ATENDIMENTOS (AO VIVO & EXCLUSIVA) -->
+    <!-- ======================================================================== -->
+    <section id="tab-atendimentos" class="tab-content hidden fade-in space-y-6">
+      <!-- HEADER & ESTATÍSTICAS DA CENTRAL -->
+      <div class="bg-dark-850 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+              <i data-lucide="headset" class="w-5 h-5 text-emerald-400"></i>
+              <span>Central de Atendimentos WhatsApp</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Fila ao vivo de conversas, atendimento manual, retorno de ligações e envio de áudios</p>
+          </div>
+
+          <div class="flex items-center space-x-3">
+            <button onclick="openNewAtendimentoModal()" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2 rounded-xl text-xs flex items-center space-x-2 shadow-lg shadow-brand-600/25 transition">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              <span>Novo Atendimento</span>
+            </button>
+            <button onclick="loadAtendimentos()" class="bg-dark-800 hover:bg-dark-750 text-slate-300 font-medium px-3.5 py-2 rounded-xl text-xs border border-slate-700 flex items-center space-x-1.5 transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              <span>Atualizar</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI CARDS DA CENTRAL -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div class="bg-dark-900/60 border border-slate-800 p-4 rounded-xl">
+            <span class="text-xs text-slate-400 font-medium">Total de Conversas</span>
+            <div id="atendKpiTotal" class="text-xl font-bold text-white mt-1">0</div>
+          </div>
+          <div class="bg-dark-900/60 border border-emerald-500/20 p-4 rounded-xl">
+            <span class="text-xs text-emerald-400 font-medium flex items-center space-x-1">
+              <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+              <span>Automação (IA Nat)</span>
+            </span>
+            <div id="atendKpiAi" class="text-xl font-bold text-emerald-400 mt-1">0</div>
+          </div>
+          <div class="bg-dark-900/60 border border-amber-500/20 p-4 rounded-xl">
+            <span class="text-xs text-amber-400 font-medium flex items-center space-x-1">
+              <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
+              <span>Atendimento Manual</span>
+            </span>
+            <div id="atendKpiManual" class="text-xl font-bold text-amber-400 mt-1">0</div>
+          </div>
+          <div class="bg-dark-900/60 border border-purple-500/20 p-4 rounded-xl">
+            <span class="text-xs text-purple-400 font-medium flex items-center space-x-1">
+              <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
+              <span>Chamadas Recebidas</span>
+            </span>
+            <div id="atendKpiCalls" class="text-xl font-bold text-purple-400 mt-1">0</div>
+          </div>
+        </div>
+
+        <!-- BARRA DE FILTROS & BUSCA -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="filterAtendimentos('todos')" id="filterBtn-todos" class="atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 text-white transition">Todos</button>
+            <button onclick="filterAtendimentos('manual')" id="filterBtn-manual" class="atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-slate-400 hover:text-white border border-slate-700 transition">👤 Atendimento Manual</button>
+            <button onclick="filterAtendimentos('ia')" id="filterBtn-ia" class="atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-slate-400 hover:text-white border border-slate-700 transition">🤖 Automação (IA)</button>
+            <button onclick="filterAtendimentos('chamadas')" id="filterBtn-chamadas" class="atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-slate-400 hover:text-white border border-slate-700 transition">📞 Chamadas</button>
+            <button onclick="filterAtendimentos('audios')" id="filterBtn-audios" class="atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-slate-400 hover:text-white border border-slate-700 transition">🎙️ Com Áudios</button>
+          </div>
+
+          <div class="relative w-full sm:w-72">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-500"></i>
+            <input type="text" id="atendSearchInput" oninput="handleAtendSearch()" placeholder="Buscar cliente, número..." class="w-full bg-dark-800 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- DESK DE ATENDIMENTO INTEGRADO (FILA + CONVERSA AO VIVO) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[640px]">
+        <!-- COLUNA DA ESQUERDA: LISTA DE ATENDIMENTOS (5 cols) -->
+        <div class="lg:col-span-5 bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800 px-1">
+            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
+              <i data-lucide="inbox" class="w-4 h-4 text-brand-400"></i>
+              <span>Fila de Conversas</span>
+            </span>
+            <span id="atendQueueBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">0</span>
+          </div>
+
+          <!-- LISTA COM ROLAGEM -->
+          <div id="atendListContainer" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar max-h-[580px]">
+            <div class="text-center text-slate-500 text-xs py-12">Carregando fila de atendimentos...</div>
+          </div>
+        </div>
+
+        <!-- COLUNA DA DIREITA: PAINEL DE CONVERSA AO VIVO E COMPOSIÇÃO DE ÁUDIO/TEXTO (7 cols) -->
+        <div class="lg:col-span-7 bg-dark-850 border border-slate-800 rounded-2xl shadow-xl flex flex-col overflow-hidden">
+          
+          <!-- ESTADO VAZIO: NENHUM SELECIONADO -->
+          <div id="atendEmptyState" class="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-4">
+            <div class="w-16 h-16 rounded-2xl bg-dark-800 border border-slate-700 flex items-center justify-center text-slate-500 shadow-inner">
+              <i data-lucide="headset" class="w-8 h-8 text-emerald-400"></i>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-white">Nenhum atendimento selecionado</h4>
+              <p class="text-xs text-slate-400 max-w-sm mt-1 leading-relaxed">
+                Clique em uma conversa na fila ao lado para ver o histórico, assumir o atendimento manual, atender/retornar chamadas ou gravar e enviar áudios pelo microfone.
+              </p>
+            </div>
+          </div>
+
+          <!-- PAINEL DE CHAT ATIVO NA CENTRAL -->
+          <div id="atendChatPanel" class="hidden flex-1 flex flex-col h-full">
+            <!-- CABEÇALHO DA CONVERSA -->
+            <div class="p-4 border-b border-slate-800 bg-dark-900/60 flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-full bg-brand-600/30 border border-brand-500/40 flex items-center justify-center text-brand-300 font-bold text-sm">
+                  <span id="atendActiveAvatar">?</span>
+                </div>
+                <div>
+                  <div class="flex items-center space-x-2">
+                    <h4 id="atendActiveName" class="text-sm font-bold text-white">Cliente</h4>
+                    <span id="atendActiveModeBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">🤖 IA Ativa</span>
+                  </div>
+                  <p id="atendActivePhone" class="text-xs text-slate-400 font-mono mt-0.5">-</p>
+                </div>
+              </div>
+
+              <!-- BOTÕES DE AÇÃO RÁPIDA -->
+              <div class="flex items-center space-x-2">
+                <!-- BOTÃO DE ATENDER / LIGAR -->
+                <button onclick="handleDeskCallCustomer()" id="btnDeskCall" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center space-x-1.5 shadow-sm" title="Ligar ou retornar chamada para este cliente">
+                  <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
+                  <span>Ligar / Atender</span>
+                </button>
+
+                <!-- BOTÃO DE ASSUMIR / ALTERNAR IA -->
+                <button onclick="handleDeskToggleAi()" id="btnDeskToggleAi" class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center space-x-1.5 bg-amber-600/20 text-amber-300 border-amber-500/30 hover:bg-amber-600/30">
+                  <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
+                  <span>Atender Manual</span>
+                </button>
+
+                <!-- VER DOSSIÊ -->
+                <button onclick="handleDeskOpenDossier()" class="p-2 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 border border-slate-700 transition" title="Ver Dossiê do Cliente">
+                  <i data-lucide="brain" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- HISTÓRICO DE MENSAGENS -->
+            <div id="atendChatMessagesContainer" class="flex-1 p-5 overflow-y-auto space-y-3.5 custom-scrollbar max-h-[460px] bg-dark-900/30">
+              <div class="text-center text-slate-500 text-xs py-8">Carregando mensagens...</div>
+            </div>
+
+            <!-- BARRA DE GRAVAÇÃO DE ÁUDIO (MOSTRADA ENQUANTO GRAVA) -->
+            <div id="atendRecordingBar" class="hidden p-3 bg-red-950/40 border-t border-red-800/60 flex items-center justify-between">
+              <div class="flex items-center space-x-2.5 text-xs text-red-300 font-semibold">
+                <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+                <span>Gravando nota de voz:</span>
+                <span id="atendRecordingTimer" class="font-mono text-white text-sm">00:00</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <button type="button" onclick="cancelDeskAudioRecording()" class="px-3 py-1 rounded-lg text-xs font-medium text-slate-300 hover:bg-dark-800 border border-slate-700 transition">Cancelar</button>
+                <button type="button" onclick="stopAndSendDeskAudio()" class="px-4 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow transition flex items-center space-x-1">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                  <span>Enviar Áudio</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- FORMULÁRIO DE ENVIO MANUAL (TEXTO OU DISPARO DE GRAVAÇÃO DE ÁUDIO) -->
+            <form id="atendChatForm" onsubmit="handleSendDeskTextMessage(event)" class="p-3 bg-dark-900 border-t border-slate-800 flex items-center space-x-2">
+              <!-- BOTÃO GRAVAR ÁUDIO -->
+              <button type="button" onclick="startDeskAudioRecording()" id="btnDeskRecordAudio" class="p-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-emerald-400 border border-slate-700 transition flex items-center justify-center shrink-0" title="Gravar e Enviar Áudio pelo Microfone">
+                <i data-lucide="mic" class="w-4 h-4"></i>
+              </button>
+
+              <!-- BOTÃO UPLOAD DE ÁUDIO -->
+              <button type="button" onclick="document.getElementById('deskAudioFileInput').click()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-brand-400 border border-slate-700 transition flex items-center justify-center shrink-0" title="Anexar arquivo de áudio">
+                <i data-lucide="paperclip" class="w-4 h-4"></i>
+              </button>
+              <input type="file" id="deskAudioFileInput" accept="audio/*" class="hidden" onchange="handleDeskAudioFileUpload(event)">
+
+              <input type="text" id="atendChatInput" placeholder="Digitar mensagem manual para o WhatsApp..." class="flex-1 bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500">
+              
+              <button type="submit" id="btnDeskSendMsg" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2.5 rounded-xl text-xs transition flex items-center space-x-1.5 shrink-0">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span>Enviar</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
     <!-- ======================================================================== -->
     <section id="tab-appointments" class="tab-content hidden fade-in space-y-6">
       <div class="bg-dark-850 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
@@ -726,12 +921,12 @@
               <div>
                 <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Modo de Resposta por Áudio da IA</label>
                 <select id="aiResponderComAudio" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
-                  <option value="quando_receber_audio">Responder com áudio apenas quando o cliente enviar áudio (Híbrido Inteligente)</option>
+                  <option value="texto" selected>Responder em texto (Padrão: áudio do cliente é transcrito e compreendido, IA responde em texto ágil)</option>
+                  <option value="quando_receber_audio">Responder em áudio quando o cliente enviar áudio (Híbrido Inteligente)</option>
                   <option value="sempre">Sempre responder por áudio (Nota de voz com waveform)</option>
-                  <option value="nunca">Apenas mensagens de texto</option>
                 </select>
                 <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                  Quando ativo, a assistente sintetiza a fala com inteligência artificial humanizada e envia como nota de voz no WhatsApp.
+                  Quando em texto, a Nat compreende com precisão os áudios enviados pelo cliente via Whisper e responde de forma rápida e clara em texto.
                 </p>
               </div>
 
@@ -914,6 +1109,12 @@
         </div>
 
         <div class="flex items-center space-x-2">
+          <!-- BOTÃO LIGAR / ATENDER CHAMADA -->
+          <button id="modalCallBtn" onclick="callCustomerFromModal()" title="Ligar para o cliente" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center space-x-1.5 shadow-sm">
+            <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
+            <span>Ligar / Atender</span>
+          </button>
+
           <!-- BOTÃO SELETOR MANUAL / IA DESTE CLIENTE -->
           <button id="modalToggleAiBtn" onclick="toggleAiFromModal()" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center space-x-1.5 bg-amber-600/20 text-amber-300 border-amber-500/30 hover:bg-amber-600/30 shadow-sm">
             <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
@@ -938,14 +1139,41 @@
 
       <!-- BARRA DE ENVIO DE MENSAGEM MANUAL DO OPERADOR -->
       <div class="p-3 sm:p-4 border-t border-slate-800 bg-dark-850">
+        <!-- BARRA DE GRAVAÇÃO DE ÁUDIO NO MODAL -->
+        <div id="modalRecordingBar" class="hidden p-2.5 bg-red-950/40 border border-red-800/60 rounded-xl mb-2 flex items-center justify-between">
+          <div class="flex items-center space-x-2.5 text-xs text-red-300 font-semibold">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+            <span>Gravando nota de voz:</span>
+            <span id="modalRecordingTimer" class="font-mono text-white text-sm">00:00</span>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button type="button" onclick="cancelModalAudioRecording()" class="px-3 py-1 rounded-lg text-xs font-medium text-slate-300 hover:bg-dark-800 border border-slate-700 transition">Cancelar</button>
+            <button type="button" onclick="stopAndSendModalAudio()" class="px-4 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow transition flex items-center space-x-1">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              <span>Enviar Áudio</span>
+            </button>
+          </div>
+        </div>
+
         <form onsubmit="handleSendManualMessage(event)" class="flex items-center space-x-2">
+          <!-- BOTÃO GRAVAR ÁUDIO NO MODAL -->
+          <button type="button" onclick="startModalAudioRecording()" id="btnModalRecordAudio" class="p-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-emerald-400 border border-slate-700 transition flex items-center justify-center shrink-0" title="Gravar e Enviar Áudio pelo Microfone">
+            <i data-lucide="mic" class="w-4 h-4"></i>
+          </button>
+
+          <!-- BOTÃO UPLOAD DE ÁUDIO NO MODAL -->
+          <button type="button" onclick="document.getElementById('modalAudioFileInput').click()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-brand-400 border border-slate-700 transition flex items-center justify-center shrink-0" title="Anexar arquivo de áudio">
+            <i data-lucide="paperclip" class="w-4 h-4"></i>
+          </button>
+          <input type="file" id="modalAudioFileInput" accept="audio/*" class="hidden" onchange="handleModalAudioFileUpload(event)">
+
           <input type="text" id="manualChatMessageInput" placeholder="Digite uma mensagem para o cliente no WhatsApp (Enter para enviar)..." autocomplete="off" class="flex-1 bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
-          <button type="submit" id="btnSendManualMsg" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2.5 rounded-xl text-sm flex items-center space-x-1.5 shadow-lg shadow-brand-600/30 transition">
+          <button type="submit" id="btnSendManualMsg" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2.5 rounded-xl text-sm flex items-center space-x-1.5 shadow-lg shadow-brand-600/30 transition shrink-0">
             <span>Enviar</span>
             <i data-lucide="send" class="w-4 h-4"></i>
           </button>
         </form>
-        <p class="text-[11px] text-slate-500 mt-1 px-1">💡 Ao responder manualmente, a IA é pausada por 45 minutos para o operador atender sem interferências.</p>
+        <p class="text-[11px] text-slate-500 mt-1 px-1">💡 Ao responder manualmente ou por áudio, a IA é silenciada para o operador atender sem interferências.</p>
       </div>
 
     </div>
@@ -1402,6 +1630,7 @@
 
         switchTab('crm');
         await loadLeads();
+        loadAtendimentos().catch(() => {});
 
         if (currentUserProfile?.role !== 'atendente') {
           await checkWhatsAppStatus();
@@ -1430,6 +1659,7 @@
       document.getElementById(`tab-${tab}`)?.classList.remove('hidden');
 
       if (tab === 'crm') loadLeads();
+      if (tab === 'atendimentos') loadAtendimentos();
       if (tab === 'appointments') loadAppointments();
       if (tab === 'team') loadTeamUsers();
       if (tab === 'ai') loadAiConfig();
@@ -1865,6 +2095,11 @@
               mediaBadge = `<div class="inline-flex items-center space-x-1 px-2.5 py-0.5 mb-1.5 rounded-full text-[10px] font-bold ${isUser ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/30'}"><span>🎙️ ${isUser ? 'Áudio do Cliente (Transcrito)' : 'Nota de Voz da Assistente (Nat)'}</span></div>`;
             }
 
+            let audioPlayer = '';
+            if (m.media_url && (m.media_url.startsWith('data:audio') || m.media_url.startsWith('http'))) {
+              audioPlayer = `<audio controls src="${m.media_url}" class="mt-2 w-full max-w-xs h-8"></audio>`;
+            }
+
             msgDiv.innerHTML = `
               <div class="max-w-[85%] rounded-2xl p-3.5 text-sm ${isUser ? 'bg-dark-800 text-slate-200 border border-slate-700/80' : 'bg-brand-600 text-white shadow-md'}">
                 <div class="text-[10px] font-semibold uppercase tracking-wider mb-1 opacity-70 flex items-center space-x-1">
@@ -1872,6 +2107,7 @@
                 </div>
                 ${mediaBadge}
                 <div class="whitespace-pre-wrap leading-relaxed">${m.content}</div>
+                ${audioPlayer}
                 <div class="text-[9px] text-right mt-1.5 opacity-60">${new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
             `;
@@ -1920,8 +2156,608 @@
     }
 
     function closeMessagesModal() {
+      cancelModalAudioRecording();
       document.getElementById('messagesModal').classList.add('hidden');
       activeChatSession = null;
+    }
+
+    // Ações de Chamada e Áudio no Modal de Chat
+    async function callCustomerFromModal() {
+      if (!activeChatSession) return;
+      await toggleAi(activeChatSession.id, 'manual');
+      activeChatSession.isPaused = true;
+      updateChatModalAiBadge(true);
+      const cleanPhone = (activeChatSession.phone || '').replace(/\D/g, '');
+      window.open(`https://wa.me/${cleanPhone}`, '_blank');
+    }
+
+    let modalMediaRecorder = null;
+    let modalAudioChunks = [];
+    let modalRecordingInterval = null;
+    let modalRecordingSeconds = 0;
+
+    async function startModalAudioRecording() {
+      if (!activeChatSession) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        modalAudioChunks = [];
+        modalMediaRecorder = new MediaRecorder(stream);
+        modalMediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) modalAudioChunks.push(e.data);
+        };
+        modalMediaRecorder.start();
+        modalRecordingSeconds = 0;
+        document.getElementById('modalRecordingTimer').textContent = '00:00';
+        document.getElementById('modalRecordingBar').classList.remove('hidden');
+
+        modalRecordingInterval = setInterval(() => {
+          modalRecordingSeconds++;
+          const m = String(Math.floor(modalRecordingSeconds / 60)).padStart(2, '0');
+          const s = String(modalRecordingSeconds % 60).padStart(2, '0');
+          document.getElementById('modalRecordingTimer').textContent = `${m}:${s}`;
+        }, 1000);
+      } catch (err) {
+        alert('Permissão de microfone negada ou microfone indisponível no navegador: ' + (err.message || 'Erro'));
+      }
+    }
+
+    function cancelModalAudioRecording() {
+      if (modalMediaRecorder) {
+        modalMediaRecorder.onstop = null;
+        try { modalMediaRecorder.stop(); } catch (e) {}
+        if (modalMediaRecorder.stream) {
+          modalMediaRecorder.stream.getTracks().forEach(t => t.stop());
+        }
+        modalMediaRecorder = null;
+      }
+      clearInterval(modalRecordingInterval);
+      modalAudioChunks = [];
+      const bar = document.getElementById('modalRecordingBar');
+      if (bar) bar.classList.add('hidden');
+    }
+
+    async function stopAndSendModalAudio() {
+      if (!modalMediaRecorder || !activeChatSession) return;
+      clearInterval(modalRecordingInterval);
+      document.getElementById('modalRecordingBar').classList.add('hidden');
+
+      modalMediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(modalAudioChunks, { type: modalMediaRecorder.mimeType || 'audio/ogg; codecs=opus' });
+        if (modalMediaRecorder.stream) {
+          modalMediaRecorder.stream.getTracks().forEach(t => t.stop());
+        }
+        modalMediaRecorder = null;
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64Audio = reader.result;
+          try {
+            const res = await apiFetch(`/api/v2/tenant/leads/${activeChatSession.id}/messages`, {
+              method: 'POST',
+              body: JSON.stringify({ audio: base64Audio, mediaType: 'audio' })
+            });
+            if (res.ok) {
+              activeChatSession.isPaused = true;
+              updateChatModalAiBadge(true);
+              await refreshChatMessages();
+              await loadLeads();
+              if (typeof loadAtendimentos === 'function') await loadAtendimentos();
+            } else {
+              alert('Falha ao enviar áudio: ' + (res.data?.error || 'Erro'));
+            }
+          } catch (e) {
+            alert('Erro ao enviar áudio gravado.');
+          }
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+      try { modalMediaRecorder.stop(); } catch (e) {}
+    }
+
+    async function handleModalAudioFileUpload(e) {
+      const file = e.target.files?.[0];
+      if (!file || !activeChatSession) return;
+      e.target.value = '';
+
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Audio = reader.result;
+        try {
+          const res = await apiFetch(`/api/v2/tenant/leads/${activeChatSession.id}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ audio: base64Audio, mediaType: 'audio', message: `[Áudio: ${file.name}]` })
+          });
+          if (res.ok) {
+            activeChatSession.isPaused = true;
+            updateChatModalAiBadge(true);
+            await refreshChatMessages();
+            await loadLeads();
+            if (typeof loadAtendimentos === 'function') await loadAtendimentos();
+          } else {
+            alert('Falha ao enviar arquivo de áudio: ' + (res.data?.error || 'Erro'));
+          }
+        } catch (err) {
+          alert('Erro ao processar arquivo de áudio.');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // --------------------------------------------------------------------------
+    // 2.5 CENTRAL DE ATENDIMENTOS (DESK INTEGRADO, FILA AO VIVO, LIGAÇÕES E ÁUDIO)
+    // --------------------------------------------------------------------------
+    let rawAtendimentosList = [];
+    let currentAtendFilter = 'todos';
+    let activeDeskSession = null;
+    let deskMediaRecorder = null;
+    let deskAudioChunks = [];
+    let deskRecordingInterval = null;
+    let deskRecordingSeconds = 0;
+
+    function openNewAtendimentoModal() {
+      openNewLeadModal();
+    }
+
+    async function loadAtendimentos() {
+      const container = document.getElementById('atendListContainer');
+      if (!container) return;
+
+      try {
+        const res = await apiFetch('/api/v2/tenant/leads');
+        if (!res.ok || !Array.isArray(res.data?.leads)) {
+          container.innerHTML = '<div class="text-center text-rose-400 text-xs py-8">Falha ao carregar atendimentos.</div>';
+          return;
+        }
+
+        rawAtendimentosList = res.data.leads;
+        const stats = res.data.stats || {};
+
+        // Atualiza KPIs da Central
+        const kpiTotal = document.getElementById('atendKpiTotal');
+        const kpiAi = document.getElementById('atendKpiAi');
+        const kpiManual = document.getElementById('atendKpiManual');
+        const kpiCalls = document.getElementById('atendKpiCalls');
+        const queueBadge = document.getElementById('atendQueueBadge');
+
+        if (kpiTotal) kpiTotal.textContent = stats.total || rawAtendimentosList.length;
+        if (kpiAi) kpiAi.textContent = stats.ia_ativa || 0;
+        if (kpiManual) kpiManual.textContent = stats.manual || 0;
+        if (kpiCalls) kpiCalls.textContent = stats.chamadas || rawAtendimentosList.filter(l => (parseInt(l.total_chamadas, 10) || 0) > 0).length;
+        if (queueBadge) queueBadge.textContent = `${rawAtendimentosList.length} contatos`;
+
+        renderAtendimentosList();
+
+        // Se houver atendimento ativo no Desk, sincroniza estado e mensagens
+        if (activeDeskSession) {
+          const updated = rawAtendimentosList.find(l => l.id === activeDeskSession.id);
+          if (updated) {
+            activeDeskSession.isPaused = updated.is_manual;
+            updateDeskHeaderUi(updated);
+          }
+        }
+      } catch (err) {
+        container.innerHTML = '<div class="text-center text-rose-400 text-xs py-8">Erro ao carregar atendimentos.</div>';
+      }
+    }
+
+    function filterAtendimentos(type) {
+      currentAtendFilter = type;
+      document.querySelectorAll('.atend-filter-btn').forEach(b => {
+        b.className = 'atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-slate-400 hover:text-white border border-slate-700 transition';
+      });
+      const activeBtn = document.getElementById(`filterBtn-${type}`);
+      if (activeBtn) {
+        activeBtn.className = 'atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 text-white transition';
+      }
+      renderAtendimentosList();
+    }
+
+    function handleAtendSearch() {
+      renderAtendimentosList();
+    }
+
+    function renderAtendimentosList() {
+      const container = document.getElementById('atendListContainer');
+      if (!container) return;
+
+      const search = (document.getElementById('atendSearchInput')?.value || '').toLowerCase().trim();
+
+      const filtered = rawAtendimentosList.filter(lead => {
+        const name = (lead.client_name || '').toLowerCase();
+        const phone = (lead.remote_jid || '').replace(/\D/g, '');
+        const servico = (lead.dados_lead?.servico || '').toLowerCase();
+        const lastMsg = (lead.ultima_mensagem || '').toLowerCase();
+
+        const matchesSearch = !search || name.includes(search) || phone.includes(search) || servico.includes(search) || lastMsg.includes(search);
+        if (!matchesSearch) return false;
+
+        if (currentAtendFilter === 'manual') return !!lead.is_manual;
+        if (currentAtendFilter === 'ia') return !lead.is_manual;
+        if (currentAtendFilter === 'chamadas') return (parseInt(lead.total_chamadas, 10) || 0) > 0;
+        if (currentAtendFilter === 'audios') return (parseInt(lead.total_audios, 10) || 0) > 0;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-500 text-xs py-12">Nenhum atendimento corresponde ao filtro selecionado.</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(lead => {
+        const phone = lead.remote_jid.replace(/@.*$/, '');
+        const isManual = !!lead.is_manual;
+        const isSelected = activeDeskSession && activeDeskSession.id === lead.id;
+        const hasCalls = (parseInt(lead.total_chamadas, 10) || 0) > 0;
+        const hasAudios = (parseInt(lead.total_audios, 10) || 0) > 0;
+        const dados = lead.dados_lead || {};
+        const servico = dados.servico || 'Sondagem / Geral';
+
+        const lastInteraction = lead.last_interaction ? new Date(lead.last_interaction).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+        return `
+          <div onclick="selectDeskAtendimento('${lead.id}')" class="p-3.5 rounded-xl border transition cursor-pointer ${isSelected ? 'bg-brand-950/40 border-brand-500/70 shadow-md ring-1 ring-brand-500/30' : 'bg-dark-900/60 hover:bg-dark-800/80 border-slate-800 hover:border-slate-700'}">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center space-x-2.5 min-w-0">
+                <div class="w-8 h-8 rounded-full ${isManual ? 'bg-amber-600/20 text-amber-300 border-amber-500/30' : 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30'} border flex items-center justify-center font-bold text-xs shrink-0">
+                  ${(lead.client_name || 'C').charAt(0).toUpperCase()}
+                </div>
+                <div class="min-w-0">
+                  <h5 class="text-xs font-bold text-white truncate">${lead.client_name}</h5>
+                  <p class="text-[11px] text-slate-400 font-mono">+${phone}</p>
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <span class="text-[10px] text-slate-500 font-mono">${lastInteraction}</span>
+                <div class="mt-0.5">
+                  <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${isManual ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}">
+                    ${isManual ? '👤 Manual' : '🤖 IA Nat'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-2 text-xs text-slate-300 truncate">
+              <span class="text-slate-500 font-medium">Interesse:</span> ${servico}
+            </div>
+
+            ${lead.ultima_mensagem ? `
+              <div class="mt-1 text-[11px] text-slate-400 truncate bg-dark-800/40 px-2 py-1 rounded-lg border border-slate-800/60 font-sans">
+                ${lead.ultima_mensagem}
+              </div>
+            ` : ''}
+
+            <div class="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <div class="flex items-center space-x-1.5">
+                ${hasCalls ? `
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center space-x-0.5" title="Cliente realizou chamada de voz ou vídeo">
+                    <i data-lucide="phone-call" class="w-2.5 h-2.5"></i>
+                    <span>Chamada</span>
+                  </span>
+                ` : ''}
+                ${hasAudios ? `
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 flex items-center space-x-0.5" title="Conversa contém áudios">
+                    <i data-lucide="mic" class="w-2.5 h-2.5"></i>
+                    <span>Áudio</span>
+                  </span>
+                ` : ''}
+                <span class="text-[10px] text-slate-500">
+                  ${lead.total_mensagens || 0} msgs
+                </span>
+              </div>
+
+              <div class="flex items-center space-x-1" onclick="event.stopPropagation()">
+                <button onclick="handleQuickCallCustomer('${lead.id}', '${lead.remote_jid}', '${phone}', '${lead.client_name}', event)" class="px-2 py-1 rounded-lg text-[10px] font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1 transition" title="Ligar / Atender chamada">
+                  <i data-lucide="phone" class="w-3 h-3"></i>
+                  <span>Ligar</span>
+                </button>
+                <button onclick="selectDeskAtendimento('${lead.id}')" class="px-2 py-1 rounded-lg text-[10px] font-semibold bg-brand-600 hover:bg-brand-500 text-white flex items-center space-x-1 transition">
+                  <span>Abrir</span>
+                  <i data-lucide="chevron-right" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function updateDeskHeaderUi(lead) {
+      const isManual = !!lead.is_manual;
+      const deskAiBadge = document.getElementById('deskAiBadge');
+      const btnDeskToggleAi = document.getElementById('btnDeskToggleAi');
+
+      if (deskAiBadge) {
+        if (isManual) {
+          deskAiBadge.textContent = '👤 Atendimento Manual';
+          deskAiBadge.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20';
+        } else {
+          deskAiBadge.textContent = '🤖 Automação (IA Nat)';
+          deskAiBadge.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse';
+        }
+      }
+
+      if (btnDeskToggleAi) {
+        if (isManual) {
+          btnDeskToggleAi.innerHTML = '<i data-lucide="bot" class="w-3.5 h-3.5"></i><span>Passar para IA</span>';
+          btnDeskToggleAi.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center space-x-1.5 bg-emerald-600/20 text-emerald-300 border-emerald-500/30 hover:bg-emerald-600/30 shadow-sm';
+        } else {
+          btnDeskToggleAi.innerHTML = '<i data-lucide="user-check" class="w-3.5 h-3.5"></i><span>Atender Manual</span>';
+          btnDeskToggleAi.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center space-x-1.5 bg-amber-600/20 text-amber-300 border-amber-500/30 hover:bg-amber-600/30 shadow-sm';
+        }
+      }
+      lucide.createIcons();
+    }
+
+    async function selectDeskAtendimento(leadId) {
+      const lead = rawAtendimentosList.find(l => l.id === leadId);
+      if (!lead) return;
+
+      const phone = lead.remote_jid.replace(/@.*$/, '');
+      activeDeskSession = {
+        id: lead.id,
+        clientName: lead.client_name,
+        phone,
+        remoteJid: lead.remote_jid,
+        isPaused: !!lead.is_manual
+      };
+
+      document.getElementById('atendEmptyState')?.classList.add('hidden');
+      document.getElementById('atendChatPanel')?.classList.remove('hidden');
+
+      document.getElementById('deskClientTitle').textContent = lead.client_name;
+      document.getElementById('deskClientPhone').textContent = `+${phone}`;
+      document.getElementById('deskClientAvatar').textContent = (lead.client_name || 'C').charAt(0).toUpperCase();
+
+      updateDeskHeaderUi(lead);
+      renderAtendimentosList();
+
+      await refreshDeskMessages();
+      document.getElementById('atendChatInput')?.focus();
+    }
+
+    async function refreshDeskMessages() {
+      if (!activeDeskSession) return;
+      const container = document.getElementById('atendChatMessagesContainer');
+      if (!container) return;
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/messages`);
+        if (res.ok && Array.isArray(res.data?.messages)) {
+          if (res.data.messages.length === 0) {
+            container.innerHTML = '<div class="text-center text-slate-500 text-xs py-12">Nenhuma mensagem registrada nesta conversa. Digite abaixo para iniciar o atendimento manual.</div>';
+            return;
+          }
+
+          container.innerHTML = '';
+          res.data.messages.forEach(m => {
+            const isUser = m.role === 'user';
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `flex flex-col ${isUser ? 'items-start' : 'items-end'}`;
+
+            const isCallVoice = m.media_type === 'call_voice' || (m.content && m.content.includes('[Chamada de voz'));
+            const isCallVideo = m.media_type === 'call_video' || (m.content && m.content.includes('[Chamada de vídeo'));
+            const isAudio = m.media_type === 'audio' || (m.content && m.content.startsWith('[audio]'));
+
+            let mediaBadge = '';
+            if (isCallVoice) {
+              mediaBadge = '<div class="inline-flex items-center space-x-1 px-2.5 py-0.5 mb-2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30"><span>📞 Chamada de Voz Recebida</span></div>';
+            } else if (isCallVideo) {
+              mediaBadge = '<div class="inline-flex items-center space-x-1 px-2.5 py-0.5 mb-2 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30"><span>📹 Chamada de Vídeo Recebida</span></div>';
+            } else if (isAudio) {
+              mediaBadge = `<div class="inline-flex items-center space-x-1 px-2.5 py-0.5 mb-1.5 rounded-full text-[10px] font-bold ${isUser ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/30'}"><span>🎙️ ${isUser ? 'Áudio do Cliente (Transcrito)' : 'Nota de Voz Enviada'}</span></div>`;
+            }
+
+            let audioPlayer = '';
+            if (m.media_url && (m.media_url.startsWith('data:audio') || m.media_url.startsWith('http'))) {
+              audioPlayer = `<audio controls src="${m.media_url}" class="mt-2 w-full max-w-xs h-8"></audio>`;
+            }
+
+            msgDiv.innerHTML = `
+              <div class="max-w-[85%] rounded-2xl p-3.5 text-xs ${isUser ? 'bg-dark-800 text-slate-200 border border-slate-700/80' : 'bg-brand-600 text-white shadow-md'}">
+                <div class="text-[9px] font-semibold uppercase tracking-wider mb-1 opacity-70 flex items-center space-x-1">
+                  <span>${isUser ? 'Cliente' : 'Atendente / IA (Nat)'}</span>
+                </div>
+                ${mediaBadge}
+                <div class="whitespace-pre-wrap leading-relaxed">${m.content}</div>
+                ${audioPlayer}
+                <div class="text-[9px] text-right mt-1.5 opacity-60">${new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+            `;
+            container.appendChild(msgDiv);
+          });
+          container.scrollTop = container.scrollHeight;
+          lucide.createIcons();
+        }
+      } catch (e) {
+        container.innerHTML = '<div class="text-center text-rose-400 text-xs py-8">Erro ao carregar mensagens.</div>';
+      }
+    }
+
+    async function handleSendDeskTextMessage(e) {
+      if (e) e.preventDefault();
+      if (!activeDeskSession) return;
+
+      const input = document.getElementById('atendChatInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const btn = document.getElementById('btnDeskSendMsg');
+      btn.disabled = true;
+      input.value = '';
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({ message: text })
+        });
+
+        if (res.ok) {
+          activeDeskSession.isPaused = true;
+          const lead = rawAtendimentosList.find(l => l.id === activeDeskSession.id);
+          if (lead) lead.is_manual = true;
+          updateDeskHeaderUi(lead || { is_manual: true });
+          await refreshDeskMessages();
+          await loadAtendimentos();
+          await loadLeads();
+        } else {
+          alert('Falha ao enviar mensagem: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (err) {
+        alert('Erro ao enviar mensagem.');
+      } finally {
+        btn.disabled = false;
+        input.focus();
+      }
+    }
+
+    async function handleDeskToggleAi() {
+      if (!activeDeskSession) return;
+      const nextAction = activeDeskSession.isPaused ? 'automacao' : 'manual';
+      await toggleAi(activeDeskSession.id, nextAction);
+      activeDeskSession.isPaused = (nextAction === 'manual');
+      const lead = rawAtendimentosList.find(l => l.id === activeDeskSession.id);
+      if (lead) lead.is_manual = activeDeskSession.isPaused;
+      updateDeskHeaderUi(lead || { is_manual: activeDeskSession.isPaused });
+      await loadAtendimentos();
+    }
+
+    function handleDeskOpenDossier() {
+      if (activeDeskSession) {
+        openDossierModal(activeDeskSession.remoteJid, activeDeskSession.clientName, activeDeskSession.phone);
+      }
+    }
+
+    async function handleDeskCallCustomer() {
+      if (!activeDeskSession) return;
+      await toggleAi(activeDeskSession.id, 'manual');
+      activeDeskSession.isPaused = true;
+      const lead = rawAtendimentosList.find(l => l.id === activeDeskSession.id);
+      if (lead) lead.is_manual = true;
+      updateDeskHeaderUi(lead || { is_manual: true });
+
+      const cleanPhone = (activeDeskSession.phone || '').replace(/\D/g, '');
+      window.open(`https://wa.me/${cleanPhone}`, '_blank');
+    }
+
+    async function handleQuickCallCustomer(leadId, remoteJid, phone, clientName, event) {
+      if (event) event.stopPropagation();
+      await toggleAi(leadId, 'manual');
+      await selectDeskAtendimento(leadId);
+      const cleanPhone = (phone || '').replace(/\D/g, '');
+      window.open(`https://wa.me/${cleanPhone}`, '_blank');
+    }
+
+    // Gravação de Áudio no Desk da Central
+    async function startDeskAudioRecording() {
+      if (!activeDeskSession) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        deskAudioChunks = [];
+        deskMediaRecorder = new MediaRecorder(stream);
+        deskMediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) deskAudioChunks.push(e.data);
+        };
+        deskMediaRecorder.start();
+        deskRecordingSeconds = 0;
+        document.getElementById('atendRecordingTimer').textContent = '00:00';
+        document.getElementById('atendRecordingBar').classList.remove('hidden');
+
+        deskRecordingInterval = setInterval(() => {
+          deskRecordingSeconds++;
+          const m = String(Math.floor(deskRecordingSeconds / 60)).padStart(2, '0');
+          const s = String(deskRecordingSeconds % 60).padStart(2, '0');
+          document.getElementById('atendRecordingTimer').textContent = `${m}:${s}`;
+        }, 1000);
+      } catch (err) {
+        alert('Permissão de microfone negada ou microfone indisponível no navegador: ' + (err.message || 'Erro'));
+      }
+    }
+
+    function cancelDeskAudioRecording() {
+      if (deskMediaRecorder) {
+        deskMediaRecorder.onstop = null;
+        try { deskMediaRecorder.stop(); } catch (e) {}
+        if (deskMediaRecorder.stream) {
+          deskMediaRecorder.stream.getTracks().forEach(t => t.stop());
+        }
+        deskMediaRecorder = null;
+      }
+      clearInterval(deskRecordingInterval);
+      deskAudioChunks = [];
+      const bar = document.getElementById('atendRecordingBar');
+      if (bar) bar.classList.add('hidden');
+    }
+
+    async function stopAndSendDeskAudio() {
+      if (!deskMediaRecorder || !activeDeskSession) return;
+      clearInterval(deskRecordingInterval);
+      document.getElementById('atendRecordingBar').classList.add('hidden');
+
+      deskMediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(deskAudioChunks, { type: deskMediaRecorder.mimeType || 'audio/ogg; codecs=opus' });
+        if (deskMediaRecorder.stream) {
+          deskMediaRecorder.stream.getTracks().forEach(t => t.stop());
+        }
+        deskMediaRecorder = null;
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64Audio = reader.result;
+          try {
+            const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/messages`, {
+              method: 'POST',
+              body: JSON.stringify({ audio: base64Audio, mediaType: 'audio' })
+            });
+            if (res.ok) {
+              activeDeskSession.isPaused = true;
+              const lead = rawAtendimentosList.find(l => l.id === activeDeskSession.id);
+              if (lead) lead.is_manual = true;
+              updateDeskHeaderUi(lead || { is_manual: true });
+              await refreshDeskMessages();
+              await loadAtendimentos();
+              await loadLeads();
+            } else {
+              alert('Falha ao enviar áudio: ' + (res.data?.error || 'Erro'));
+            }
+          } catch (e) {
+            alert('Erro ao enviar áudio gravado.');
+          }
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+      try { deskMediaRecorder.stop(); } catch (e) {}
+    }
+
+    async function handleDeskAudioFileUpload(e) {
+      const file = e.target.files?.[0];
+      if (!file || !activeDeskSession) return;
+      e.target.value = '';
+
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Audio = reader.result;
+        try {
+          const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/messages`, {
+            method: 'POST',
+            body: JSON.stringify({ audio: base64Audio, mediaType: 'audio', message: `[Áudio: ${file.name}]` })
+          });
+          if (res.ok) {
+            activeDeskSession.isPaused = true;
+            const lead = rawAtendimentosList.find(l => l.id === activeDeskSession.id);
+            if (lead) lead.is_manual = true;
+            updateDeskHeaderUi(lead || { is_manual: true });
+            await refreshDeskMessages();
+            await loadAtendimentos();
+            await loadLeads();
+          } else {
+            alert('Falha ao enviar arquivo de áudio: ' + (res.data?.error || 'Erro'));
+          }
+        } catch (err) {
+          alert('Erro ao processar arquivo de áudio.');
+        }
+      };
+      reader.readAsDataURL(file);
     }
 
     // --------------------------------------------------------------------------

@@ -1073,7 +1073,7 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
     }
 
     // 4. Decide se a resposta será enviada em Áudio (TTS) ou Texto
-    const modoRespostaAudio = aiConfig.responder_com_audio || 'quando_receber_audio';
+    const modoRespostaAudio = aiConfig.responder_com_audio || 'texto';
     const hasAudioInput = !!isAudio || (typeof userMessage === 'string' && userMessage.startsWith('[audio]'));
     const shouldSendAudio = (
       modoRespostaAudio === 'sempre' ||

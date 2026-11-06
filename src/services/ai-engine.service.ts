@@ -606,7 +606,7 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
     }
 
     // 5. Envia resposta ao WhatsApp via Evolution API (Áudio TTS ou Texto)
-    const modoRespostaAudio = (aiConfig as any).responder_com_audio || 'quando_receber_audio';
+    const modoRespostaAudio = (aiConfig as any).responder_com_audio || 'texto';
     const hasAudioInput = !!turn.isAudio || (typeof userMessage === 'string' && userMessage.startsWith('[audio]'));
     const shouldSendAudio = (
       modoRespostaAudio === 'sempre' ||

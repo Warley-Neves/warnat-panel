@@ -84,7 +84,8 @@ ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS taxa_manutencao_reais NUM
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS instrucoes_personalizadas TEXT;
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS atender_chamadas BOOLEAN DEFAULT true;
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS mensagem_chamada TEXT DEFAULT 'Olá! Vi que você tentou me ligar por chamada. Como sou a assistente virtual Nat e nossos técnicos estão em visitas técnicas em campo, nosso atendimento aqui pelo WhatsApp é realizado com total agilidade por mensagens de áudio e texto! Como posso te ajudar agora? Pode me mandar um áudio ou escrever aqui o que precisa!';
-ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS responder_com_audio VARCHAR(30) DEFAULT 'quando_receber_audio';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS responder_com_audio VARCHAR(30) DEFAULT 'texto';
+ALTER TABLE tenant_ai_configs ALTER COLUMN responder_com_audio SET DEFAULT 'texto';
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS voz_ia VARCHAR(20) DEFAULT 'nova';
 
 -- ------------------------------------------------------------------------------

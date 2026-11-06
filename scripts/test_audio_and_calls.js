@@ -372,6 +372,71 @@ async function runTests() {
       assert.strictEqual(typeof evolutionService.rejectCall, 'function');
     });
 
+    // --------------------------------------------------------------------------
+    // TESTE 9: Modo Padrão 'texto' - Áudio do cliente é compreendido e Nat responde em texto
+    // --------------------------------------------------------------------------
+    await test('Modo "texto" (Padrão): Áudio do cliente é transcrito e Nat responde em texto ágil', async () => {
+      sentAudios = [];
+      sentMessages = [];
+      await query(`UPDATE tenant_ai_configs SET responder_com_audio = 'texto' WHERE tenant_id = $1`, [tenantId]);
+
+      const sess = await query(`SELECT id FROM chat_sessions WHERE remote_jid = $1`, [testJid]);
+      const sessionId = sess.rows[0].id;
+
+      const turnRes = await aiEngine.processTurn({
+        tenantId,
+        instanceName: 'warnat-tech',
+        sessionId,
+        remoteJid: testJid,
+        pushName: 'Cliente Áudio Texto',
+        userMessage: '[audio] Quero fazer uma visita para orçamento de interfonia',
+        isAudio: true
+      });
+
+      assert.strictEqual(turnRes.success, true);
+      assert.strictEqual(turnRes.mediaType, 'text', 'No modo "texto", a resposta deve ser enviada em texto para agilidade');
+      assert.strictEqual(sentAudios.length, 0);
+      assert.strictEqual(sentMessages.length, 1);
+      assert.ok(sentMessages[0].text.length > 10);
+    });
+
+    // --------------------------------------------------------------------------
+    // TESTE 10: Assumir Chamada e Envio Manual de Áudio pelo Atendente
+    // --------------------------------------------------------------------------
+    await test('Assumir Atendimento & Envio de Áudio Manual pelo Atendente', async () => {
+      sentAudios = [];
+      const sess = await query(`SELECT id FROM chat_sessions WHERE remote_jid = $1`, [testJid]);
+      const sessionId = sess.rows[0].id;
+
+      // 1. Simula atendente clicando em "Ligar / Atender" ou assumindo manualmente
+      const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+      await query(
+        `UPDATE chat_sessions 
+         SET status_atendimento = 'manual', paused_until = $1, etapa_funil = 'manual' 
+         WHERE id = $2`,
+        [farFuture, sessionId]
+      );
+
+      const checkSess = await query(`SELECT status_atendimento, etapa_funil, paused_until FROM chat_sessions WHERE id = $1`, [sessionId]);
+      assert.strictEqual(checkSess.rows[0].status_atendimento, 'manual');
+      assert.strictEqual(checkSess.rows[0].etapa_funil, 'manual');
+
+      // 2. Simula envio de áudio gravado pelo atendente no Desk / Modal
+      const dummyAudioBase64 = 'data:audio/ogg;base64,T2dnUwACAAAAAAAAAAAAAAA=';
+      const sendRes = await evolutionService.sendWhatsAppAudio('warnat-tech', testJid, dummyAudioBase64);
+      assert.strictEqual(sendRes.success, true);
+      assert.strictEqual(sentAudios.length, 1);
+
+      // 3. Persiste mensagem manual de áudio no banco
+      const msgRes = await query(
+        `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, media_url, message_id)
+         VALUES ($1, $2, 'assistant', '[Nota de voz do atendente]', 'audio', $3, $4)
+         RETURNING id, media_type, content`,
+        [sessionId, tenantId, dummyAudioBase64, sendRes.messageId]
+      );
+      assert.strictEqual(msgRes.rows[0].media_type, 'audio');
+    });
+
   } finally {
     // Restaura mocks
     evolutionService.sendTextMessage = originalSendText;
@@ -389,9 +454,7 @@ async function runTests() {
   console.log(`📊 RESULTADO FINAL: ${passed} PASSOU / ${failed} FALHOU`);
   console.log('================================================================');
 
-  if (failed > 0) {
-    process.exit(1);
-  }
+  process.exit(failed > 0 ? 1 : 0);
 }
 
 runTests().catch(err => {
