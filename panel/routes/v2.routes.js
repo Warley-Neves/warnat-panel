@@ -16,8 +16,34 @@ async function handleV2Routes(req, res, pathname, method, body) {
 
   try {
     // --------------------------------------------------------------------------
-    // 1. AUTENTICAÇÃO PÚBLICA (LOGIN)
+    // 1. AUTENTICAÇÃO PÚBLICA (LOGIN & AUTO-CADASTRO)
     // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/auth/register' && method === 'POST') {
+      const { nome_empresa, documento, plano, nome, email, password, sobre_empresa } = body;
+      if (!nome_empresa || !nome || !email || !password) {
+        return sendJson(400, { success: false, error: 'Campos obrigatórios: nome_empresa, nome, email e password.' });
+      }
+
+      try {
+        const result = await authService.registerTenantAndAdmin({
+          nome_empresa,
+          documento,
+          plano,
+          nome,
+          email,
+          password,
+          sobre_empresa
+        });
+        return sendJson(201, {
+          success: true,
+          message: 'Empresa cadastrada com sucesso!',
+          ...result
+        });
+      } catch (regErr) {
+        return sendJson(400, { success: false, error: regErr.message });
+      }
+    }
+
     if (pathname === '/api/v2/auth/login' && method === 'POST') {
       const { email, password } = body;
       if (!email || !password) {
@@ -270,6 +296,25 @@ async function handleV2Routes(req, res, pathname, method, body) {
         success: true,
         sessionId,
         messages: msgsRes.rows
+      });
+    }
+
+    // --------------------------------------------------------------------------
+    // 6. DOSSIÊ DE CLIENTES (MEMÓRIA CUMULATIVA DE LONGO PRAZO)
+    // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/tenant/customers' && method === 'GET') {
+      const custRes = await query(
+        `SELECT c.id, c.tenant_id, c.remote_jid, c.nome, c.telefone, c.endereco_completo, c.perfil_resumo, c.metadados, c.created_at, c.updated_at,
+           (SELECT json_agg(a.* ORDER BY a.data_agendada DESC) FROM appointments a WHERE a.customer_id = c.id) as agendamentos
+         FROM customer_profiles c
+         WHERE c.tenant_id = $1
+         ORDER BY c.updated_at DESC`,
+        [tenantId]
+      );
+
+      return sendJson(200, {
+        success: true,
+        customers: custRes.rows
       });
     }
 

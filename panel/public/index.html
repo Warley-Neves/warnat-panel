@@ -41,19 +41,30 @@
 <body class="bg-dark-900 text-slate-100 min-h-screen flex flex-col antialiased">
 
   <!-- ============================================================================ -->
-  <!-- 1. TELA DE LOGIN SAAS MULTI-TENANT (MODAL / OVERLAY) -->
+  <!-- 1. TELA DE AUTENTICAÇÃO SAAS (LOGIN & AUTO-CADASTRO) -->
   <!-- ============================================================================ -->
   <div id="loginOverlay" class="fixed inset-0 z-50 bg-dark-900/90 backdrop-blur-md flex items-center justify-center p-4">
     <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-md p-8 shadow-2xl fade-in">
-      <div class="text-center mb-8">
+      <div class="text-center mb-6">
         <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-600/20 text-brand-500 mb-4 border border-brand-500/30">
           <i data-lucide="shield-check" class="w-8 h-8"></i>
         </div>
         <h2 class="text-2xl font-bold text-white tracking-tight">WarNat SaaS Multi-Tenant</h2>
-        <p class="text-slate-400 text-sm mt-1">Acesse a gestão da sua empresa</p>
+        <p class="text-slate-400 text-sm mt-1">Plataforma de Atendimento WhatsApp & IA</p>
       </div>
 
-      <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-5">
+      <!-- TABS LOGIN / REGISTRO -->
+      <div class="flex rounded-xl bg-dark-800 p-1 mb-6 border border-slate-700">
+        <button type="button" onclick="switchAuthMode('login')" id="authTabBtn-login" class="flex-1 py-2 text-xs font-semibold rounded-lg transition bg-brand-600 text-white">
+          Entrar na Conta
+        </button>
+        <button type="button" onclick="switchAuthMode('register')" id="authTabBtn-register" class="flex-1 py-2 text-xs font-semibold rounded-lg transition text-slate-400 hover:text-white">
+          Cadastrar Empresa
+        </button>
+      </div>
+
+      <!-- FORMULÁRIO DE LOGIN -->
+      <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
         <div id="loginError" class="hidden p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-sm"></div>
 
         <div>
@@ -73,8 +84,49 @@
         </div>
 
         <button type="submit" id="loginBtn" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-medium py-3 rounded-xl shadow-lg shadow-brand-600/25 transition flex items-center justify-center space-x-2">
-          <span>Entrar na Plataforma</span>
+          <span>Acessar Painel</span>
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+
+      <!-- FORMULÁRIO DE AUTO-CADASTRO (NOVO TENANT) -->
+      <form id="registerForm" onsubmit="handleRegister(event)" class="hidden space-y-4">
+        <div id="registerError" class="hidden p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-sm"></div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Nome da Empresa</label>
+          <input type="text" id="regNomeEmpresa" required placeholder="Ex: Alfa Segurança & CFTV" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">CNPJ / CPF</label>
+            <input type="text" id="regDocumento" placeholder="00.000.000/0001-00" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Seu Nome</label>
+            <input type="text" id="regNome" required placeholder="Nome Gestor" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">E-mail Corporativo</label>
+          <input type="email" id="regEmail" required placeholder="admin@suaempresa.com" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Senha de Acesso</label>
+          <input type="password" id="regPassword" required placeholder="Senha forte" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Sobre o Negócio / Serviços</label>
+          <textarea id="regSobre" rows="2" placeholder="Resumo dos serviços que sua empresa oferece..." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-brand-500"></textarea>
+        </div>
+
+        <button type="submit" id="regBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl shadow-lg shadow-emerald-600/25 transition flex items-center justify-center space-x-2">
+          <span>Criar Conta & Iniciar Teste</span>
+          <i data-lucide="check" class="w-4 h-4"></i>
         </button>
       </form>
     </div>
@@ -379,6 +431,45 @@
   </div>
 
   <!-- ============================================================================ -->
+  <!-- MODAL DE DOSSIÊ DO CLIENTE (MEMÓRIA CUMULATIVA) -->
+  <!-- ============================================================================ -->
+  <div id="dossierModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl fade-in">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-lg bg-brand-500/10 text-brand-400 flex items-center justify-center border border-brand-500/20">
+            <i data-lucide="brain" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 id="dossierClientTitle" class="font-bold text-white text-base">Dossiê Permanente do Cliente</h4>
+            <p id="dossierClientPhone" class="text-xs text-slate-400 font-mono">-</p>
+          </div>
+        </div>
+        <button onclick="closeDossierModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto flex-1 space-y-5 text-sm text-slate-200 bg-dark-900/30">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Endereço Completo</label>
+          <div id="dossierAddress" class="p-3 bg-dark-800 rounded-xl border border-slate-700 text-sm text-white font-medium">-</div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Memória Cumulativa de Interações (Dossiê IA)</label>
+          <div id="dossierSummary" class="p-4 bg-dark-800 rounded-xl border border-slate-700 whitespace-pre-wrap text-slate-300 font-sans text-xs leading-relaxed max-h-48 overflow-y-auto">-</div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Histórico de Agendamentos e Ordens de Serviço</label>
+          <div id="dossierAppointments" class="space-y-2">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
   <!-- JAVASCRIPT DO PAINEL SAAS MULTI-TENANT -->
   <!-- ============================================================================ -->
   <script>
@@ -413,6 +504,70 @@
         document.getElementById('loginOverlay').classList.remove('hidden');
       }
     });
+
+    // Controle de Abas Login / Auto-Cadastro
+    function switchAuthMode(mode) {
+      const loginForm = document.getElementById('loginForm');
+      const regForm = document.getElementById('registerForm');
+      const tabLogin = document.getElementById('authTabBtn-login');
+      const tabReg = document.getElementById('authTabBtn-register');
+
+      if (mode === 'register') {
+        loginForm.classList.add('hidden');
+        regForm.classList.remove('hidden');
+        tabReg.className = 'flex-1 py-2 text-xs font-semibold rounded-lg transition bg-brand-600 text-white';
+        tabLogin.className = 'flex-1 py-2 text-xs font-semibold rounded-lg transition text-slate-400 hover:text-white';
+      } else {
+        regForm.classList.add('hidden');
+        loginForm.classList.remove('hidden');
+        tabLogin.className = 'flex-1 py-2 text-xs font-semibold rounded-lg transition bg-brand-600 text-white';
+        tabReg.className = 'flex-1 py-2 text-xs font-semibold rounded-lg transition text-slate-400 hover:text-white';
+      }
+      lucide.createIcons();
+    }
+
+    // Auto-Cadastro Multi-Tenant
+    async function handleRegister(e) {
+      e.preventDefault();
+      const nome_empresa = document.getElementById('regNomeEmpresa').value.trim();
+      const documento = document.getElementById('regDocumento').value.trim();
+      const nome = document.getElementById('regNome').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const sobre_empresa = document.getElementById('regSobre').value.trim();
+      const errBox = document.getElementById('registerError');
+      errBox.classList.add('hidden');
+
+      const regBtn = document.getElementById('regBtn');
+      regBtn.disabled = true;
+      regBtn.innerHTML = '<span>Criando Empresa...</span>';
+
+      try {
+        const res = await fetch('/api/v2/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome_empresa, documento, nome, email, password, sobre_empresa })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.token) {
+          currentToken = data.token;
+          localStorage.setItem('warnat_saas_token', currentToken);
+          document.getElementById('loginOverlay').classList.add('hidden');
+          await initDashboard();
+        } else {
+          errBox.textContent = data.error || 'Falha ao registrar empresa.';
+          errBox.classList.remove('hidden');
+        }
+      } catch (err) {
+        errBox.textContent = 'Erro de conexão com o servidor.';
+        errBox.classList.remove('hidden');
+      } finally {
+        regBtn.disabled = false;
+        regBtn.innerHTML = '<span>Criar Conta & Iniciar Teste</span><i data-lucide="check" class="w-4 h-4"></i>';
+        lucide.createIcons();
+      }
+    }
 
     // Login Multi-Tenant
     async function handleLogin(e) {
@@ -695,6 +850,10 @@
               <button onclick="openMessagesModal('${lead.id}', '${clientName}', '${phone}')" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-dark-700 transition" title="Ver mensagens">
                 <i data-lucide="message-square" class="w-4 h-4"></i>
               </button>
+
+              <button onclick="openDossierModal('${lead.remote_jid}', '${clientName}', '${phone}')" class="p-1.5 text-slate-400 hover:text-brand-400 rounded-lg hover:bg-dark-700 transition" title="Ver Dossiê Permanente">
+                <i data-lucide="brain" class="w-4 h-4"></i>
+              </button>
             </td>
           `;
           tbody.appendChild(tr);
@@ -763,6 +922,52 @@
 
     function closeMessagesModal() {
       document.getElementById('messagesModal').classList.add('hidden');
+    }
+
+    // Modal de Dossiê Permanente do Cliente
+    async function openDossierModal(remoteJid, clientName, phone) {
+      document.getElementById('dossierClientTitle').textContent = `Dossiê: ${clientName}`;
+      document.getElementById('dossierClientPhone').textContent = `+${phone}`;
+      document.getElementById('dossierAddress').textContent = 'Carregando endereço...';
+      document.getElementById('dossierSummary').textContent = 'Carregando dossiê cumulativo...';
+      document.getElementById('dossierAppointments').innerHTML = '<div class="text-xs text-slate-500">Buscando histórico...</div>';
+      document.getElementById('dossierModal').classList.remove('hidden');
+
+      try {
+        const res = await apiFetch('/api/v2/tenant/customers');
+        if (res.ok && Array.isArray(res.data?.customers)) {
+          const customer = res.data.customers.find(c => c.remote_jid === remoteJid);
+          if (customer) {
+            document.getElementById('dossierAddress').textContent = customer.endereco_completo || 'Nenhum endereço cadastrado.';
+            document.getElementById('dossierSummary').textContent = customer.perfil_resumo || 'Nenhuma nota cumulativa no dossiê até o momento.';
+
+            const appts = customer.agendamentos;
+            if (Array.isArray(appts) && appts.length > 0) {
+              document.getElementById('dossierAppointments').innerHTML = appts.map(a => `
+                <div class="p-3 bg-dark-800 rounded-xl border border-slate-700 flex items-center justify-between">
+                  <div>
+                    <p class="font-medium text-white text-xs">${a.servico}</p>
+                    <p class="text-[11px] text-slate-400">${new Date(a.data_agendada).toLocaleString('pt-BR')}</p>
+                  </div>
+                  <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${a.status === 'concluido' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}">${a.status}</span>
+                </div>
+              `).join('');
+            } else {
+              document.getElementById('dossierAppointments').innerHTML = '<div class="text-xs text-slate-500">Nenhum agendamento registrado para este contato.</div>';
+            }
+          } else {
+            document.getElementById('dossierAddress').textContent = 'Perfil em fase inicial de coleta.';
+            document.getElementById('dossierSummary').textContent = 'Lead em processo de qualificação no WhatsApp.';
+            document.getElementById('dossierAppointments').innerHTML = '<div class="text-xs text-slate-500">Sem agendamentos registrados.</div>';
+          }
+        }
+      } catch (err) {
+        document.getElementById('dossierSummary').textContent = 'Erro ao carregar dossiê.';
+      }
+    }
+
+    function closeDossierModal() {
+      document.getElementById('dossierModal').classList.add('hidden');
     }
   </script>
 </body>

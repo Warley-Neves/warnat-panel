@@ -40,11 +40,11 @@ async function runMigration() {
       SELECT table_name 
       FROM information_schema.tables 
       WHERE table_schema = 'public' 
-        AND table_name IN ('tenants', 'users', 'tenant_whatsapp_instances', 'tenant_ai_configs', 'chat_sessions', 'chat_messages')
+        AND table_name IN ('tenants', 'users', 'tenant_whatsapp_instances', 'tenant_ai_configs', 'customer_profiles', 'appointments', 'chat_sessions', 'chat_messages')
       ORDER BY table_name;
     `);
 
-    console.log('\n📊 Tabelas ativas no banco de dados:');
+    console.log('\n📊 Tabelas ativas no banco de dados (8/8):');
     tablesRes.rows.forEach(r => console.log(`   ✔️ ${r.table_name}`));
 
     return true;

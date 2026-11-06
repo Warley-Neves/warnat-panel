@@ -152,6 +152,65 @@ class AuthService {
   }
 
   /**
+   * Auto-cadastro de nova Empresa Assinante (Tenant) + Usuário Administrador
+   */
+  async registerTenantAndAdmin({ nome_empresa, documento, plano = 'start', nome, email, password, sobre_empresa = 'Empresa inovadora atendendo via WhatsApp.' }) {
+    if (!nome_empresa || !nome || !email || !password) {
+      throw new Error('Campos obrigatórios: nome_empresa, nome, email e password.');
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const existing = await query('SELECT id FROM users WHERE email = $1;', [cleanEmail]);
+    if (existing.rowCount > 0) {
+      throw new Error(`O e-mail '${cleanEmail}' já está cadastrado.`);
+    }
+
+    // 1. Cria Tenant
+    const tenantRes = await query(
+      `INSERT INTO tenants (nome_empresa, documento, plano, limite_conversas_mes, ativo)
+       VALUES ($1, $2, $3, 300, true)
+       RETURNING id, nome_empresa, documento, plano, limite_conversas_mes, ativo, created_at;`,
+      [nome_empresa.trim(), documento || null, plano]
+    );
+    const tenant = tenantRes.rows[0];
+
+    // 2. Hash da senha e insere Usuário Administrador
+    const passwordHash = await this.hashPassword(password);
+    const userRes = await query(
+      `INSERT INTO users (tenant_id, nome, email, password_hash, role)
+       VALUES ($1, $2, $3, $4, 'admin')
+       RETURNING id, tenant_id, nome, email, role, created_at;`,
+      [tenant.id, nome.trim(), cleanEmail, passwordHash]
+    );
+    const user = userRes.rows[0];
+
+    // 3. Cria configuração de IA inicial padrão para o Tenant
+    await query(
+      `INSERT INTO tenant_ai_configs (
+         tenant_id, tom_de_voz, sobre_empresa, servicos_oferecidos, servicos_recusados, regras_agendamento, pausa_automatica_minutos
+       ) VALUES ($1, 'profissional_amigavel', $2, '[]'::jsonb, null, '{"dias":["segunda","terca","quarta","quinta","sexta"],"horario_inicio":"08:00","horario_fim":"18:00"}'::jsonb, 45)
+       ON CONFLICT (tenant_id) DO NOTHING;`,
+      [tenant.id, sobre_empresa]
+    );
+
+    const token = this.generateToken(user);
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        tenantId: tenant.id,
+        email: user.email,
+        role: user.role,
+        nome: user.nome,
+        empresa: tenant.nome_empresa,
+        plano: tenant.plano
+      },
+      tenant
+    };
+  }
+
+  /**
    * Middleware para extrair e validar autenticação em requisições HTTP
    */
   authenticateRequest(req) {

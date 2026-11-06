@@ -18,5 +18,13 @@
     "jsonwebtoken": "^9.0.3",
     "openai": "^7.47.0",
     "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
   }
 }

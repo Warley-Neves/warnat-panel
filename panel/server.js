@@ -1136,10 +1136,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+const { runMigration } = require('../database/migrator');
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`==========================================================`);
   console.log(`  Painel Multi-Tenant WhatsApp & Operações (Warnat Tech)  `);
   console.log(`  Autenticação: ATIVADA (Protegido por Senha Master)      `);
   console.log(`  Acesse no navegador: http://localhost:${PORT}             `);
   console.log(`==========================================================`);
+
+  // Executa migração idempotente em background ao iniciar o servidor
+  runMigration()
+    .then(() => console.log('✅ [Database] Schema multi-tenant (8 tabelas) sincronizado com sucesso.'))
+    .catch((err) => console.warn('⚠️ [Database Warning] Falha na auto-migração de inicialização:', err.message));
 });
