@@ -64,6 +64,7 @@ export interface ServiceOffering {
 
 export interface TenantAiConfig {
   tenant_id: string; // PK/FK -> tenants.id
+  modo_atendimento?: 'automacao' | 'manual'; // default 'automacao'
   nome_assistente?: string | null; // e.g. 'Natália'
   responsavel_tecnico?: string | null; // e.g. 'Warley Santos'
   regiao_atendimento?: string | null; // e.g. 'Belo Horizonte, Barreiro e Grande BH'

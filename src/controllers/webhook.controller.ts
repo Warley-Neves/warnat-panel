@@ -93,6 +93,8 @@ export class WebhookController {
     messageId?: string;
     bufferLength?: number;
     event?: string;
+    tenantId?: string;
+    status?: string;
   }> {
     if (!payload || !payload.event) {
       return { handled: false, reason: 'payload_sem_evento' };
@@ -277,14 +279,39 @@ export class WebhookController {
     );
 
     // ============================================================================
-    // 4. VERIFICA SE O ATENDIMENTO ESTÁ PAUSADO PARA OPERADOR HUMANO
+    // 4. VERIFICAÇÃO DE ATENDIMENTO MANUAL GLOBAL (TENANT) OU POR CONTATO INDIVIDUAL
     // ============================================================================
-    const isPaused = session.paused_until && new Date(session.paused_until) > new Date();
-    if (isPaused || session.status_atendimento === 'transbordado') {
-      console.log(`🛑 [Webhook] ${effectiveJid} pausado até ${session.paused_until?.toISOString()}. IA não responderá.`);
+    // A) Checa se o tenant inteiro está em atendimento manual global
+    const aiConfigRes = await query<{ modo_atendimento: string }>(
+      `SELECT modo_atendimento FROM tenant_ai_configs WHERE tenant_id = $1;`,
+      [tenantId]
+    );
+    const tenantModo = aiConfigRes.rows[0]?.modo_atendimento || 'automacao';
+
+    if (tenantModo === 'manual') {
+      console.log(`🛑 [Webhook] Tenant ${tenantId} configurado em ATENDIMENTO 100% MANUAL GLOBAL. IA silenciada.`);
+      return {
+        handled: true,
+        action: 'tenant_manual_mode_active',
+        tenantId
+      };
+    }
+
+    // B) Checa se este contato específico está em atendimento manual individual
+    const isContactManual = (
+      session.status_atendimento === 'manual' ||
+      session.status_atendimento === 'pausa_humana' ||
+      session.status_atendimento === 'transbordado' ||
+      (session.paused_until && new Date(session.paused_until) > new Date())
+    );
+
+    if (isContactManual) {
+      console.log(`🛑 [Webhook] Contato ${effectiveJid} em ATENDIMENTO MANUAL EXCLUSIVO. Automação silenciada.`);
       return {
         handled: true,
         action: 'message_saved_human_in_control',
+        reason: 'contact_manual_mode_active',
+        status: session.status_atendimento,
         pausedUntil: session.paused_until || undefined
       };
     }

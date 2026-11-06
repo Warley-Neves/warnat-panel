@@ -149,8 +149,38 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     // --------------------------------------------------------------------------
-    // 4. REGRAS DA IA (tenant_ai_configs)
+    // 4. REGRAS DA IA (tenant_ai_configs) & MODO DE ATENDIMENTO DO TENANT
     // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/tenant/mode' && method === 'GET') {
+      const configRes = await query(`SELECT modo_atendimento FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
+      const modo = configRes.rows[0]?.modo_atendimento || 'automacao';
+      return sendJson(200, { success: true, modo_atendimento: modo });
+    }
+
+    if (pathname === '/api/v2/tenant/mode' && method === 'PUT') {
+      if (decodedUser.role === 'atendente') {
+        return sendJson(403, { success: false, error: 'Apenas Administradores e Supervisores podem alterar o modo de atendimento do tenant.' });
+      }
+
+      const { modo_atendimento } = body;
+      if (!modo_atendimento || (modo_atendimento !== 'automacao' && modo_atendimento !== 'manual')) {
+        return sendJson(400, { success: false, error: 'modo_atendimento deve ser "automacao" ou "manual".' });
+      }
+
+      await query(
+        `UPDATE tenant_ai_configs SET modo_atendimento = $1, updated_at = now() WHERE tenant_id = $2`,
+        [modo_atendimento, tenantId]
+      );
+
+      return sendJson(200, {
+        success: true,
+        modo_atendimento,
+        message: modo_atendimento === 'manual'
+          ? 'Atendimento do tenant alterado para 100% MANUAL. A automação foi desativada para todos os clientes.'
+          : 'Atendimento do tenant alterado para AUTOMAÇÃO (IA). O assistente responderá aos clientes automaticamente.'
+      });
+    }
+
     if (pathname === '/api/v2/tenant/ai-config' && method === 'GET') {
       const configRes = await query(`SELECT * FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
       const tenantRes = await query(`SELECT nome_empresa, plano FROM tenants WHERE id = $1`, [tenantId]);
@@ -168,11 +198,17 @@ async function handleV2Routes(req, res, pathname, method, body) {
       }
 
       const {
+        modo_atendimento,
+        nome_assistente,
+        responsavel_tecnico,
+        regiao_atendimento,
+        taxa_manutencao_reais,
         tom_de_voz,
         sobre_empresa,
         servicos_oferecidos,
         servicos_recusados,
         regras_agendamento,
+        instrucoes_personalizadas,
         whatsapp_notificacao_humana,
         pausa_automatica_minutos
       } = body;
@@ -180,32 +216,50 @@ async function handleV2Routes(req, res, pathname, method, body) {
       await query(
         `INSERT INTO tenant_ai_configs (
            tenant_id, 
+           modo_atendimento,
+           nome_assistente,
+           responsavel_tecnico,
+           regiao_atendimento,
+           taxa_manutencao_reais,
            tom_de_voz, 
            sobre_empresa, 
            servicos_oferecidos, 
            servicos_recusados, 
            regras_agendamento, 
+           instrucoes_personalizadas,
            whatsapp_notificacao_humana, 
            pausa_automatica_minutos,
            updated_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
          ON CONFLICT (tenant_id)
          DO UPDATE SET
+           modo_atendimento = COALESCE(EXCLUDED.modo_atendimento, tenant_ai_configs.modo_atendimento),
+           nome_assistente = COALESCE(EXCLUDED.nome_assistente, tenant_ai_configs.nome_assistente),
+           responsavel_tecnico = COALESCE(EXCLUDED.responsavel_tecnico, tenant_ai_configs.responsavel_tecnico),
+           regiao_atendimento = COALESCE(EXCLUDED.regiao_atendimento, tenant_ai_configs.regiao_atendimento),
+           taxa_manutencao_reais = COALESCE(EXCLUDED.taxa_manutencao_reais, tenant_ai_configs.taxa_manutencao_reais),
            tom_de_voz = EXCLUDED.tom_de_voz,
            sobre_empresa = EXCLUDED.sobre_empresa,
            servicos_oferecidos = EXCLUDED.servicos_oferecidos,
            servicos_recusados = EXCLUDED.servicos_recusados,
            regras_agendamento = EXCLUDED.regras_agendamento,
+           instrucoes_personalizadas = EXCLUDED.instrucoes_personalizadas,
            whatsapp_notificacao_humana = EXCLUDED.whatsapp_notificacao_humana,
            pausa_automatica_minutos = EXCLUDED.pausa_automatica_minutos,
            updated_at = now()`,
         [
           tenantId,
+          modo_atendimento || 'automacao',
+          nome_assistente || 'Natália',
+          responsavel_tecnico || 'Warley Santos',
+          regiao_atendimento || 'Belo Horizonte, Barreiro e Grande BH',
+          Number(taxa_manutencao_reais) || 140.00,
           tom_de_voz || 'profissional_humanizado',
           sobre_empresa || '',
           JSON.stringify(Array.isArray(servicos_oferecidos) ? servicos_oferecidos : []),
           servicos_recusados || '',
           JSON.stringify(typeof regras_agendamento === 'object' ? regras_agendamento : {}),
+          instrucoes_personalizadas || null,
           whatsapp_notificacao_humana || null,
           parseInt(pausa_automatica_minutos, 10) || 45
         ]
@@ -248,11 +302,22 @@ async function handleV2Routes(req, res, pathname, method, body) {
         [tenantId]
       );
 
-      const leads = leadsRes.rows;
+      const tenantCfgRes = await query(`SELECT modo_atendimento FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
+      const tenant_modo_atendimento = tenantCfgRes.rows[0]?.modo_atendimento || 'automacao';
+
+      const leads = leadsRes.rows.map(l => {
+        const is_manual = l.is_paused || l.status_atendimento === 'manual' || l.status_atendimento === 'pausa_humana' || l.etapa_funil === 'manual';
+        return {
+          ...l,
+          is_manual,
+          modo_atendimento: is_manual ? 'manual' : 'automacao'
+        };
+      });
+
       const stats = {
         total: leads.length,
-        ia_ativa: leads.filter(l => !l.is_paused && l.status_atendimento === 'ia_ativa').length,
-        manual: leads.filter(l => l.is_paused || l.status_atendimento === 'pausa_humana' || l.etapa_funil === 'manual').length,
+        ia_ativa: leads.filter(l => !l.is_manual).length,
+        manual: leads.filter(l => l.is_manual).length,
         agendados: leads.filter(l => l.etapa_funil === 'agendado' || (l.dados_lead && l.dados_lead.servico && (l.dados_lead.data_agendada || l.dados_lead.horario))).length,
         concluidos: leads.filter(l => l.etapa_funil === 'concluido').length,
         qualificados: leads.filter(l => l.dados_lead && l.dados_lead.servico).length
@@ -260,6 +325,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
 
       return sendJson(200, {
         success: true,
+        tenant_modo_atendimento,
         leads,
         stats
       });
@@ -341,15 +407,15 @@ async function handleV2Routes(req, res, pathname, method, body) {
       });
     }
 
-    // Toggle de Pausa da IA (Zera paused_until ou ativa pausa humana imediata)
+    // Toggle de Atendimento do Contato (Automação vs Manual)
     if (pathname === '/api/v2/tenant/leads/toggle-ai' && method === 'POST') {
-      const { sessionId, action } = body; // action: 'pause' ou 'resume'
+      const { sessionId, action } = body; // action: 'manual' (ou 'pause') vs 'automacao' (ou 'resume')
       if (!sessionId) {
         return sendJson(400, { success: false, error: 'sessionId é obrigatório.' });
       }
 
-      if (action === 'resume') {
-        // Reativa a IA imediatamente: zera paused_until e seta ia_ativa
+      if (action === 'resume' || action === 'automacao') {
+        // Reativa a automação (IA) imediatamente: zera paused_until e seta ia_ativa
         await query(
           `UPDATE chat_sessions 
            SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
@@ -359,22 +425,24 @@ async function handleV2Routes(req, res, pathname, method, body) {
         return sendJson(200, {
           success: true,
           status: 'ia_ativa',
-          message: 'IA reativada com sucesso! O assistente voltará a responder automaticamente.'
+          modo: 'automacao',
+          message: 'Automação (IA) ativada para este contato! O assistente voltará a responder automaticamente.'
         });
       } else {
-        // Pausa a IA para atendimento humano (45 minutos)
-        const pausedUntil = new Date(Date.now() + 45 * 60 * 1000);
+        // Coloca o contato em Atendimento Manual (silencia a IA para este contato)
+        const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // Fixo em manual até operador reativar
         await query(
           `UPDATE chat_sessions 
-           SET status_atendimento = 'pausa_humana', paused_until = $1, etapa_funil = 'manual', atendente_id = $2, last_interaction = now()
+           SET status_atendimento = 'manual', paused_until = $1, etapa_funil = 'manual', atendente_id = $2, last_interaction = now()
            WHERE id = $3 AND tenant_id = $4`,
-          [pausedUntil, decodedUser.userId, sessionId, tenantId]
+          [farFuture, decodedUser.userId, sessionId, tenantId]
         );
         return sendJson(200, {
           success: true,
-          status: 'pausa_humana',
-          pausedUntil,
-          message: 'Atendimento manual ativado! A IA foi pausada para esta conversa.'
+          status: 'manual',
+          modo: 'manual',
+          pausedUntil: farFuture,
+          message: 'Atendimento manual ativado para este contato! A automação foi silenciada.'
         });
       }
     }

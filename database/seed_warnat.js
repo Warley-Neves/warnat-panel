@@ -88,6 +88,7 @@ async function seedWarNatTech() {
     await client.query(
       `INSERT INTO tenant_ai_configs (
          tenant_id,
+         modo_atendimento,
          nome_assistente,
          responsavel_tecnico,
          regiao_atendimento,
@@ -100,9 +101,10 @@ async function seedWarNatTech() {
          whatsapp_notificacao_humana,
          pausa_automatica_minutos,
          updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
        ON CONFLICT (tenant_id)
        DO UPDATE SET
+         modo_atendimento = COALESCE(tenant_ai_configs.modo_atendimento, EXCLUDED.modo_atendimento),
          nome_assistente = EXCLUDED.nome_assistente,
          responsavel_tecnico = EXCLUDED.responsavel_tecnico,
          regiao_atendimento = EXCLUDED.regiao_atendimento,
@@ -117,6 +119,7 @@ async function seedWarNatTech() {
          updated_at = now()`,
       [
         tenantId,
+        'automacao',
         'Natália',
         'Warley Santos',
         'Belo Horizonte, Barreiro e Grande BH',

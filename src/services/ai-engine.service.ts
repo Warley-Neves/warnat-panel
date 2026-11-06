@@ -461,13 +461,15 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
             toolCallCount++;
             messagesToSend.push(responseMessage);
 
-            for (const toolCall of responseMessage.tool_calls) {
-              const fnName = toolCall.function.name;
+            for (const rawToolCall of responseMessage.tool_calls) {
+              const toolCall = rawToolCall as any;
+              const fnName = toolCall.function?.name;
+              if (!fnName) continue;
               toolCallsExecuted.push(fnName);
 
               let fnArgs: any = {};
               try {
-                fnArgs = JSON.parse(toolCall.function.arguments);
+                fnArgs = JSON.parse(toolCall.function?.arguments || '{}');
               } catch {
                 fnArgs = {};
               }

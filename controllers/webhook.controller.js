@@ -242,14 +242,39 @@ class WebhookController {
     );
 
     // ============================================================================
-    // 4. VERIFICA SE O ATENDIMENTO ESTÁ PAUSADO PARA OPERADOR HUMANO
+    // 4. VERIFICAÇÃO DE ATENDIMENTO MANUAL GLOBAL (TENANT) OU POR CONTATO INDIVIDUAL
     // ============================================================================
-    const isPaused = session.paused_until && (new Date(session.paused_until) > new Date());
-    if (isPaused || session.status_atendimento === 'transbordado') {
-      console.log(`[Webhook] Mensagem recebida de ${effectiveJid}, mas atendimento está pausado até ${session.paused_until}. IA não responderá.`);
+    // A) Checa se o tenant inteiro está configurado em atendimento 100% manual
+    const aiConfigRes = await query(
+      `SELECT modo_atendimento FROM tenant_ai_configs WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    const tenantModo = aiConfigRes.rows[0]?.modo_atendimento || 'automacao';
+
+    if (tenantModo === 'manual') {
+      console.log(`[Webhook] Tenant ${tenantId} configurado em ATENDIMENTO 100% MANUAL GLOBAL. IA silenciada para todos os clientes.`);
+      return {
+        handled: true,
+        action: 'tenant_manual_mode_active',
+        tenantId
+      };
+    }
+
+    // B) Checa se este contato específico foi colocado em atendimento manual ou está com IA pausada
+    const isContactManual = (
+      session.status_atendimento === 'manual' ||
+      session.status_atendimento === 'pausa_humana' ||
+      session.status_atendimento === 'transbordado' ||
+      (session.paused_until && new Date(session.paused_until) > new Date())
+    );
+
+    if (isContactManual) {
+      console.log(`[Webhook] Contato ${effectiveJid} em ATENDIMENTO MANUAL EXCLUSIVO. Automação silenciada (apenas operador humano responde).`);
       return {
         handled: true,
         action: 'message_saved_human_in_control',
+        reason: 'contact_manual_mode_active',
+        status: session.status_atendimento,
         pausedUntil: session.paused_until
       };
     }

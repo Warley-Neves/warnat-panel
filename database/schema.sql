@@ -59,6 +59,7 @@ CREATE INDEX IF NOT EXISTS idx_instances_tenant_id ON tenant_whatsapp_instances(
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tenant_ai_configs (
     tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+    modo_atendimento VARCHAR(30) DEFAULT 'automacao', -- 'automacao' (IA ativa) ou 'manual' (atendimento humano para todo o tenant)
     nome_assistente VARCHAR(60) DEFAULT 'Natália',
     responsavel_tecnico VARCHAR(100) DEFAULT 'Warley Santos',
     regiao_atendimento VARCHAR(150) DEFAULT 'Belo Horizonte, Barreiro e Grande BH',
@@ -75,6 +76,7 @@ CREATE TABLE IF NOT EXISTS tenant_ai_configs (
 );
 
 -- Migrações seguras idempotentes para tenant_ai_configs
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS modo_atendimento VARCHAR(30) DEFAULT 'automacao';
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS nome_assistente VARCHAR(60) DEFAULT 'Natália';
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS responsavel_tecnico VARCHAR(100) DEFAULT 'Warley Santos';
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS regiao_atendimento VARCHAR(150) DEFAULT 'Belo Horizonte, Barreiro e Grande BH';
@@ -134,7 +136,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     remote_jid VARCHAR(60) NOT NULL,
     client_name VARCHAR(150),
-    status_atendimento VARCHAR(30) DEFAULT 'ia_ativa', -- 'ia_ativa', 'pausa_humana', 'transbordado'
+    status_atendimento VARCHAR(30) DEFAULT 'ia_ativa' CHECK (status_atendimento IN ('ia_ativa', 'pausa_humana', 'transbordado', 'manual')),
     etapa_funil VARCHAR(30) DEFAULT 'novo', -- 'novo', 'qualificacao', 'manual', 'agendado', 'concluido', 'perdido'
     atendente_id UUID REFERENCES users(id) ON DELETE SET NULL,
     paused_until TIMESTAMPTZ,
