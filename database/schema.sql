@@ -53,6 +53,14 @@ CREATE TABLE IF NOT EXISTS tenant_whatsapp_instances (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_instances_tenant_id ON tenant_whatsapp_instances(tenant_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_tenant_whatsapp_instances_tenant'
+  ) THEN
+    ALTER TABLE tenant_whatsapp_instances ADD CONSTRAINT uq_tenant_whatsapp_instances_tenant UNIQUE (tenant_id);
+  END IF;
+END $$;
 
 -- ------------------------------------------------------------------------------
 -- 4. Configurações Comerciais e Regras da IA por Tenant

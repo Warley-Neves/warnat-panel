@@ -22,12 +22,14 @@ if (fs.existsSync(envPath)) {
 
 class EvolutionApiService {
   constructor(baseUrl = null, apiKey = null) {
-    this.baseUrl = (baseUrl || process.env.SERVER_URL || envMap['SERVER_URL'] || 'http://localhost:8085').replace(/\/+$/, '');
+    this.primaryUrl = (baseUrl || process.env.SERVER_URL || envMap['SERVER_URL'] || 'https://warnat-api.onrender.com').replace(/\/+$/, '');
+    this.fallbackUrl = 'https://warnat-api.onrender.com';
+    this.baseUrl = this.primaryUrl;
     this.apiKey = apiKey || process.env.AUTHENTICATION_API_KEY || envMap['AUTHENTICATION_API_KEY'] || 'SUA_CHAVE_GLOBAL_AQUI_123456';
   }
 
   /**
-   * Helper genérico para requisições HTTP à Evolution API com resiliência a falhas de rede
+   * Helper genérico para requisições HTTP à Evolution API com resiliência e fallback automático
    */
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
@@ -37,9 +39,12 @@ class EvolutionApiService {
       ...(options.headers || {})
     };
 
+    const signal = options.signal || (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(options.timeout || 15000) : undefined);
+
     try {
       const response = await fetch(url, {
         ...options,
+        signal,
         headers
       });
 
@@ -57,6 +62,36 @@ class EvolutionApiService {
         data
       };
     } catch (fetchErr) {
+      // Se falhou e estávamos usando localhost ou URL local, tenta imediatamente o fallback cloud na Render
+      if (this.baseUrl !== this.fallbackUrl) {
+        console.warn(`[EvolutionAPI] Falha em ${this.baseUrl} (${fetchErr.message}). Tentando fallback em ${this.fallbackUrl}...`);
+        try {
+          const fallbackRes = await fetch(`${this.fallbackUrl}${endpoint}`, {
+            ...options,
+            headers
+          });
+          const text = await fallbackRes.text();
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            data = text;
+          }
+          this.baseUrl = this.fallbackUrl;
+          return {
+            status: fallbackRes.status,
+            ok: fallbackRes.ok,
+            data
+          };
+        } catch (fbErr) {
+          return {
+            status: 503,
+            ok: false,
+            data: { error: fbErr.message }
+          };
+        }
+      }
+
       return {
         status: 503,
         ok: false,
@@ -102,27 +137,67 @@ class EvolutionApiService {
   }
 
   /**
-   * Obtém o QR Code ou status de pareamento da instância
+   * Obtém o QR Code ou status de pareamento da instância com auto-provisionamento
    * @param {string} instanceName
    */
   async getQRCode(instanceName) {
     if (!instanceName) throw new Error('Nome da instância é obrigatório.');
 
-    const res = await this.request(`/instance/connect/${instanceName}`, {
+    let res = await this.request(`/instance/connect/${instanceName}`, {
       method: 'GET'
     });
+
+    // Se a instância não existe na Evolution API, cria automaticamente
+    const resString = JSON.stringify(res.data || {});
+    const isNotFound = !res.ok && (
+      res.status === 404 ||
+      resString.includes('not found') ||
+      resString.includes('não encontrada') ||
+      resString.includes('does not exist')
+    );
+
+    if (isNotFound) {
+      console.log(`[EvolutionAPI] Instância ${instanceName} não encontrada na API. Criando automaticamente...`);
+      try {
+        const createRes = await this.createInstance(instanceName, { qrcode: true });
+        const createQr = createRes.data?.qrcode;
+        if (createQr?.base64 || createRes.data?.base64) {
+          const base64Raw = createQr?.base64 || createRes.data?.base64;
+          const formattedBase64 = base64Raw.startsWith('data:') ? base64Raw : `data:image/png;base64,${base64Raw}`;
+          return {
+            success: true,
+            instanceName,
+            pairingCode: createQr?.pairingCode || null,
+            code: createQr?.code || null,
+            base64: formattedBase64,
+            raw: createRes.data
+          };
+        }
+      } catch (crErr) {
+        console.warn(`[EvolutionAPI] Erro ao auto-criar ${instanceName}:`, crErr.message);
+      }
+      res = await this.request(`/instance/connect/${instanceName}`, { method: 'GET' });
+    }
 
     if (!res.ok) {
       throw new Error(`Falha ao obter QR Code: ${JSON.stringify(res.data)}`);
     }
 
     // Evolution API v2 retorna { base64, code, pairingCode } ou status
+    const qrRaw = res.data;
+    const base64Raw = qrRaw?.base64 || qrRaw?.qrcode?.base64 || null;
+    const formattedBase64 = base64Raw ? (base64Raw.startsWith('data:') ? base64Raw : `data:image/png;base64,${base64Raw}`) : null;
+    const code = qrRaw?.code || qrRaw?.qrcode?.code || null;
+    const pairingCode = qrRaw?.pairingCode || qrRaw?.qrcode?.pairingCode || null;
+    const state = qrRaw?.instance?.state || (formattedBase64 ? 'connecting' : 'close');
+
     return {
       success: true,
       instanceName,
-      pairingCode: res.data?.pairingCode || null,
-      code: res.data?.code || null,
-      base64: res.data?.base64 || null,
+      state,
+      pairingCode,
+      code,
+      base64: formattedBase64,
       raw: res.data
     };
   }
@@ -138,7 +213,7 @@ class EvolutionApiService {
       method: 'GET'
     });
 
-    const state = res.data?.instance?.state || res.data?.state || 'disconnected';
+    const state = res.data?.instance?.state || res.data?.state || (res.ok ? 'open' : 'disconnected');
     return {
       success: res.ok,
       instanceName,

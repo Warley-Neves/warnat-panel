@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const { query } = require('./db');
+const evolutionService = require('../services/evolution.service');
 
 // Carregar variáveis de ambiente
 const envPath = path.resolve(__dirname, '..', '.env');
@@ -265,6 +266,29 @@ class AuthService {
        ON CONFLICT (tenant_id) DO NOTHING;`,
       [tenant.id, sobre_empresa]
     );
+
+    // 4. Cria Instância do WhatsApp no banco de dados para a nova Empresa
+    const cleanCompanySlug = nome_empresa.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'empresa';
+    const instanceSlug = `${cleanCompanySlug}-${String(tenant.id).slice(0, 6)}`;
+
+    await query(
+      `INSERT INTO tenant_whatsapp_instances (tenant_id, instance_name, instance_token, status)
+       VALUES ($1, $2, $3, 'connecting')
+       ON CONFLICT (tenant_id) DO UPDATE SET instance_name = EXCLUDED.instance_name, updated_at = now()`,
+      [tenant.id, instanceSlug, `token-${instanceSlug}`]
+    );
+
+    // 5. Auto-cria instância na Evolution API para gerar QR Code de imediato
+    try {
+      await evolutionService.createInstance(instanceSlug, { qrcode: true });
+      console.log(`[AuthService] Instância WhatsApp ${instanceSlug} auto-provisionada na Evolution API para a empresa ${nome_empresa}`);
+    } catch (evErr) {
+      console.warn(`[AuthService] Aviso ao provisionar instância ${instanceSlug} na Evolution API:`, evErr.message);
+    }
 
     const token = this.generateToken(user);
 

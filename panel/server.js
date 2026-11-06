@@ -31,7 +31,8 @@ if (fs.existsSync(envPath)) {
 const PORT = process.env.PORT || envMap['PANEL_PORT'] || 3100;
 const ADMIN_PASSWORD = process.env.PANEL_ADMIN_PASSWORD || envMap['PANEL_ADMIN_PASSWORD'] || 'WarnatAdmin2026!';
 const JWT_SECRET = process.env.PANEL_JWT_SECRET || envMap['PANEL_JWT_SECRET'] || 'warnat-tech-master-secret-key-2026';
-const EVOLUTION_URL = process.env.SERVER_URL || envMap['SERVER_URL'] || 'http://localhost:8085';
+const EVOLUTION_URL = (process.env.SERVER_URL || envMap['SERVER_URL'] || 'https://warnat-api.onrender.com').replace(/\/+$/, '');
+const EVOLUTION_FALLBACK_URL = 'https://warnat-api.onrender.com';
 const EVOLUTION_API_KEY = process.env.AUTHENTICATION_API_KEY || envMap['AUTHENTICATION_API_KEY'] || 'SUA_CHAVE_GLOBAL_AQUI_123456';
 const CHATWOOT_PORT = process.env.CHATWOOT_PORT || 3000;
 const CHATWOOT_URL = process.env.CHATWOOT_URL || `http://localhost:${CHATWOOT_PORT}`;
@@ -79,7 +80,7 @@ function verifyAdminToken(token) {
   }
 }
 
-// Helper para chamadas HTTP à Evolution API
+// Helper para chamadas HTTP à Evolution API com fallback cloud
 async function evolutionFetch(endpoint, options = {}) {
   const targetUrl = `${EVOLUTION_URL}${endpoint}`;
   const headers = {
@@ -88,16 +89,36 @@ async function evolutionFetch(endpoint, options = {}) {
     ...(options.headers || {})
   };
 
-  const res = await fetch(targetUrl, {
-    ...options,
-    headers
-  });
-
-  const text = await res.text();
   try {
-    return { status: res.status, ok: res.ok, data: JSON.parse(text) };
-  } catch (e) {
-    return { status: res.status, ok: res.ok, data: text };
+    const res = await fetch(targetUrl, {
+      ...options,
+      headers
+    });
+
+    const text = await res.text();
+    try {
+      return { status: res.status, ok: res.ok, data: JSON.parse(text) };
+    } catch (e) {
+      return { status: res.status, ok: res.ok, data: text };
+    }
+  } catch (err) {
+    if (EVOLUTION_URL !== EVOLUTION_FALLBACK_URL) {
+      try {
+        const fallbackRes = await fetch(`${EVOLUTION_FALLBACK_URL}${endpoint}`, {
+          ...options,
+          headers
+        });
+        const text = await fallbackRes.text();
+        try {
+          return { status: fallbackRes.status, ok: fallbackRes.ok, data: JSON.parse(text) };
+        } catch (e) {
+          return { status: fallbackRes.status, ok: fallbackRes.ok, data: text };
+        }
+      } catch (fbErr) {
+        return { status: 503, ok: false, data: { error: fbErr.message } };
+      }
+    }
+    return { status: 503, ok: false, data: { error: err.message } };
   }
 }
 

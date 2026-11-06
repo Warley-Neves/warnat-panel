@@ -6,6 +6,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query, withTransaction } from '../database/db';
+import { evolutionService } from './evolution.service';
 import {
   Tenant,
   User,
@@ -117,6 +118,27 @@ export class AuthService {
           JSON.stringify({ dias: ['segunda', 'terca', 'quarta', 'quinta', 'sexta'], horario_inicio: '08:00', horario_fim: '18:00' })
         ]
       );
+
+      // 5. Cria Instância do WhatsApp no banco de dados para a nova Empresa
+      const cleanCompanySlug = nome_empresa.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || 'empresa';
+      const instanceSlug = `${cleanCompanySlug}-${String(tenant.id).slice(0, 6)}`;
+
+      await client.query(
+        `INSERT INTO tenant_whatsapp_instances (tenant_id, instance_name, instance_token, status)
+         VALUES ($1, $2, $3, 'connecting')
+         ON CONFLICT (tenant_id) DO UPDATE SET instance_name = EXCLUDED.instance_name, updated_at = now();`,
+        [tenant.id, instanceSlug, `token-${instanceSlug}`]
+      );
+
+      try {
+        await evolutionService.createInstance(instanceSlug, { qrcode: true });
+      } catch (evErr: any) {
+        console.warn(`[AuthService] Aviso ao auto-provisionar instância ${instanceSlug}:`, evErr.message);
+      }
 
       const safeUser: SafeUser = {
         id: rawUser.id,

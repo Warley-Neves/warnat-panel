@@ -3150,16 +3150,39 @@
     }
 
     async function refreshQRCode() {
+      const qrLoading = document.getElementById('qrLoading');
+      const qrImg = document.getElementById('qrImage');
+      const qrStatusMessage = document.getElementById('qrStatusMessage');
+
       try {
+        qrLoading.classList.remove('hidden');
+        qrStatusMessage.textContent = 'Gerando QR Code de conexão...';
+
         const qrRes = await apiFetch('/api/v2/whatsapp/qrcode');
         if (qrRes.ok && qrRes.data?.qrcode) {
-          const qrImg = document.getElementById('qrImage');
-          qrImg.src = qrRes.data.qrcode.startsWith('data:') ? qrRes.data.qrcode : `data:image/png;base64,${qrRes.data.qrcode}`;
+          const qrSrc = qrRes.data.qrcode.startsWith('data:') ? qrRes.data.qrcode : `data:image/png;base64,${qrRes.data.qrcode}`;
+          qrImg.src = qrSrc;
           qrImg.classList.remove('hidden');
-          document.getElementById('qrLoading').classList.add('hidden');
-          document.getElementById('qrStatusMessage').textContent = 'Aponte a câmera do WhatsApp para conectar';
+          qrLoading.classList.add('hidden');
+
+          if (qrRes.data.pairingCode) {
+            qrStatusMessage.innerHTML = `Escaneie o QR Code ou use o código de pareamento: <strong class="text-brand-400 font-mono text-base block mt-1">${qrRes.data.pairingCode}</strong>`;
+          } else {
+            qrStatusMessage.textContent = 'Aponte a câmera do WhatsApp para conectar';
+          }
+        } else if (qrRes.data?.state === 'open') {
+          qrLoading.classList.add('hidden');
+          qrImg.classList.add('hidden');
+          qrStatusMessage.textContent = '✅ WhatsApp já conectado com sucesso!';
+          checkWhatsAppStatus();
+        } else {
+          qrLoading.classList.add('hidden');
+          qrStatusMessage.innerHTML = `<span class="text-rose-400">Falha ao obter QR Code (${qrRes.data?.error || 'serviço ocupado'}).</span><br><button onclick="refreshQRCode()" class="mt-2 text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium px-3 py-1.5 rounded-lg transition">Tentar Novamente</button>`;
         }
-      } catch (e) {}
+      } catch (e) {
+        qrLoading.classList.add('hidden');
+        qrStatusMessage.innerHTML = `<span class="text-rose-400">Erro de conexão ao carregar QR Code.</span><br><button onclick="refreshQRCode()" class="mt-2 text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium px-3 py-1.5 rounded-lg transition">Tentar Novamente</button>`;
+      }
     }
 
     // --------------------------------------------------------------------------

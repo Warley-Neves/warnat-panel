@@ -87,21 +87,42 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     // --------------------------------------------------------------------------
-    // 3. CONEXÃO WHATSAPP (STATUS E QR CODE COM POLLING)
+    // 3. CONEXÃO WHATSAPP (STATUS E QR CODE COM POLLING & AUTO-PROVISIONAMENTO)
     // --------------------------------------------------------------------------
     if (pathname === '/api/v2/whatsapp/status' && method === 'GET') {
-      const instRes = await query(
+      let instRes = await query(
         `SELECT id, instance_name, numero_telefone, status FROM tenant_whatsapp_instances WHERE tenant_id = $1 LIMIT 1`,
         [tenantId]
       );
 
+      // Auto-provisionamento de instância se ainda não existir para este tenant
       if (instRes.rowCount === 0) {
-        return sendJson(200, {
-          success: true,
-          configured: false,
-          status: 'disconnected',
-          message: 'Nenhuma instância configurada para este tenant.'
-        });
+        const tRes = await query(`SELECT nome_empresa FROM tenants WHERE id = $1`, [tenantId]);
+        const nomeEmpresa = tRes.rows[0]?.nome_empresa || 'empresa';
+        const cleanCompanySlug = nomeEmpresa.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '') || 'empresa';
+        const instanceSlug = `${cleanCompanySlug}-${String(tenantId).slice(0, 6)}`;
+
+        await query(
+          `INSERT INTO tenant_whatsapp_instances (tenant_id, instance_name, instance_token, status)
+           VALUES ($1, $2, $3, 'connecting')
+           ON CONFLICT (tenant_id) DO UPDATE SET instance_name = EXCLUDED.instance_name, updated_at = now()`,
+          [tenantId, instanceSlug, `token-${instanceSlug}`]
+        );
+
+        instRes = await query(
+          `SELECT id, instance_name, numero_telefone, status FROM tenant_whatsapp_instances WHERE tenant_id = $1 LIMIT 1`,
+          [tenantId]
+        );
+
+        try {
+          await evolutionService.createInstance(instanceSlug, { qrcode: true });
+        } catch (evErr) {
+          console.warn(`[WhatsAppStatus] Aviso ao auto-provisionar instância ${instanceSlug}:`, evErr.message);
+        }
       }
 
       const instance = instRes.rows[0];
@@ -125,13 +146,39 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     if (pathname === '/api/v2/whatsapp/qrcode' && method === 'GET') {
-      const instRes = await query(
+      let instRes = await query(
         `SELECT instance_name FROM tenant_whatsapp_instances WHERE tenant_id = $1 LIMIT 1`,
         [tenantId]
       );
 
+      // Auto-provisionamento de instância caso ainda não exista
       if (instRes.rowCount === 0) {
-        return sendJson(404, { success: false, error: 'Instância não configurada para este tenant.' });
+        const tRes = await query(`SELECT nome_empresa FROM tenants WHERE id = $1`, [tenantId]);
+        const nomeEmpresa = tRes.rows[0]?.nome_empresa || 'empresa';
+        const cleanCompanySlug = nomeEmpresa.toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '') || 'empresa';
+        const instanceSlug = `${cleanCompanySlug}-${String(tenantId).slice(0, 6)}`;
+
+        await query(
+          `INSERT INTO tenant_whatsapp_instances (tenant_id, instance_name, instance_token, status)
+           VALUES ($1, $2, $3, 'connecting')
+           ON CONFLICT (tenant_id) DO UPDATE SET instance_name = EXCLUDED.instance_name, updated_at = now()`,
+          [tenantId, instanceSlug, `token-${instanceSlug}`]
+        );
+
+        instRes = await query(
+          `SELECT instance_name FROM tenant_whatsapp_instances WHERE tenant_id = $1 LIMIT 1`,
+          [tenantId]
+        );
+
+        try {
+          await evolutionService.createInstance(instanceSlug, { qrcode: true });
+        } catch (evErr) {
+          console.warn(`[WhatsAppQRCode] Aviso ao auto-provisionar instância ${instanceSlug}:`, evErr.message);
+        }
       }
 
       const instanceName = instRes.rows[0].instance_name;
@@ -142,7 +189,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
           success: true,
           instanceName,
           qrcode: qrData.base64 || qrData.code,
-          pairingCode: qrData.pairingCode
+          pairingCode: qrData.pairingCode,
+          state: qrData.state || 'connecting'
         });
       } catch (err) {
         return sendJson(500, { success: false, error: err.message });
