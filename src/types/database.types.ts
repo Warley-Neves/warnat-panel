@@ -18,9 +18,9 @@ export interface Tenant {
 }
 
 /**
- * 2. Usuário Administrativo do Tenant
+ * 2. Usuário do Tenant (RBAC)
  */
-export type UserRole = 'admin' | 'operador';
+export type UserRole = 'admin' | 'supervisor' | 'atendente' | 'operador';
 
 export interface User {
   id: string; // UUID
@@ -29,7 +29,9 @@ export interface User {
   email: string;
   password_hash: string;
   role: UserRole;
+  ativo?: boolean;
   created_at: Date;
+  updated_at?: Date;
 }
 
 export type SafeUser = Omit<User, 'password_hash'>;
@@ -117,6 +119,8 @@ export interface ChatSession {
   remote_jid: string;
   client_name?: string | null;
   status_atendimento: SessionStatus;
+  etapa_funil?: string;
+  atendente_id?: string | null;
   paused_until?: Date | null;
   dados_lead: Record<string, unknown>;
   last_interaction: Date;

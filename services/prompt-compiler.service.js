@@ -40,11 +40,17 @@ class PromptCompilerService {
     let regrasAgendamentoTexto = 'Horário comercial padrão.';
     if (aiConfig?.regras_agendamento && typeof aiConfig.regras_agendamento === 'object') {
       const r = aiConfig.regras_agendamento;
+      const dias = Array.isArray(r.dias_atendimento) ? r.dias_atendimento.join(', ') : (r.dias_semana || 'Segunda a Sábado');
+      const slots = Array.isArray(r.slots_agendamento) ? r.slots_agendamento.join(', ') : (Array.isArray(r.slots_disponiveis) ? r.slots_disponiveis.join(', ') : '08:00, 10:00, 12:00, 14:00, 16:00');
+      const politica = r.politica_agendamento || r.politica_visita || r.politica_visita_gratuita || r.descricao || 'Avaliação no local com agendamento prévio';
+      const taxas = r.taxas || r.taxa_manutencao || 'Consultar condições durante a conversa';
+
       regrasAgendamentoTexto = `
-- Dias de atendimento: ${r.dias_semana || 'Segunda a Sábado'}
+- Dias de atendimento comercial: ${dias}
 - Horário de funcionamento: das ${r.horario_inicio || '08:00'} às ${r.horario_fim || '18:00'}
-- Política de visita técnica: ${r.politica_visita || 'Avaliação no local com agendamento prévio'}
-- Política de taxas: ${r.taxas || 'Consultar condições durante a conversa'}
+- Horários disponíveis para agendamento de visita técnica: ${slots}
+- Política de visita técnica: ${politica}
+- Política de taxas: ${taxas}
       `.trim();
     }
 

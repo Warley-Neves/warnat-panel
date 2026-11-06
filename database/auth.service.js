@@ -89,13 +89,86 @@ class AuthService {
 
     const passwordHash = await this.hashPassword(password);
     const result = await query(
-      `INSERT INTO users (tenant_id, email, password_hash, role, nome)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, tenant_id, email, role, nome, created_at`,
+      `INSERT INTO users (tenant_id, email, password_hash, role, nome, ativo)
+       VALUES ($1, $2, $3, $4, $5, true)
+       RETURNING id, tenant_id, email, role, nome, ativo, created_at`,
       [tenantId, cleanEmail, passwordHash, role, nome.trim()]
     );
 
     return result.rows[0];
+  }
+
+  /**
+   * Helper alternativo para criar usuário pelo Tenant
+   */
+  async createUser(tenantId, { nome, email, password, role = 'atendente' }) {
+    return this.registerUser({ tenantId, email, password, role, nome });
+  }
+
+  /**
+   * Lista todos os usuários de um tenant específico
+   */
+  async listUsers(tenantId) {
+    const res = await query(
+      `SELECT id, tenant_id, nome, email, role, COALESCE(ativo, true) as ativo, created_at, updated_at
+       FROM users
+       WHERE tenant_id = $1
+       ORDER BY created_at ASC`,
+      [tenantId]
+    );
+    return res.rows;
+  }
+
+  /**
+   * Atualiza dados de um usuário do tenant
+   */
+  async updateUser(tenantId, userId, { nome, role, ativo, password }) {
+    const updates = [];
+    const values = [userId, tenantId];
+    let idx = 3;
+
+    if (nome) {
+      updates.push(`nome = $${idx++}`);
+      values.push(nome.trim());
+    }
+    if (role) {
+      updates.push(`role = $${idx++}`);
+      values.push(role);
+    }
+    if (typeof ativo === 'boolean') {
+      updates.push(`ativo = $${idx++}`);
+      values.push(ativo);
+    }
+    if (password && password.trim().length >= 6) {
+      const hash = await this.hashPassword(password.trim());
+      updates.push(`password_hash = $${idx++}`);
+      values.push(hash);
+    }
+
+    if (updates.length === 0) return null;
+
+    updates.push(`updated_at = NOW()`);
+
+    const res = await query(
+      `UPDATE users
+       SET ${updates.join(', ')}
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING id, tenant_id, nome, email, role, COALESCE(ativo, true) as ativo, created_at, updated_at`,
+      values
+    );
+
+    return res.rows[0] || null;
+  }
+
+  /**
+   * Remove um usuário do tenant
+   */
+  async deleteUser(tenantId, userId) {
+    const res = await query(
+      `DELETE FROM users WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+      [userId, tenantId]
+    );
+    return res.rowCount > 0;
   }
 
   /**
@@ -108,7 +181,7 @@ class AuthService {
 
     const cleanEmail = email.toLowerCase().trim();
     const res = await query(
-      `SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role, u.nome,
+      `SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role, u.nome, COALESCE(u.ativo, true) as user_ativo,
               t.nome_empresa, t.plano, t.ativo as tenant_ativo
        FROM users u
        JOIN tenants t ON t.id = u.tenant_id
@@ -124,6 +197,10 @@ class AuthService {
 
     if (!user.tenant_ativo) {
       throw new Error('Empresa/Tenant desativado. Contate o suporte.');
+    }
+
+    if (!user.user_ativo) {
+      throw new Error('Acesso bloqueado: Este usuário foi desativado pelo administrador.');
     }
 
     const isValid = await this.comparePassword(password, user.password_hash);

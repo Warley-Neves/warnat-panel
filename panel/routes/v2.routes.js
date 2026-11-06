@@ -12,6 +12,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
   const sendJson = (statusCode, data) => {
     res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(data));
+    return true;
   };
 
   try {
@@ -162,6 +163,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     if (pathname === '/api/v2/tenant/ai-config' && method === 'PUT') {
+      if (decodedUser.role === 'atendente') {
+        return sendJson(403, { success: false, error: 'Apenas Administradores e Supervisores podem alterar as regras e horários da IA.' });
+      }
+
       const {
         tom_de_voz,
         sobre_empresa,
@@ -208,12 +213,12 @@ async function handleV2Routes(req, res, pathname, method, body) {
 
       return sendJson(200, {
         success: true,
-        message: 'Configurações de IA salvas com sucesso!'
+        message: 'Configurações de IA e regras de agendamento salvas com sucesso!'
       });
     }
 
     // --------------------------------------------------------------------------
-    // 5. LEADS E CONVERSAS (CRM MULTI-TENANT)
+    // 5. LEADS E CONVERSAS (CRM MULTI-TENANT & DASHBOARD VISUAL)
     // --------------------------------------------------------------------------
     if (pathname === '/api/v2/tenant/leads' && method === 'GET') {
       const leadsRes = await query(
@@ -222,6 +227,9 @@ async function handleV2Routes(req, res, pathname, method, body) {
            s.remote_jid, 
            COALESCE(s.client_name, c.nome, s.dados_lead->>'nome', 'Cliente') as client_name, 
            s.status_atendimento, 
+           COALESCE(s.etapa_funil, 'novo') as etapa_funil,
+           s.atendente_id,
+           u.nome as atendente_nome,
            s.paused_until, 
            s.dados_lead, 
            s.last_interaction, 
@@ -229,17 +237,107 @@ async function handleV2Routes(req, res, pathname, method, body) {
            CASE 
              WHEN s.paused_until IS NOT NULL AND s.paused_until > now() THEN true 
              ELSE false 
-           END as is_paused
+           END as is_paused,
+           (SELECT content FROM chat_messages m WHERE m.session_id = s.id ORDER BY m.created_at DESC LIMIT 1) as ultima_mensagem,
+           (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id)::int as total_mensagens
          FROM chat_sessions s
          LEFT JOIN customer_profiles c ON c.tenant_id = s.tenant_id AND c.remote_jid = s.remote_jid
+         LEFT JOIN users u ON u.id = s.atendente_id
          WHERE s.tenant_id = $1 
          ORDER BY s.last_interaction DESC`,
         [tenantId]
       );
 
+      const leads = leadsRes.rows;
+      const stats = {
+        total: leads.length,
+        ia_ativa: leads.filter(l => !l.is_paused && l.status_atendimento === 'ia_ativa').length,
+        manual: leads.filter(l => l.is_paused || l.status_atendimento === 'pausa_humana' || l.etapa_funil === 'manual').length,
+        agendados: leads.filter(l => l.etapa_funil === 'agendado' || (l.dados_lead && l.dados_lead.servico && (l.dados_lead.data_agendada || l.dados_lead.horario))).length,
+        concluidos: leads.filter(l => l.etapa_funil === 'concluido').length,
+        qualificados: leads.filter(l => l.dados_lead && l.dados_lead.servico).length
+      };
+
       return sendJson(200, {
         success: true,
-        leads: leadsRes.rows
+        leads,
+        stats
+      });
+    }
+
+    // Criar Atendimento Manual (Novo Contato/Lead)
+    if (pathname === '/api/v2/tenant/leads/manual' && method === 'POST') {
+      const { phone, name, initialMessage, servico, bairro_cidade, urgencia, etapa_funil } = body;
+      if (!phone) {
+        return sendJson(400, { success: false, error: 'O número de telefone/WhatsApp é obrigatório.' });
+      }
+
+      const cleanPhone = phone.replace(/\D/g, '');
+      const effectivePhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+      const remoteJid = `${effectivePhone}@s.whatsapp.net`;
+      const clientName = (name || '').trim() || 'Cliente Manual';
+
+      // 1. Dossiê do cliente permanente
+      await query(
+        `INSERT INTO customer_profiles (tenant_id, remote_jid, nome, telefone)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (tenant_id, remote_jid)
+         DO UPDATE SET nome = COALESCE(EXCLUDED.nome, customer_profiles.nome), updated_at = now()`,
+        [tenantId, remoteJid, clientName, effectivePhone]
+      );
+
+      const pausedUntil = new Date(Date.now() + 60 * 60 * 1000); // 1 hora de pausa
+      const leadData = {
+        nome: clientName,
+        servico: servico || null,
+        bairro_cidade: bairro_cidade || null,
+        urgencia: urgencia || 'media',
+        origem: 'painel_manual'
+      };
+
+      // 2. Cria ou atualiza a sessão de chat
+      const sessRes = await query(
+        `INSERT INTO chat_sessions (
+           tenant_id, remote_jid, client_name, status_atendimento, etapa_funil, atendente_id, paused_until, dados_lead, last_interaction
+         ) VALUES ($1, $2, $3, 'pausa_humana', $4, $5, $6, $7, now())
+         ON CONFLICT (tenant_id, remote_jid)
+         DO UPDATE SET
+           client_name = EXCLUDED.client_name,
+           status_atendimento = 'pausa_humana',
+           etapa_funil = EXCLUDED.etapa_funil,
+           atendente_id = EXCLUDED.atendente_id,
+           paused_until = EXCLUDED.paused_until,
+           dados_lead = EXCLUDED.dados_lead,
+           last_interaction = now()
+         RETURNING id`,
+        [tenantId, remoteJid, clientName, etapa_funil || 'manual', decodedUser.userId, pausedUntil, JSON.stringify(leadData)]
+      );
+      const sessionId = sessRes.rows[0].id;
+
+      // 3. Se houver mensagem inicial, dispara via Evolution API
+      if (initialMessage && initialMessage.trim()) {
+        try {
+          const instRes = await query(
+            `SELECT instance_name FROM tenant_whatsapp_instances WHERE tenant_id = $1 LIMIT 1`,
+            [tenantId]
+          );
+          if (instRes.rowCount > 0 && instRes.rows[0].instance_name) {
+            const sent = await evolutionService.sendTextMessage(instRes.rows[0].instance_name, remoteJid, initialMessage.trim());
+            await query(
+              `INSERT INTO chat_messages (session_id, tenant_id, role, content, message_id)
+               VALUES ($1, $2, 'assistant', $3, $4)`,
+              [sessionId, tenantId, initialMessage.trim(), sent?.messageId || null]
+            );
+          }
+        } catch (sendErr) {
+          console.warn('[Manual Lead] Aviso ao enviar mensagem inicial:', sendErr.message);
+        }
+      }
+
+      return sendJson(201, {
+        success: true,
+        sessionId,
+        message: 'Atendimento manual criado com sucesso!'
       });
     }
 
@@ -268,9 +366,9 @@ async function handleV2Routes(req, res, pathname, method, body) {
         const pausedUntil = new Date(Date.now() + 45 * 60 * 1000);
         await query(
           `UPDATE chat_sessions 
-           SET status_atendimento = 'pausa_humana', paused_until = $1, last_interaction = now()
-           WHERE id = $2 AND tenant_id = $3`,
-          [pausedUntil, sessionId, tenantId]
+           SET status_atendimento = 'pausa_humana', paused_until = $1, etapa_funil = 'manual', atendente_id = $2, last_interaction = now()
+           WHERE id = $3 AND tenant_id = $4`,
+          [pausedUntil, decodedUser.userId, sessionId, tenantId]
         );
         return sendJson(200, {
           success: true,
@@ -279,6 +377,28 @@ async function handleV2Routes(req, res, pathname, method, body) {
           message: 'Atendimento manual ativado! A IA foi pausada para esta conversa.'
         });
       }
+    }
+
+    // Atualizar Etapa do Funil de Atendimento (Kanban / Fluxo)
+    const stageMatch = pathname.match(/^\/api\/v2\/tenant\/leads\/([^/]+)\/stage$/);
+    if (stageMatch && method === 'PUT') {
+      const sessionId = stageMatch[1];
+      const { etapa_funil, atendente_id } = body;
+      if (!etapa_funil) {
+        return sendJson(400, { success: false, error: 'etapa_funil é obrigatória.' });
+      }
+
+      await query(
+        `UPDATE chat_sessions
+         SET etapa_funil = $1, atendente_id = COALESCE($2, atendente_id), last_interaction = now()
+         WHERE id = $3 AND tenant_id = $4`,
+        [etapa_funil, atendente_id || null, sessionId, tenantId]
+      );
+
+      return sendJson(200, {
+        success: true,
+        message: `Etapa atualizada para "${etapa_funil}" com sucesso!`
+      });
     }
 
     // Histórico de mensagens de uma conversa específica
@@ -297,6 +417,166 @@ async function handleV2Routes(req, res, pathname, method, body) {
         success: true,
         sessionId,
         messages: msgsRes.rows
+      });
+    }
+
+    // Enviar Mensagem Manual do Atendente pelo Painel para o WhatsApp
+    if (messagesMatch && method === 'POST') {
+      const sessionId = messagesMatch[1];
+      const { message } = body;
+      if (!message || !message.trim()) {
+        return sendJson(400, { success: false, error: 'O conteúdo da mensagem é obrigatório.' });
+      }
+
+      // 1. Busca a sessão e o JID do cliente
+      const sessRes = await query(
+        `SELECT s.id, s.remote_jid, s.client_name, i.instance_name 
+         FROM chat_sessions s
+         LEFT JOIN tenant_whatsapp_instances i ON i.tenant_id = s.tenant_id
+         WHERE s.id = $1 AND s.tenant_id = $2 LIMIT 1`,
+        [sessionId, tenantId]
+      );
+
+      if (sessRes.rowCount === 0) {
+        return sendJson(404, { success: false, error: 'Sessão de atendimento não encontrada.' });
+      }
+
+      const session = sessRes.rows[0];
+      let messageId = null;
+
+      // 2. Dispara a mensagem via Evolution API se a instância estiver configurada
+      if (session.instance_name) {
+        try {
+          const sent = await evolutionService.sendTextMessage(session.instance_name, session.remote_jid, message.trim());
+          messageId = sent?.messageId || null;
+        } catch (evErr) {
+          console.warn('[SendMsg] Falha ao enviar para o WhatsApp:', evErr.message);
+        }
+      }
+
+      // 3. Salva no banco de dados com role assistant
+      const msgRes = await query(
+        `INSERT INTO chat_messages (session_id, tenant_id, role, content, message_id)
+         VALUES ($1, $2, 'assistant', $3, $4)
+         RETURNING id, role, content, message_id, created_at`,
+        [sessionId, tenantId, message.trim(), messageId]
+      );
+
+      // 4. Ativa pausa humana de 45 min para o operador continuar conversando sem a IA interferir
+      const pausedUntil = new Date(Date.now() + 45 * 60 * 1000);
+      await query(
+        `UPDATE chat_sessions 
+         SET status_atendimento = 'pausa_humana', paused_until = $1, etapa_funil = 'manual', atendente_id = $2, last_interaction = now()
+         WHERE id = $3`,
+        [pausedUntil, decodedUser.userId, sessionId]
+      );
+
+      return sendJson(200, {
+        success: true,
+        message: msgRes.rows[0]
+      });
+    }
+
+    // --------------------------------------------------------------------------
+    // 6. GESTÃO DA EQUIPE E USUÁRIOS (RBAC MULTI-TENANT)
+    // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/tenant/users' && method === 'GET') {
+      if (decodedUser.role === 'atendente') {
+        return sendJson(403, { success: false, error: 'Apenas Administradores e Supervisores podem visualizar a equipe.' });
+      }
+      const users = await authService.listUsers(tenantId);
+      return sendJson(200, { success: true, users });
+    }
+
+    if (pathname === '/api/v2/tenant/users' && method === 'POST') {
+      if (decodedUser.role !== 'admin') {
+        return sendJson(403, { success: false, error: 'Apenas Administradores podem cadastrar novos membros na equipe.' });
+      }
+
+      const { nome, email, password, role } = body;
+      if (!nome || !email || !password) {
+        return sendJson(400, { success: false, error: 'Nome, e-mail e senha são obrigatórios.' });
+      }
+
+      const validRoles = ['admin', 'supervisor', 'atendente'];
+      const userRole = validRoles.includes(role) ? role : 'atendente';
+
+      try {
+        const newUser = await authService.createUser(tenantId, {
+          nome,
+          email,
+          password,
+          role: userRole
+        });
+        return sendJson(201, {
+          success: true,
+          message: `Usuário "${newUser.nome}" (${userRole}) cadastrado com sucesso!`,
+          user: newUser
+        });
+      } catch (uErr) {
+        return sendJson(400, { success: false, error: uErr.message });
+      }
+    }
+
+    const userModMatch = pathname.match(/^\/api\/v2\/tenant\/users\/([^/]+)$/);
+    if (userModMatch && method === 'PUT') {
+      if (decodedUser.role !== 'admin') {
+        return sendJson(403, { success: false, error: 'Apenas Administradores podem editar membros da equipe.' });
+      }
+      const targetUserId = userModMatch[1];
+      const updated = await authService.updateUser(tenantId, targetUserId, body);
+      if (!updated) {
+        return sendJson(404, { success: false, error: 'Usuário não encontrado.' });
+      }
+      return sendJson(200, {
+        success: true,
+        message: 'Membro da equipe atualizado com sucesso!',
+        user: updated
+      });
+    }
+
+    if (userModMatch && method === 'DELETE') {
+      if (decodedUser.role !== 'admin') {
+        return sendJson(403, { success: false, error: 'Apenas Administradores podem excluir membros da equipe.' });
+      }
+      const targetUserId = userModMatch[1];
+      if (targetUserId === decodedUser.userId) {
+        return sendJson(400, { success: false, error: 'Você não pode excluir sua própria conta de administrador.' });
+      }
+      await authService.deleteUser(tenantId, targetUserId);
+      return sendJson(200, {
+        success: true,
+        message: 'Membro removido da equipe com sucesso.'
+      });
+    }
+
+    // --------------------------------------------------------------------------
+    // 7. AGENDAMENTOS E VISITAS TÉCNICAS
+    // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/tenant/appointments' && method === 'GET') {
+      const apptRes = await query(
+        `SELECT 
+           a.id, 
+           a.remote_jid, 
+           a.servico, 
+           a.data_agendada, 
+           a.status, 
+           a.valor_estimado, 
+           a.observacoes, 
+           a.created_at,
+           COALESCE(c.nome, 'Cliente') as client_name,
+           c.telefone,
+           c.endereco_completo
+         FROM appointments a
+         LEFT JOIN customer_profiles c ON c.tenant_id = a.tenant_id AND c.remote_jid = a.remote_jid
+         WHERE a.tenant_id = $1
+         ORDER BY a.data_agendada DESC`,
+        [tenantId]
+      );
+
+      return sendJson(200, {
+        success: true,
+        appointments: apptRes.rows
       });
     }
 

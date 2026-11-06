@@ -34,8 +34,12 @@
   </script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    .fade-in { animation: fadeIn 0.25s ease-in-out; }
+    .fade-in { animation: fadeIn 0.2s ease-in-out; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(17, 24, 39, 0.4); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(75, 85, 99, 0.5); border-radius: 9999px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.8); }
   </style>
 </head>
 <body class="bg-dark-900 text-slate-100 min-h-screen flex flex-col antialiased">
@@ -83,49 +87,48 @@
           </div>
         </div>
 
-        <button type="submit" id="loginBtn" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-medium py-3 rounded-xl shadow-lg shadow-brand-600/25 transition flex items-center justify-center space-x-2">
+        <button type="submit" id="loginBtn" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-3 rounded-xl shadow-lg shadow-brand-600/30 transition flex items-center justify-center space-x-2">
           <span>Acessar Painel</span>
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </button>
       </form>
 
-      <!-- FORMULÁRIO DE AUTO-CADASTRO (NOVO TENANT) -->
-      <form id="registerForm" onsubmit="handleRegister(event)" class="hidden space-y-4">
+      <!-- FORMULÁRIO DE AUTO-CADASTRO (ONBOARDING) -->
+      <form id="registerForm" onsubmit="handleRegister(event)" class="space-y-4 hidden">
         <div id="registerError" class="hidden p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-sm"></div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Nome da Empresa</label>
-          <input type="text" id="regNomeEmpresa" required placeholder="Ex: Alfa Segurança & CFTV" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          <input type="text" id="regNomeEmpresa" required placeholder="Ex: Minha Empresa Tech" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">CNPJ / CPF</label>
-            <input type="text" id="regDocumento" placeholder="00.000.000/0001-00" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Seu Nome</label>
-            <input type="text" id="regNome" required placeholder="Nome Gestor" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
-          </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">CNPJ / CPF</label>
+          <input type="text" id="regDocumento" placeholder="00.000.000/0001-00" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Seu Nome Completo (Administrador)</label>
+          <input type="text" id="regNome" required placeholder="Ex: João Silva" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">E-mail Corporativo</label>
-          <input type="email" id="regEmail" required placeholder="admin@suaempresa.com" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+          <input type="email" id="regEmail" required placeholder="admin@minhaempresa.com" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Senha de Acesso</label>
-          <input type="password" id="regPassword" required placeholder="Senha forte" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Criar Senha Forte</label>
+          <input type="password" id="regPassword" required minlength="6" placeholder="Mínimo 6 caracteres" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Sobre o Negócio / Serviços</label>
-          <textarea id="regSobre" rows="2" placeholder="Resumo dos serviços que sua empresa oferece..." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-brand-500"></textarea>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Breve Descrição do Negócio</label>
+          <textarea id="regSobre" rows="2" placeholder="Ex: Prestação de serviços e suporte técnico especializado." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
         </div>
 
-        <button type="submit" id="regBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl shadow-lg shadow-emerald-600/25 transition flex items-center justify-center space-x-2">
-          <span>Criar Conta & Iniciar Teste</span>
+        <button type="submit" id="regBtn" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-3 rounded-xl shadow-lg shadow-brand-600/30 transition flex items-center justify-center space-x-2">
+          <span>Criar Conta & Iniciar</span>
           <i data-lucide="check" class="w-4 h-4"></i>
         </button>
       </form>
@@ -133,22 +136,22 @@
   </div>
 
   <!-- ============================================================================ -->
-  <!-- 2. CABEÇALHO PRINCIPAL DA PLATAFORMA SAAS -->
+  <!-- 2. CABEÇALHO DO PAINEL SAAS MULTI-TENANT -->
   <!-- ============================================================================ -->
-  <header class="bg-dark-850/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+  <header class="bg-dark-850 border-b border-slate-800 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+      
+      <!-- LOGO & EMPRESA DO TENANT -->
       <div class="flex items-center space-x-4">
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-brand-600/20 border border-brand-500/30 flex items-center justify-center text-brand-500 font-bold">
-            <i data-lucide="bot" class="w-6 h-6"></i>
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+          <i data-lucide="bot" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 id="tenantCompanyName" class="text-base font-bold text-white tracking-tight">Carregando...</h1>
+            <span id="tenantPlanBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20 uppercase tracking-wider">ENTERPRISE</span>
           </div>
-          <div>
-            <div class="flex items-center space-x-2">
-              <span id="tenantCompanyName" class="font-bold text-white text-base">Carregando...</span>
-              <span id="tenantPlanBadge" class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">PRO</span>
-            </div>
-            <p class="text-xs text-slate-400">WarNat Multi-Tenant AI Platform</p>
-          </div>
+          <p class="text-xs text-slate-400">WarNat Multi-Tenant AI Platform</p>
         </div>
       </div>
 
@@ -164,7 +167,7 @@
         <div class="flex items-center space-x-3">
           <div class="text-right hidden sm:block">
             <p id="userProfileName" class="text-sm font-medium text-white">-</p>
-            <p id="userProfileRole" class="text-xs text-slate-400 capitalize">-</p>
+            <p id="userProfileRoleBadge" class="text-xs font-semibold px-2 py-0.5 rounded-md inline-block capitalize bg-slate-800 text-slate-300">Admin</p>
           </div>
           <button onclick="handleLogout()" title="Sair da Plataforma" class="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-slate-800 transition">
             <i data-lucide="log-out" class="w-5 h-5"></i>
@@ -173,21 +176,37 @@
       </div>
     </div>
 
-    <!-- ABAS DE NAVEGAÇÃO -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-8 -mb-px">
-      <button onclick="switchTab('whatsapp')" id="tabBtn-whatsapp" class="tab-btn py-3 text-sm font-medium border-b-2 border-brand-500 text-brand-400 flex items-center space-x-2 transition">
+    <!-- ABAS DE NAVEGAÇÃO MULTI-TENANT -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6 sm:space-x-8 -mb-px overflow-x-auto custom-scrollbar">
+      
+      <!-- ABA 1: DASHBOARD & CRM -->
+      <button onclick="switchTab('crm')" id="tabBtn-crm" class="tab-btn py-3 text-sm font-medium border-b-2 border-brand-500 text-brand-400 flex items-center space-x-2 whitespace-nowrap transition">
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+        <span>Dashboard & CRM</span>
+      </button>
+
+      <!-- ABA 2: AGENDA & VISITAS TÉCNICAS -->
+      <button onclick="switchTab('appointments')" id="tabBtn-appointments" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
+        <i data-lucide="calendar-days" class="w-4 h-4"></i>
+        <span>Agenda & Visitas</span>
+      </button>
+
+      <!-- ABA 3: REGRAS DA IA & HORÁRIOS COMERCIAIS (ADMIN/SUPERVISOR) -->
+      <button onclick="switchTab('ai')" id="tabBtn-ai" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
+        <i data-lucide="sliders" class="w-4 h-4"></i>
+        <span>Regras da IA & Horários</span>
+      </button>
+
+      <!-- ABA 4: CONEXÃO WHATSAPP (ADMIN/SUPERVISOR) -->
+      <button onclick="switchTab('whatsapp')" id="tabBtn-whatsapp" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
         <i data-lucide="qr-code" class="w-4 h-4"></i>
         <span>Conexão WhatsApp</span>
       </button>
 
-      <button onclick="switchTab('ai')" id="tabBtn-ai" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 transition">
-        <i data-lucide="sliders" class="w-4 h-4"></i>
-        <span>Regras da IA</span>
-      </button>
-
-      <button onclick="switchTab('leads')" id="tabBtn-leads" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 transition">
-        <i data-lucide="users" class="w-4 h-4"></i>
-        <span>Leads & Conversas</span>
+      <!-- ABA 5: GESTÃO DA EQUIPE & USUÁRIOS (ADMIN/SUPERVISOR) -->
+      <button onclick="switchTab('team')" id="tabBtn-team" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
+        <i data-lucide="users-round" class="w-4 h-4"></i>
+        <span>Equipe & Usuários</span>
       </button>
     </div>
   </header>
@@ -198,9 +217,431 @@
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
 
     <!-- ======================================================================== -->
-    <!-- ABA 1: CONEXÃO WHATSAPP (STATUS & QR CODE COM POLLING) -->
+    <!-- ABA 1: DASHBOARD VISUAL & CRM DE ATENDIMENTO -->
     <!-- ======================================================================== -->
-    <section id="tab-whatsapp" class="tab-content fade-in space-y-6">
+    <section id="tab-crm" class="tab-content fade-in space-y-6">
+      
+      <!-- CARDS DE KPIS DO DASHBOARD -->
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        
+        <!-- CARD TOTAL -->
+        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl flex items-center space-x-3.5">
+          <div class="w-11 h-11 rounded-xl bg-brand-500/10 text-brand-400 flex items-center justify-center border border-brand-500/20">
+            <i data-lucide="message-square" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <p class="text-[11px] uppercase font-semibold text-slate-400 tracking-wider">Total Atendimentos</p>
+            <h4 id="statTotalCount" class="text-xl font-bold text-white mt-0.5">0</h4>
+          </div>
+        </div>
+
+        <!-- CARD IA ATIVA -->
+        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl flex items-center space-x-3.5">
+          <div class="w-11 h-11 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+            <i data-lucide="bot" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <p class="text-[11px] uppercase font-semibold text-slate-400 tracking-wider">Automação IA</p>
+            <h4 id="statAiActiveCount" class="text-xl font-bold text-emerald-400 mt-0.5">0</h4>
+          </div>
+        </div>
+
+        <!-- CARD MANUAL / HUMANO -->
+        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl flex items-center space-x-3.5">
+          <div class="w-11 h-11 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20">
+            <i data-lucide="user-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <p class="text-[11px] uppercase font-semibold text-slate-400 tracking-wider">Atendimento Manual</p>
+            <h4 id="statManualCount" class="text-xl font-bold text-amber-400 mt-0.5">0</h4>
+          </div>
+        </div>
+
+        <!-- CARD QUALIFICADOS / AGENDADOS -->
+        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl flex items-center space-x-3.5">
+          <div class="w-11 h-11 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+            <i data-lucide="calendar" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <p class="text-[11px] uppercase font-semibold text-slate-400 tracking-wider">Visitas / Agendados</p>
+            <h4 id="statAgendadosCount" class="text-xl font-bold text-blue-400 mt-0.5">0</h4>
+          </div>
+        </div>
+
+        <!-- CARD CONCLUÍDOS -->
+        <div class="col-span-2 lg:col-span-1 bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl flex items-center space-x-3.5">
+          <div class="w-11 h-11 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
+            <i data-lucide="check-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <p class="text-[11px] uppercase font-semibold text-slate-400 tracking-wider">Concluídos</p>
+            <h4 id="statConcluidosCount" class="text-xl font-bold text-purple-400 mt-0.5">0</h4>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- BARRA DE CONTROLE, FILTROS E AÇÕES RÁPIDAS -->
+      <div class="bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
+        
+        <!-- BUSCA RÁPIDA -->
+        <div class="relative w-full md:w-80">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-3 text-slate-400"></i>
+          <input type="text" id="crmSearchInput" oninput="filterCrmLeads()" placeholder="Buscar cliente, WhatsApp ou serviço..." class="w-full bg-dark-800 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <!-- FILTRO DE STATUS & ALTERNÂNCIA KANBAN / TABELA -->
+        <div class="flex items-center space-x-3 w-full md:w-auto justify-end">
+          
+          <select id="crmStatusFilter" onchange="filterCrmLeads()" class="bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+            <option value="all">Todas as Etapas</option>
+            <option value="novo">Novos & Sondagem</option>
+            <option value="qualificacao">Em Atendimento IA</option>
+            <option value="manual">Atendimento Manual</option>
+            <option value="agendado">Visita / Agendado</option>
+            <option value="concluido">Concluídos</option>
+          </select>
+
+          <!-- BOTÕES KANBAN / LISTA -->
+          <div class="flex bg-dark-800 p-1 rounded-xl border border-slate-700">
+            <button onclick="setCrmViewMode('kanban')" id="crmBtnKanban" title="Visão Kanban (Fluxo Visual)" class="px-3 py-1 text-xs font-semibold rounded-lg bg-brand-600 text-white flex items-center space-x-1.5 transition">
+              <i data-lucide="kanban" class="w-3.5 h-3.5"></i>
+              <span class="hidden sm:inline">Kanban</span>
+            </button>
+            <button onclick="setCrmViewMode('table')" id="crmBtnTable" title="Visão Tabela Completa" class="px-3 py-1 text-xs font-semibold rounded-lg text-slate-400 hover:text-white flex items-center space-x-1.5 transition">
+              <i data-lucide="list" class="w-3.5 h-3.5"></i>
+              <span class="hidden sm:inline">Tabela</span>
+            </button>
+          </div>
+
+          <!-- BOTÃO NOVO ATENDIMENTO MANUAL -->
+          <button onclick="openNewLeadModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-lg shadow-emerald-600/20 transition whitespace-nowrap">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Novo Atendimento</span>
+          </button>
+
+          <!-- RECARREGAR -->
+          <button onclick="loadLeads()" title="Atualizar dados" class="p-2 rounded-xl bg-dark-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
+            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- ====================================================================== -->
+      <!-- 1.1 VISÃO KANBAN DO FLUXO DE ATENDIMENTO -->
+      <!-- ====================================================================== -->
+      <div id="crmKanbanContainer" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 items-start fade-in">
+        
+        <!-- COLUNA 1: NOVOS -->
+        <div class="bg-dark-850/80 border border-slate-800/90 rounded-2xl flex flex-col max-h-[750px]">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+              <h4 class="text-xs font-bold text-white uppercase tracking-wider">1. Novos</h4>
+            </div>
+            <span id="colCount-novo" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">0</span>
+          </div>
+          <div id="kanbanCol-novo" class="p-3 space-y-3 overflow-y-auto flex-1 custom-scrollbar min-h-[160px]">
+            <div class="text-center text-slate-600 text-xs py-8">Nenhum atendimento</div>
+          </div>
+        </div>
+
+        <!-- COLUNA 2: EM IA -->
+        <div class="bg-dark-850/80 border border-slate-800/90 rounded-2xl flex flex-col max-h-[750px]">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <h4 class="text-xs font-bold text-white uppercase tracking-wider">2. Em IA (Auto)</h4>
+            </div>
+            <span id="colCount-qualificacao" class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono">0</span>
+          </div>
+          <div id="kanbanCol-qualificacao" class="p-3 space-y-3 overflow-y-auto flex-1 custom-scrollbar min-h-[160px]">
+            <div class="text-center text-slate-600 text-xs py-8">Nenhum atendimento</div>
+          </div>
+        </div>
+
+        <!-- COLUNA 3: ATENDIMENTO MANUAL -->
+        <div class="bg-dark-850/80 border border-slate-800/90 rounded-2xl flex flex-col max-h-[750px]">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+              <h4 class="text-xs font-bold text-white uppercase tracking-wider">3. Manual / Operador</h4>
+            </div>
+            <span id="colCount-manual" class="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-mono">0</span>
+          </div>
+          <div id="kanbanCol-manual" class="p-3 space-y-3 overflow-y-auto flex-1 custom-scrollbar min-h-[160px]">
+            <div class="text-center text-slate-600 text-xs py-8">Nenhum atendimento</div>
+          </div>
+        </div>
+
+        <!-- COLUNA 4: VISITA / AGENDADO -->
+        <div class="bg-dark-850/80 border border-slate-800/90 rounded-2xl flex flex-col max-h-[750px]">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
+              <h4 class="text-xs font-bold text-white uppercase tracking-wider">4. Agendados</h4>
+            </div>
+            <span id="colCount-agendado" class="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-mono">0</span>
+          </div>
+          <div id="kanbanCol-agendado" class="p-3 space-y-3 overflow-y-auto flex-1 custom-scrollbar min-h-[160px]">
+            <div class="text-center text-slate-600 text-xs py-8">Nenhum atendimento</div>
+          </div>
+        </div>
+
+        <!-- COLUNA 5: CONCLUÍDOS -->
+        <div class="bg-dark-850/80 border border-slate-800/90 rounded-2xl flex flex-col max-h-[750px]">
+          <div class="p-3.5 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-purple-400"></span>
+              <h4 class="text-xs font-bold text-white uppercase tracking-wider">5. Concluídos</h4>
+            </div>
+            <span id="colCount-concluido" class="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 font-mono">0</span>
+          </div>
+          <div id="kanbanCol-concluido" class="p-3 space-y-3 overflow-y-auto flex-1 custom-scrollbar min-h-[160px]">
+            <div class="text-center text-slate-600 text-xs py-8">Nenhum atendimento</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ====================================================================== -->
+      <!-- 1.2 VISÃO TABELA COMPLETA (ALTERNÁVEL) -->
+      <!-- ====================================================================== -->
+      <div id="crmTableContainer" class="hidden bg-dark-850 border border-slate-800 rounded-2xl shadow-xl overflow-hidden fade-in">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-dark-800 text-slate-400 text-xs uppercase font-semibold border-b border-slate-800">
+              <tr>
+                <th class="px-6 py-4">Cliente / WhatsApp</th>
+                <th class="px-6 py-4">Serviço de Interesse</th>
+                <th class="px-6 py-4">Localização</th>
+                <th class="px-6 py-4">Modo Atendimento</th>
+                <th class="px-6 py-4">Etapa do Fluxo</th>
+                <th class="px-6 py-4 text-right">Ação / Chat</th>
+              </tr>
+            </thead>
+            <tbody id="leadsTableBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr>
+                <td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando atendimentos...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ======================================================================== -->
+    <!-- ABA 2: AGENDA & VISITAS TÉCNICAS -->
+    <!-- ======================================================================== -->
+    <section id="tab-appointments" class="tab-content hidden fade-in space-y-6">
+      <div class="bg-dark-850 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+        <div class="p-6 border-b border-slate-800 flex items-center justify-between">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center space-x-2">
+              <i data-lucide="calendar-check" class="w-5 h-5 text-brand-500"></i>
+              <span>Agenda de Visitas Técnicas & Serviços</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Histórico e agendamentos confirmados pelo WhatsApp</p>
+          </div>
+          <button onclick="loadAppointments()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Recarregar agenda">
+            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-dark-800 text-slate-400 text-xs uppercase font-semibold border-b border-slate-800">
+              <tr>
+                <th class="px-6 py-4">Data & Horário</th>
+                <th class="px-6 py-4">Cliente</th>
+                <th class="px-6 py-4">Serviço Agendado</th>
+                <th class="px-6 py-4">Endereço</th>
+                <th class="px-6 py-4">Valor Estimado</th>
+                <th class="px-6 py-4">Status</th>
+              </tr>
+            </thead>
+            <tbody id="appointmentsTableBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr>
+                <td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando agendamentos...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================== -->
+    <!-- ABA 3: REGRAS DA IA & HORÁRIOS COMERCIAIS (tenant_ai_configs) -->
+    <!-- ======================================================================== -->
+    <section id="tab-ai" class="tab-content hidden fade-in space-y-6">
+      <div class="bg-dark-850 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-5 mb-6">
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+              <i data-lucide="cpu" class="w-5 h-5 text-brand-500"></i>
+              <span>Configuração da Assistente Virtual & Horários de Atendimento</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Parâmetros do Prompt Compiler, horários de funcionamento e slots de agendamento</p>
+          </div>
+          <button onclick="saveAiConfig(event)" id="saveAiBtn" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-5 py-2.5 rounded-xl shadow-lg shadow-brand-600/25 transition flex items-center space-x-2 text-sm">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Salvar Regras da IA</span>
+          </button>
+        </div>
+
+        <form id="aiConfigForm" onsubmit="saveAiConfig(event)" class="space-y-6">
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- TOM DE VOZ -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Tom de Voz</label>
+              <select id="aiTomDeVoz" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+                <option value="profissional_humanizado">Profissional e Humanizado (Padrão)</option>
+                <option value="consultivo_especialista">Consultivo e Especialista Técnico</option>
+                <option value="direto_e_agil">Direto, Ágil e Objetivo</option>
+                <option value="amigavel_e_caloroso">Amigável, Empático e Caloroso</option>
+              </select>
+            </div>
+
+            <!-- TEMPO DE PAUSA AUTOMÁTICA -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Pausa Automática ao Intervir Humano (Minutos)</label>
+              <input type="number" id="aiPausaMinutos" min="5" max="1440" required class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="45">
+            </div>
+
+            <!-- WHATSAPP NOTIFICAÇÃO HUMANA -->
+            <div class="md:col-span-2">
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">WhatsApp para Alerta de Novo Lead (com DDI + DDD)</label>
+              <div class="relative">
+                <i data-lucide="bell" class="w-5 h-5 absolute left-3.5 top-3 text-slate-500"></i>
+                <input type="text" id="aiWhatsappNotificacao" placeholder="Ex: 5531983525816" class="w-full bg-dark-800 border border-slate-700 rounded-xl pl-11 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+              </div>
+              <p class="text-xs text-slate-500 mt-1">Este número receberá a notificação estruturada assim que a IA qualificar um novo cliente.</p>
+            </div>
+          </div>
+
+          <!-- BLOCO: HORÁRIO COMERCIAL E REGRAS DE AGENDAMENTO -->
+          <div class="p-6 bg-dark-800/60 rounded-2xl border border-slate-700/80 space-y-5">
+            <div class="flex items-center space-x-2 text-white font-bold text-sm">
+              <i data-lucide="clock" class="w-4 h-4 text-brand-400"></i>
+              <span>Horários de Atendimento & Dias Disponíveis para Agendamento</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5 font-medium">Horário de Início do Atendimento Comercial</label>
+                <input type="time" id="aiHorarioInicio" value="08:00" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+              </div>
+              <div>
+                <label class="block text-xs text-slate-400 mb-1.5 font-medium">Horário de Término do Atendimento Comercial</label>
+                <input type="time" id="aiHorarioFim" value="18:00" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+              </div>
+            </div>
+
+            <!-- DIAS DA SEMANA COM ATENDIMENTO -->
+            <div>
+              <label class="block text-xs text-slate-400 mb-2 font-medium">Dias de Atendimento da Empresa</label>
+              <div class="grid grid-cols-2 sm:grid-cols-7 gap-2 text-xs">
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiDias" value="segunda" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200">Segunda</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiDias" value="terca" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200">Terça</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiDias" value="quarta" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200">Quarta</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiDias" value="quinta" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200">Quinta</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiDias" value="sexta" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200">Sexta</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiDias" value="sabado" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200">Sábado</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiDias" value="domingo" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200">Domingo</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- SLOTS DISPONÍVEIS DE VISITA -->
+            <div>
+              <label class="block text-xs text-slate-400 mb-2 font-medium">Slots / Horários para Agendamento de Visita Técnica</label>
+              <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs">
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiSlots" value="08:00" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200 font-mono">08:00</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiSlots" value="10:00" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200 font-mono">10:00</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiSlots" value="12:00" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200 font-mono">12:00</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiSlots" value="14:00" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200 font-mono">14:00</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiSlots" value="16:00" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200 font-mono">16:00</span>
+                </label>
+                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
+                  <input type="checkbox" name="aiSlots" value="18:00" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-slate-200 font-mono">18:00</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- POLÍTICAS DE AGENDAMENTO -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Políticas Comerciais de Agendamento e Taxas</label>
+              <textarea id="aiRegrasAgendamento" rows="3" placeholder="Ex: Visita técnica gratuita exclusivamente para novas instalações. Manutenção possui taxa de R$ 140,00 que é abatida no conserto." class="w-full bg-dark-850 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+            </div>
+          </div>
+
+          <!-- ESCOPO DE SERVIÇOS -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- SOBRE A EMPRESA -->
+            <div class="md:col-span-2">
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Sobre a Empresa & Região de Atuação</label>
+              <textarea id="aiSobreEmpresa" rows="3" required placeholder="Ex: Especialistas em CFTV e câmeras de segurança em Belo Horizonte..." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+            </div>
+
+            <!-- SERVIÇOS OFERECIDOS -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Serviços Oferecidos (Um por linha)</label>
+              <textarea id="aiServicosOferecidos" rows="4" placeholder="Instalação de Câmeras HD&#10;Manutenção de DVR&#10;Configuração de Acesso Remoto" class="w-full bg-dark-800 border border-slate-700 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+            </div>
+
+            <!-- SERVIÇOS RECUSADOS -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Serviços Fora de Escopo / Recusados</label>
+              <textarea id="aiServicosRecusados" rows="4" placeholder="Pintura, alarmes automotivos, cerca elétrica..." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+            </div>
+          </div>
+
+        </form>
+      </div>
+    </section>
+
+    <!-- ======================================================================== -->
+    <!-- ABA 4: CONEXÃO WHATSAPP (STATUS & QR CODE COM POLLING) -->
+    <!-- ======================================================================== -->
+    <section id="tab-whatsapp" class="tab-content hidden fade-in space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         
         <!-- CARD DE STATUS DA INSTÂNCIA -->
@@ -220,7 +661,7 @@
             </div>
             <div class="flex justify-between border-b border-slate-800 pb-2">
               <span class="text-slate-500">Número Conectado</span>
-              <span id="instancePhoneText" class="text-white">-</span>
+              <span id="instancePhoneText" class="text-white font-mono">-</span>
             </div>
             <div class="flex justify-between border-b border-slate-800 pb-2">
               <span class="text-slate-500">Atualização Automática</span>
@@ -259,174 +700,217 @@
     </section>
 
     <!-- ======================================================================== -->
-    <!-- ABA 2: REGRAS DA IA (tenant_ai_configs) -->
+    <!-- ABA 5: GESTÃO DA EQUIPE & USUÁRIOS (RBAC MULTI-TENANT) -->
     <!-- ======================================================================== -->
-    <section id="tab-ai" class="tab-content hidden fade-in space-y-6">
-      <div class="bg-dark-850 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-5 mb-6">
-          <div>
-            <h3 class="text-lg font-bold text-white flex items-center space-x-2">
-              <i data-lucide="cpu" class="w-5 h-5 text-brand-500"></i>
-              <span>Configuração da Assistente Virtual (IA)</span>
-            </h3>
-            <p class="text-xs text-slate-400 mt-1">Parâmetros dinâmicos do Prompt Compiler e regras de negócio</p>
-          </div>
-          <button onclick="saveAiConfig(event)" id="saveAiBtn" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-5 py-2.5 rounded-xl shadow-lg shadow-brand-600/25 transition flex items-center space-x-2 text-sm">
-            <i data-lucide="check" class="w-4 h-4"></i>
-            <span>Salvar Regras da IA</span>
-          </button>
-        </div>
-
-        <form id="aiConfigForm" onsubmit="saveAiConfig(event)" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          <!-- TOM DE VOZ -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Tom de Voz</label>
-            <select id="aiTomDeVoz" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
-              <option value="profissional_humanizado">Profissional e Humanizado (Padrão)</option>
-              <option value="consultivo_especialista">Consultivo e Especialista Técnico</option>
-              <option value="direto_e_agil">Direto, Ágil e Objetivo</option>
-              <option value="amigavel_e_caloroso">Amigável, Empático e Caloroso</option>
-            </select>
-          </div>
-
-          <!-- TEMPO DE PAUSA AUTOMÁTICA -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Pausa Automática ao Intervir Humano (Minutos)</label>
-            <input type="number" id="aiPausaMinutos" min="5" max="1440" required class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="45">
-          </div>
-
-          <!-- WHATSAPP NOTIFICAÇÃO HUMANA -->
-          <div class="md:col-span-2">
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">WhatsApp para Alerta de Novo Lead (com DDI + DDD)</label>
-            <div class="relative">
-              <i data-lucide="bell" class="w-5 h-5 absolute left-3.5 top-3 text-slate-500"></i>
-              <input type="text" id="aiWhatsappNotificacao" placeholder="Ex: 5531983525816" class="w-full bg-dark-800 border border-slate-700 rounded-xl pl-11 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
-            </div>
-            <p class="text-xs text-slate-500 mt-1">Este número receberá a notificação estruturada assim que a IA qualificar um novo cliente.</p>
-          </div>
-
-          <!-- SOBRE A EMPRESA -->
-          <div class="md:col-span-2">
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Sobre a Empresa & Região de Atuação</label>
-            <textarea id="aiSobreEmpresa" rows="3" required placeholder="Ex: Especialistas em CFTV e câmeras de segurança em Belo Horizonte e região metropolitana..." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
-          </div>
-
-          <!-- SERVIÇOS OFERECIDOS -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Serviços Oferecidos (Um por linha)</label>
-            <textarea id="aiServicosOferecidos" rows="4" placeholder="Instalação de Câmeras HD&#10;Manutenção de DVR e Fontes&#10;Configuração de Acesso Remoto" class="w-full bg-dark-800 border border-slate-700 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
-          </div>
-
-          <!-- SERVIÇOS RECUSADOS -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Serviços Fora de Escopo / Recusados</label>
-            <textarea id="aiServicosRecusados" rows="4" placeholder="Pintura, alarmes automotivos, cercas elétricas..." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
-          </div>
-
-          <!-- REGRAS DE AGENDAMENTO (JSON OU TEXTO) -->
-          <div class="md:col-span-2">
-            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Políticas de Agendamento e Taxas</label>
-            <textarea id="aiRegrasAgendamento" rows="3" placeholder="Ex: Visita técnica gratuita para novas instalações. Manutenção possui taxa fixa de R$ 140,00 abatível no serviço." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
-          </div>
-
-        </form>
-      </div>
-    </section>
-
-    <!-- ======================================================================== -->
-    <!-- ABA 3: LEADS & CONVERSAS (CRM MULTI-TENANT) -->
-    <!-- ======================================================================== -->
-    <section id="tab-leads" class="tab-content hidden fade-in space-y-6">
-      
-      <!-- MÉTRICAS DO FUNIL -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-6 shadow-xl flex items-center space-x-4">
-          <div class="w-12 h-12 rounded-xl bg-brand-500/10 text-brand-400 flex items-center justify-center border border-brand-500/20">
-            <i data-lucide="check-circle-2" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <p class="text-xs uppercase font-semibold text-slate-400">Leads Qualificados</p>
-            <h4 id="statLeadsCount" class="text-2xl font-bold text-white mt-0.5">0</h4>
-          </div>
-        </div>
-
-        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-6 shadow-xl flex items-center space-x-4">
-          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
-            <i data-lucide="bot" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <p class="text-xs uppercase font-semibold text-slate-400">IA Respondendo</p>
-            <h4 id="statAiActiveCount" class="text-2xl font-bold text-white mt-0.5">0</h4>
-          </div>
-        </div>
-
-        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-6 shadow-xl flex items-center space-x-4">
-          <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20">
-            <i data-lucide="user-check" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <p class="text-xs uppercase font-semibold text-slate-400">Intervenção Humana</p>
-            <h4 id="statHumanCount" class="text-2xl font-bold text-white mt-0.5">0</h4>
-          </div>
-        </div>
-      </div>
-
-      <!-- TABELA DE LEADS -->
+    <section id="tab-team" class="tab-content hidden fade-in space-y-6">
       <div class="bg-dark-850 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-        <div class="p-6 border-b border-slate-800 flex items-center justify-between">
+        <div class="p-6 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 class="text-base font-bold text-white">Gestão de Contatos & Conversas</h3>
-            <p class="text-xs text-slate-400 mt-0.5">Controle o status de atendimento e pause/reative a IA em tempo real</p>
+            <h3 class="text-base font-bold text-white flex items-center space-x-2">
+              <i data-lucide="shield" class="w-5 h-5 text-brand-500"></i>
+              <span>Membros da Equipe & Níveis de Acesso</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Gerencie operadores, atendentes e administradores do seu Tenant</p>
           </div>
-          <button onclick="loadLeads()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Recarregar tabela">
-            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
-          </button>
+          <div class="flex items-center space-x-3">
+            <button onclick="openNewUserModal()" id="btnNewUser" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2.5 rounded-xl text-xs flex items-center space-x-2 shadow-lg shadow-brand-600/20 transition">
+              <i data-lucide="user-plus" class="w-4 h-4"></i>
+              <span>Novo Membro</span>
+            </button>
+            <button onclick="loadTeamUsers()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Recarregar equipe">
+              <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+            </button>
+          </div>
         </div>
 
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
             <thead class="bg-dark-800 text-slate-400 text-xs uppercase font-semibold border-b border-slate-800">
               <tr>
-                <th class="px-6 py-4">Cliente / WhatsApp</th>
-                <th class="px-6 py-4">Serviço Qualificado</th>
-                <th class="px-6 py-4">Localização</th>
-                <th class="px-6 py-4">Urgência</th>
-                <th class="px-6 py-4">Status da IA</th>
-                <th class="px-6 py-4 text-right">Ação / Controle</th>
+                <th class="px-6 py-4">Nome do Membro</th>
+                <th class="px-6 py-4">E-mail Corporativo</th>
+                <th class="px-6 py-4">Nível de Acesso (Cargo)</th>
+                <th class="px-6 py-4">Status</th>
+                <th class="px-6 py-4">Data de Cadastro</th>
+                <th class="px-6 py-4 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody id="leadsTableBody" class="divide-y divide-slate-800 text-slate-300">
+            <tbody id="teamTableBody" class="divide-y divide-slate-800 text-slate-300">
               <tr>
-                <td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando contatos...</td>
+                <td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando membros da equipe...</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
-
     </section>
 
   </main>
 
   <!-- ============================================================================ -->
-  <!-- MODAL DE HISTÓRICO DE MENSAGENS -->
+  <!-- MODAL DE ATENDIMENTO / CHAT EM TEMPO REAL COM O CLIENTE -->
   <!-- ============================================================================ -->
-  <div id="messagesModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl fade-in">
-      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
-        <div>
-          <h4 id="modalClientTitle" class="font-bold text-white text-base">Histórico de Mensagens</h4>
-          <p id="modalClientPhone" class="text-xs text-slate-400 font-mono">-</p>
+  <div id="messagesModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-3xl h-[88vh] flex flex-col shadow-2xl fade-in overflow-hidden">
+      
+      <!-- CABEÇALHO DO CHAT -->
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-dark-850">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-400 flex items-center justify-center border border-brand-500/20">
+            <i data-lucide="user" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h4 id="modalClientTitle" class="font-bold text-white text-base">Cliente</h4>
+              <span id="modalAiBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">IA Ativa</span>
+            </div>
+            <p id="modalClientPhone" class="text-xs text-slate-400 font-mono">-</p>
+          </div>
         </div>
-        <button onclick="closeMessagesModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
+
+        <div class="flex items-center space-x-2">
+          <!-- SWITCH DE PAUSA / RETOMADA DA IA NO CABEÇALHO -->
+          <button id="modalToggleAiBtn" onclick="toggleAiFromModal()" class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition bg-amber-600/20 text-amber-400 border-amber-500/30 hover:bg-amber-600/30">
+            Pausar IA
+          </button>
+
+          <!-- ABRIR DOSSIÊ -->
+          <button id="modalDossierBtn" onclick="openDossierFromChat()" title="Ver Dossiê do Cliente" class="p-2 text-slate-400 hover:text-brand-400 rounded-lg hover:bg-dark-800 border border-slate-800">
+            <i data-lucide="brain" class="w-4 h-4"></i>
+          </button>
+
+          <button onclick="closeMessagesModal()" class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-dark-800">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- CORPO DAS MENSAGENS COM ROLAGEM -->
+      <div id="modalMessagesContainer" class="p-4 sm:p-6 overflow-y-auto flex-1 space-y-3 bg-dark-900/60 custom-scrollbar">
+        <!-- Balões de mensagens renderizados dinamicamente -->
+      </div>
+
+      <!-- BARRA DE ENVIO DE MENSAGEM MANUAL DO OPERADOR -->
+      <div class="p-3 sm:p-4 border-t border-slate-800 bg-dark-850">
+        <form onsubmit="handleSendManualMessage(event)" class="flex items-center space-x-2">
+          <input type="text" id="manualChatMessageInput" placeholder="Digite uma mensagem para o cliente no WhatsApp (Enter para enviar)..." autocomplete="off" class="flex-1 bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          <button type="submit" id="btnSendManualMsg" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2.5 rounded-xl text-sm flex items-center space-x-1.5 shadow-lg shadow-brand-600/30 transition">
+            <span>Enviar</span>
+            <i data-lucide="send" class="w-4 h-4"></i>
+          </button>
+        </form>
+        <p class="text-[11px] text-slate-500 mt-1 px-1">💡 Ao responder manualmente, a IA é pausada por 45 minutos para o operador atender sem interferências.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
+  <!-- MODAL: NOVO ATENDIMENTO MANUAL -->
+  <!-- ============================================================================ -->
+  <div id="newLeadModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl fade-in overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <h4 class="font-bold text-white text-base flex items-center space-x-2">
+          <i data-lucide="phone-call" class="w-5 h-5 text-emerald-400"></i>
+          <span>Novo Atendimento Manual</span>
+        </h4>
+        <button onclick="closeNewLeadModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
 
-      <div id="modalMessagesContainer" class="p-6 overflow-y-auto flex-1 space-y-3 bg-dark-900/50">
-        <!-- Mensagens renderizadas via JS -->
+      <form onsubmit="handleCreateManualLead(event)" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Número de WhatsApp (com DDD)</label>
+          <input type="text" id="newLeadPhone" required placeholder="Ex: 31983525816" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Nome do Cliente</label>
+          <input type="text" id="newLeadName" placeholder="Ex: Rodrigo Mendonça" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Serviço de Interesse</label>
+            <input type="text" id="newLeadServico" placeholder="Ex: Câmeras CFTV" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Urgência</label>
+            <select id="newLeadUrgencia" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+              <option value="alta">Alta</option>
+              <option value="media" selected>Média</option>
+              <option value="baixa">Baixa</option>
+              <option value="imediata">Imediata</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Primeira Mensagem (Dispara no WhatsApp)</label>
+          <textarea id="newLeadInitialMsg" rows="3" placeholder="Ex: Olá Rodrigo, tudo bem? Somos da equipe técnica e vimos o seu interesse..." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+        </div>
+
+        <div class="pt-2 flex justify-end space-x-3">
+          <button type="button" onclick="closeNewLeadModal()" class="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm hover:bg-dark-800">Cancelar</button>
+          <button type="submit" id="btnSubmitNewLead" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm flex items-center space-x-2">
+            <span>Iniciar Atendimento</span>
+            <i data-lucide="check" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
+  <!-- MODAL: NOVO MEMBRO DA EQUIPE (USUÁRIO) -->
+  <!-- ============================================================================ -->
+  <div id="newUserModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl fade-in overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <h4 class="font-bold text-white text-base flex items-center space-x-2">
+          <i data-lucide="user-plus" class="w-5 h-5 text-brand-400"></i>
+          <span>Cadastrar Novo Membro na Equipe</span>
+        </h4>
+        <button onclick="closeNewUserModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
       </div>
+
+      <form onsubmit="handleCreateUser(event)" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Nome Completo</label>
+          <input type="text" id="newUserNome" required placeholder="Ex: Fernanda Lima" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">E-mail Corporativo</label>
+          <input type="email" id="newUserEmail" required placeholder="fernanda@empresa.com" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Senha Provisória</label>
+          <input type="password" id="newUserPassword" required minlength="6" placeholder="Mínimo 6 caracteres" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Nível de Acesso (Perfil)</label>
+          <select id="newUserRole" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+            <option value="atendente">🎧 Atendente (Acesso a CRM, Chat e Atendimento)</option>
+            <option value="supervisor">🛡️ Supervisor (CRM, Agenda, Relatórios e Supervisão)</option>
+            <option value="admin">👑 Administrador (Controle Total do Tenant, Equipe e IA)</option>
+          </select>
+        </div>
+
+        <div class="pt-2 flex justify-end space-x-3">
+          <button type="button" onclick="closeNewUserModal()" class="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm hover:bg-dark-800">Cancelar</button>
+          <button type="submit" id="btnSubmitNewUser" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm flex items-center space-x-2">
+            <span>Salvar Membro</span>
+            <i data-lucide="check" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -450,7 +934,7 @@
         </button>
       </div>
 
-      <div class="p-6 overflow-y-auto flex-1 space-y-5 text-sm text-slate-200 bg-dark-900/30">
+      <div class="p-6 overflow-y-auto flex-1 space-y-5 text-sm text-slate-200 bg-dark-900/30 custom-scrollbar">
         <div>
           <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Endereço Completo</label>
           <div id="dossierAddress" class="p-3 bg-dark-800 rounded-xl border border-slate-700 text-sm text-white font-medium">-</div>
@@ -475,6 +959,10 @@
   <script>
     let currentToken = localStorage.getItem('warnat_saas_token');
     let qrPollingInterval = null;
+    let currentUserProfile = null;
+    let allLeadsCache = [];
+    let currentCrmView = 'kanban'; // 'kanban' ou 'table'
+    let activeChatSession = null; // { id, clientName, phone, remoteJid, isPaused }
 
     // Utilitário para requisições autenticadas
     async function apiFetch(endpoint, options = {}) {
@@ -564,7 +1052,7 @@
         errBox.classList.remove('hidden');
       } finally {
         regBtn.disabled = false;
-        regBtn.innerHTML = '<span>Criar Conta & Iniciar Teste</span><i data-lucide="check" class="w-4 h-4"></i>';
+        regBtn.innerHTML = '<span>Criar Conta & Iniciar</span><i data-lucide="check" class="w-4 h-4"></i>';
         lucide.createIcons();
       }
     }
@@ -603,28 +1091,48 @@
     function handleLogout() {
       localStorage.removeItem('warnat_saas_token');
       currentToken = null;
+      currentUserProfile = null;
       if (qrPollingInterval) clearInterval(qrPollingInterval);
       document.getElementById('loginOverlay').classList.remove('hidden');
     }
 
-    // Inicializa os dados do painel logado
+    // Inicializa os dados do painel logado com RBAC
     async function initDashboard() {
       try {
         const meRes = await apiFetch('/api/v2/auth/me');
         if (meRes.ok && meRes.data) {
+          currentUserProfile = meRes.data.user;
           document.getElementById('tenantCompanyName').textContent = meRes.data.tenant?.nome_empresa || 'Empresa';
           document.getElementById('tenantPlanBadge').textContent = (meRes.data.tenant?.plano || 'PRO').toUpperCase();
-          document.getElementById('userProfileName').textContent = meRes.data.user?.nome || 'Usuário';
-          document.getElementById('userProfileRole').textContent = meRes.data.user?.role || 'operador';
+          document.getElementById('userProfileName').textContent = currentUserProfile?.nome || 'Usuário';
+
+          // Badge de cargo
+          const role = currentUserProfile?.role || 'atendente';
+          const roleBadge = document.getElementById('userProfileRoleBadge');
+          roleBadge.textContent = role === 'admin' ? 'Administrador' : role === 'supervisor' ? 'Supervisor' : 'Atendente';
+          roleBadge.className = role === 'admin' ? 'text-xs font-semibold px-2.5 py-0.5 rounded-md inline-block bg-purple-500/10 text-purple-400 border border-purple-500/20' : role === 'supervisor' ? 'text-xs font-semibold px-2.5 py-0.5 rounded-md inline-block bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-xs font-semibold px-2.5 py-0.5 rounded-md inline-block bg-slate-800 text-slate-300 border border-slate-700';
+
+          // CONTROLE RBAC: Se for atendente, oculta abas restritas
+          if (role === 'atendente') {
+            document.getElementById('tabBtn-ai')?.classList.add('hidden');
+            document.getElementById('tabBtn-whatsapp')?.classList.add('hidden');
+            document.getElementById('tabBtn-team')?.classList.add('hidden');
+          } else {
+            document.getElementById('tabBtn-ai')?.classList.remove('hidden');
+            document.getElementById('tabBtn-whatsapp')?.classList.remove('hidden');
+            document.getElementById('tabBtn-team')?.classList.remove('hidden');
+          }
         }
 
-        await checkWhatsAppStatus();
-        await loadAiConfig();
+        switchTab('crm');
         await loadLeads();
 
-        // Inicia Polling de 5 segundos para o status do WhatsApp
-        if (qrPollingInterval) clearInterval(qrPollingInterval);
-        qrPollingInterval = setInterval(checkWhatsAppStatus, 5000);
+        if (currentUserProfile?.role !== 'atendente') {
+          await checkWhatsAppStatus();
+          await loadAiConfig();
+          if (qrPollingInterval) clearInterval(qrPollingInterval);
+          qrPollingInterval = setInterval(checkWhatsAppStatus, 5000);
+        }
       } catch (e) {
         console.error('Erro ao inicializar painel:', e);
       }
@@ -638,17 +1146,628 @@
       });
       document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
 
-      document.getElementById(`tabBtn-${tab}`).classList.add('border-brand-500', 'text-brand-400');
-      document.getElementById(`tabBtn-${tab}`).classList.remove('border-transparent', 'text-slate-400');
-      document.getElementById(`tab-${tab}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tabBtn-${tab}`);
+      if (activeBtn) {
+        activeBtn.classList.add('border-brand-500', 'text-brand-400');
+        activeBtn.classList.remove('border-transparent', 'text-slate-400');
+      }
+      document.getElementById(`tab-${tab}`)?.classList.remove('hidden');
 
-      if (tab === 'leads') loadLeads();
+      if (tab === 'crm') loadLeads();
+      if (tab === 'appointments') loadAppointments();
+      if (tab === 'team') loadTeamUsers();
       if (tab === 'ai') loadAiConfig();
       if (tab === 'whatsapp') checkWhatsAppStatus();
     }
 
+    // Alternar Visualização CRM: Kanban vs Tabela
+    function setCrmViewMode(mode) {
+      currentCrmView = mode;
+      const btnKanban = document.getElementById('crmBtnKanban');
+      const btnTable = document.getElementById('crmBtnTable');
+      const kanbanView = document.getElementById('crmKanbanContainer');
+      const tableView = document.getElementById('crmTableContainer');
+
+      if (mode === 'kanban') {
+        btnKanban.className = 'px-3 py-1 text-xs font-semibold rounded-lg bg-brand-600 text-white flex items-center space-x-1.5 transition';
+        btnTable.className = 'px-3 py-1 text-xs font-semibold rounded-lg text-slate-400 hover:text-white flex items-center space-x-1.5 transition';
+        kanbanView.classList.remove('hidden');
+        tableView.classList.add('hidden');
+      } else {
+        btnTable.className = 'px-3 py-1 text-xs font-semibold rounded-lg bg-brand-600 text-white flex items-center space-x-1.5 transition';
+        btnKanban.className = 'px-3 py-1 text-xs font-semibold rounded-lg text-slate-400 hover:text-white flex items-center space-x-1.5 transition';
+        tableView.classList.remove('hidden');
+        kanbanView.classList.add('hidden');
+      }
+      renderCrmLeads();
+    }
+
     // --------------------------------------------------------------------------
-    // 1. GESTÃO DO WHATSAPP (STATUS & QR CODE POLLING)
+    // 1. CARREGAR E RENDERIZAR CRM & DASHBOARD
+    // --------------------------------------------------------------------------
+    async function loadLeads() {
+      try {
+        const res = await apiFetch('/api/v2/tenant/leads');
+        if (!res.ok || !Array.isArray(res.data?.leads)) return;
+
+        allLeadsCache = res.data.leads;
+        const stats = res.data.stats || {};
+
+        document.getElementById('statTotalCount').textContent = stats.total || allLeadsCache.length;
+        document.getElementById('statAiActiveCount').textContent = stats.ia_ativa || 0;
+        document.getElementById('statManualCount').textContent = stats.manual || 0;
+        document.getElementById('statAgendadosCount').textContent = stats.agendados || 0;
+        document.getElementById('statConcluidosCount').textContent = stats.concluidos || 0;
+
+        renderCrmLeads();
+      } catch (e) {
+        console.error('Erro ao carregar leads:', e);
+      }
+    }
+
+    function filterCrmLeads() {
+      renderCrmLeads();
+    }
+
+    function getFilteredLeads() {
+      const search = (document.getElementById('crmSearchInput')?.value || '').toLowerCase().trim();
+      const statusFilter = document.getElementById('crmStatusFilter')?.value || 'all';
+
+      return allLeadsCache.filter(lead => {
+        const name = (lead.client_name || '').toLowerCase();
+        const phone = (lead.remote_jid || '').replace(/\D/g, '');
+        const servico = (lead.dados_lead?.servico || '').toLowerCase();
+        const etapa = (lead.etapa_funil || 'novo').toLowerCase();
+
+        const matchesSearch = !search || name.includes(search) || phone.includes(search) || servico.includes(search);
+        const matchesStatus = statusFilter === 'all' || etapa === statusFilter;
+
+        return matchesSearch && matchesStatus;
+      });
+    }
+
+    function renderCrmLeads() {
+      const leads = getFilteredLeads();
+
+      // Contadores Kanban
+      const cols = {
+        novo: [],
+        qualificacao: [],
+        manual: [],
+        agendado: [],
+        concluido: []
+      };
+
+      leads.forEach(lead => {
+        let etapa = lead.etapa_funil || 'novo';
+        if (!cols[etapa]) etapa = 'novo';
+        cols[etapa].push(lead);
+      });
+
+      // Atualiza contadores dos headers das colunas
+      Object.keys(cols).forEach(k => {
+        const el = document.getElementById(`colCount-${k}`);
+        if (el) el.textContent = cols[k].length;
+      });
+
+      // Renderiza Kanban
+      Object.keys(cols).forEach(k => {
+        const colEl = document.getElementById(`kanbanCol-${k}`);
+        if (!colEl) return;
+
+        if (cols[k].length === 0) {
+          colEl.innerHTML = '<div class="text-center text-slate-600 text-xs py-8">Nenhum contato</div>';
+          return;
+        }
+
+        colEl.innerHTML = cols[k].map(lead => {
+          const dados = lead.dados_lead || {};
+          const phone = lead.remote_jid.replace(/@.*$/, '');
+          const isPaused = lead.is_paused || lead.status_atendimento === 'pausa_humana';
+          const urgencia = dados.urgencia || 'normal';
+
+          const urgClasses = {
+            'imediata': 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+            'alta': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+            'media': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+            'baixa': 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+          };
+          const urgClass = urgClasses[urgencia] || urgClasses['media'];
+
+          return `
+            <div class="bg-dark-800 border border-slate-700/80 rounded-xl p-3.5 space-y-2.5 shadow-md hover:border-slate-600 transition">
+              <div class="flex items-start justify-between">
+                <div>
+                  <h5 class="font-bold text-white text-xs leading-tight">${lead.client_name}</h5>
+                  <p class="text-[11px] text-slate-400 font-mono mt-0.5">+${phone}</p>
+                </div>
+                <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${urgClass}">
+                  ${urgencia}
+                </span>
+              </div>
+
+              <div class="text-xs text-slate-300">
+                <p class="truncate"><span class="text-slate-500">Serviço:</span> ${dados.servico || '<span class="text-slate-500 italic">Em sondagem</span>'}</p>
+                ${dados.bairro_cidade ? `<p class="text-[11px] text-slate-400 truncate mt-0.5"><span class="text-slate-500">Local:</span> ${dados.bairro_cidade}</p>` : ''}
+              </div>
+
+              <!-- STATUS IA / MANUAL -->
+              <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-700/60">
+                <span class="inline-flex items-center space-x-1.5 ${isPaused ? 'text-amber-400' : 'text-emerald-400'}">
+                  <span class="w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}"></span>
+                  <span>${isPaused ? 'Manual' : 'Automação IA'}</span>
+                </span>
+
+                <select onchange="updateLeadStage('${lead.id}', this.value)" class="bg-dark-850 border border-slate-700 rounded-lg px-2 py-0.5 text-[10px] text-slate-300 focus:outline-none">
+                  <option value="novo" ${lead.etapa_funil === 'novo' ? 'selected' : ''}>1. Novo</option>
+                  <option value="qualificacao" ${lead.etapa_funil === 'qualificacao' ? 'selected' : ''}>2. Em IA</option>
+                  <option value="manual" ${lead.etapa_funil === 'manual' ? 'selected' : ''}>3. Manual</option>
+                  <option value="agendado" ${lead.etapa_funil === 'agendado' ? 'selected' : ''}>4. Agendado</option>
+                  <option value="concluido" ${lead.etapa_funil === 'concluido' ? 'selected' : ''}>5. Concluído</option>
+                </select>
+              </div>
+
+              <!-- BOTÕES DE AÇÃO DO CARD -->
+              <div class="flex items-center space-x-1.5 pt-1">
+                <button onclick="openChatModal('${lead.id}', '${lead.client_name}', '${phone}', '${lead.remote_jid}', ${isPaused})" class="flex-1 bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border border-brand-500/30 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition">
+                  <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+                  <span>Abrir Chat</span>
+                </button>
+                <button onclick="toggleAi('${lead.id}', '${isPaused ? 'resume' : 'pause'}')" title="${isPaused ? 'Reativar IA' : 'Pausar IA'}" class="p-1.5 rounded-lg border text-xs ${isPaused ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 'text-amber-400 border-amber-500/30 bg-amber-500/10'}">
+                  <i data-lucide="${isPaused ? 'play' : 'pause'}" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="openDossierModal('${lead.remote_jid}', '${lead.client_name}', '${phone}')" title="Dossiê do Cliente" class="p-1.5 rounded-lg border border-slate-700 hover:bg-dark-700 text-slate-400 hover:text-brand-400">
+                  <i data-lucide="brain" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      });
+
+      // Renderiza Tabela
+      const tbody = document.getElementById('leadsTableBody');
+      if (leads.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">Nenhum atendimento encontrado.</td></tr>';
+      } else {
+        tbody.innerHTML = leads.map(lead => {
+          const dados = lead.dados_lead || {};
+          const phone = lead.remote_jid.replace(/@.*$/, '');
+          const isPaused = lead.is_paused || lead.status_atendimento === 'pausa_humana';
+
+          return `
+            <tr class="hover:bg-dark-800/50 transition">
+              <td class="px-6 py-4">
+                <div class="font-medium text-white">${lead.client_name}</div>
+                <div class="text-xs text-slate-400 font-mono">+${phone}</div>
+              </td>
+              <td class="px-6 py-4">
+                <span class="text-slate-200">${dados.servico || '<span class="text-slate-500 italic">Em sondagem</span>'}</span>
+              </td>
+              <td class="px-6 py-4">
+                <span class="text-slate-300">${dados.bairro_cidade || '<span class="text-slate-500 italic">Não informado</span>'}</span>
+              </td>
+              <td class="px-6 py-4">
+                <span class="inline-flex items-center space-x-1.5 text-xs ${isPaused ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'} border px-2.5 py-1 rounded-full">
+                  <span class="w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}"></span>
+                  <span>${isPaused ? 'Manual' : 'IA Ativa'}</span>
+                </span>
+              </td>
+              <td class="px-6 py-4">
+                <select onchange="updateLeadStage('${lead.id}', this.value)" class="bg-dark-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none">
+                  <option value="novo" ${lead.etapa_funil === 'novo' ? 'selected' : ''}>1. Novo</option>
+                  <option value="qualificacao" ${lead.etapa_funil === 'qualificacao' ? 'selected' : ''}>2. Em IA</option>
+                  <option value="manual" ${lead.etapa_funil === 'manual' ? 'selected' : ''}>3. Manual</option>
+                  <option value="agendado" ${lead.etapa_funil === 'agendado' ? 'selected' : ''}>4. Agendado</option>
+                  <option value="concluido" ${lead.etapa_funil === 'concluido' ? 'selected' : ''}>5. Concluído</option>
+                </select>
+              </td>
+              <td class="px-6 py-4 text-right space-x-2">
+                <button onclick="openChatModal('${lead.id}', '${lead.client_name}', '${phone}', '${lead.remote_jid}', ${isPaused})" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white transition inline-flex items-center space-x-1">
+                  <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+                  <span>Chat</span>
+                </button>
+                <button onclick="toggleAi('${lead.id}', '${isPaused ? 'resume' : 'pause'}')" class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${isPaused ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-600' : 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border-amber-500/30'}">
+                  ${isPaused ? 'Reativar IA' : 'Pausar IA'}
+                </button>
+                <button onclick="openDossierModal('${lead.remote_jid}', '${lead.client_name}', '${phone}')" class="p-1.5 text-slate-400 hover:text-brand-400 rounded-lg hover:bg-dark-700 transition" title="Dossiê">
+                  <i data-lucide="brain" class="w-4 h-4"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      lucide.createIcons();
+    }
+
+    // Atualizar Etapa do Funil
+    async function updateLeadStage(sessionId, etapa_funil) {
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${sessionId}/stage`, {
+          method: 'PUT',
+          body: JSON.stringify({ etapa_funil })
+        });
+        if (res.ok) {
+          const lead = allLeadsCache.find(l => l.id === sessionId);
+          if (lead) lead.etapa_funil = etapa_funil;
+          renderCrmLeads();
+        }
+      } catch (e) {
+        alert('Erro ao atualizar etapa do atendimento.');
+      }
+    }
+
+    // Toggle de Pausa da IA
+    async function toggleAi(sessionId, action) {
+      try {
+        const res = await apiFetch('/api/v2/tenant/leads/toggle-ai', {
+          method: 'POST',
+          body: JSON.stringify({ sessionId, action })
+        });
+        if (res.ok) {
+          await loadLeads();
+        } else {
+          alert('Falha ao alterar status da IA: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (e) {}
+    }
+
+    // --------------------------------------------------------------------------
+    // 2. CHAT EM TEMPO REAL & ENVIO MANUAL
+    // --------------------------------------------------------------------------
+    async function openChatModal(sessionId, clientName, phone, remoteJid, isPaused) {
+      activeChatSession = { id: sessionId, clientName, phone, remoteJid, isPaused };
+      
+      document.getElementById('modalClientTitle').textContent = clientName;
+      document.getElementById('modalClientPhone').textContent = `+${phone}`;
+      updateChatModalAiBadge(isPaused);
+
+      const container = document.getElementById('modalMessagesContainer');
+      container.innerHTML = '<div class="text-center text-slate-500 text-sm py-8">Carregando conversa...</div>';
+      document.getElementById('messagesModal').classList.remove('hidden');
+
+      await refreshChatMessages();
+      document.getElementById('manualChatMessageInput').focus();
+    }
+
+    function updateChatModalAiBadge(isPaused) {
+      const badge = document.getElementById('modalAiBadge');
+      const toggleBtn = document.getElementById('modalToggleAiBtn');
+
+      if (isPaused) {
+        badge.textContent = '👤 Atendimento Manual';
+        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20';
+        toggleBtn.textContent = 'Reativar IA';
+        toggleBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold border transition bg-emerald-600/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/30';
+      } else {
+        badge.textContent = '🤖 IA Respondendo';
+        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse';
+        toggleBtn.textContent = 'Pausar IA';
+        toggleBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold border transition bg-amber-600/20 text-amber-400 border-amber-500/30 hover:bg-amber-600/30';
+      }
+    }
+
+    async function toggleAiFromModal() {
+      if (!activeChatSession) return;
+      const nextAction = activeChatSession.isPaused ? 'resume' : 'pause';
+      await toggleAi(activeChatSession.id, nextAction);
+      activeChatSession.isPaused = !activeChatSession.isPaused;
+      updateChatModalAiBadge(activeChatSession.isPaused);
+    }
+
+    function openDossierFromChat() {
+      if (activeChatSession) {
+        openDossierModal(activeChatSession.remoteJid, activeChatSession.clientName, activeChatSession.phone);
+      }
+    }
+
+    async function refreshChatMessages() {
+      if (!activeChatSession) return;
+      const container = document.getElementById('modalMessagesContainer');
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeChatSession.id}/messages`);
+        if (res.ok && Array.isArray(res.data?.messages)) {
+          if (res.data.messages.length === 0) {
+            container.innerHTML = '<div class="text-center text-slate-500 text-sm py-8">Nenhuma mensagem registrada até o momento.</div>';
+            return;
+          }
+
+          container.innerHTML = '';
+          res.data.messages.forEach(m => {
+            const isUser = m.role === 'user';
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `flex flex-col ${isUser ? 'items-start' : 'items-end'}`;
+            msgDiv.innerHTML = `
+              <div class="max-w-[85%] rounded-2xl p-3.5 text-sm ${isUser ? 'bg-dark-800 text-slate-200 border border-slate-700/80' : 'bg-brand-600 text-white shadow-md'}">
+                <div class="text-[10px] font-semibold uppercase tracking-wider mb-1 opacity-70 flex items-center space-x-1">
+                  <span>${isUser ? 'Cliente' : 'Atendente / IA'}</span>
+                </div>
+                <div class="whitespace-pre-wrap leading-relaxed">${m.content}</div>
+                <div class="text-[9px] text-right mt-1.5 opacity-60">${new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+            `;
+            container.appendChild(msgDiv);
+          });
+          container.scrollTop = container.scrollHeight;
+        }
+      } catch (e) {
+        container.innerHTML = '<div class="text-center text-rose-400 text-sm py-8">Erro ao carregar mensagens.</div>';
+      }
+      lucide.createIcons();
+    }
+
+    async function handleSendManualMessage(e) {
+      if (e) e.preventDefault();
+      if (!activeChatSession) return;
+
+      const input = document.getElementById('manualChatMessageInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const sendBtn = document.getElementById('btnSendManualMsg');
+      sendBtn.disabled = true;
+      input.value = '';
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeChatSession.id}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({ message: text })
+        });
+
+        if (res.ok) {
+          activeChatSession.isPaused = true;
+          updateChatModalAiBadge(true);
+          await refreshChatMessages();
+          await loadLeads(); // Atualiza kanban/tabela
+        } else {
+          alert('Falha ao enviar mensagem: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (err) {
+        alert('Erro ao enviar mensagem.');
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    function closeMessagesModal() {
+      document.getElementById('messagesModal').classList.add('hidden');
+      activeChatSession = null;
+    }
+
+    // --------------------------------------------------------------------------
+    // 3. NOVO ATENDIMENTO MANUAL
+    // --------------------------------------------------------------------------
+    function openNewLeadModal() {
+      document.getElementById('newLeadModal').classList.remove('hidden');
+      document.getElementById('newLeadPhone').focus();
+    }
+
+    function closeNewLeadModal() {
+      document.getElementById('newLeadModal').classList.add('hidden');
+    }
+
+    async function handleCreateManualLead(e) {
+      e.preventDefault();
+      const phone = document.getElementById('newLeadPhone').value.trim();
+      const name = document.getElementById('newLeadName').value.trim();
+      const servico = document.getElementById('newLeadServico').value.trim();
+      const urgencia = document.getElementById('newLeadUrgencia').value;
+      const initialMessage = document.getElementById('newLeadInitialMsg').value.trim();
+
+      const btn = document.getElementById('btnSubmitNewLead');
+      btn.disabled = true;
+
+      try {
+        const res = await apiFetch('/api/v2/tenant/leads/manual', {
+          method: 'POST',
+          body: JSON.stringify({ phone, name, servico, urgencia, initialMessage, etapa_funil: 'manual' })
+        });
+
+        if (res.ok) {
+          closeNewLeadModal();
+          alert('✅ Atendimento manual iniciado com sucesso!');
+          await loadLeads();
+        } else {
+          alert('❌ Falha ao criar atendimento: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (err) {
+        alert('Erro de conexão ao criar atendimento.');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 4. AGENDA & VISITAS TÉCNICAS
+    // --------------------------------------------------------------------------
+    async function loadAppointments() {
+      const tbody = document.getElementById('appointmentsTableBody');
+      tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando agenda de visitas...</td></tr>';
+
+      try {
+        const res = await apiFetch('/api/v2/tenant/appointments');
+        if (!res.ok || !Array.isArray(res.data?.appointments)) {
+          tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-rose-400">Falha ao carregar agendamentos.</td></tr>';
+          return;
+        }
+
+        const list = res.data.appointments;
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">Nenhum agendamento de visita registrado no momento.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = list.map(a => {
+          const dateStr = new Date(a.data_agendada).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+          const statusColors = {
+            'agendado': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+            'concluido': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+            'cancelado': 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+          };
+          const badgeClass = statusColors[a.status] || statusColors['agendado'];
+
+          return `
+            <tr class="hover:bg-dark-800/50 transition">
+              <td class="px-6 py-4 font-mono font-bold text-brand-400 text-xs">${dateStr}</td>
+              <td class="px-6 py-4">
+                <div class="font-medium text-white">${a.client_name}</div>
+                <div class="text-xs text-slate-400 font-mono">+${a.telefone || a.remote_jid.replace(/@.*$/, '')}</div>
+              </td>
+              <td class="px-6 py-4 text-slate-200">${a.servico}</td>
+              <td class="px-6 py-4 text-slate-300 text-xs">${a.endereco_completo || a.observacoes || '-'}</td>
+              <td class="px-6 py-4 font-medium text-emerald-400">R$ ${parseFloat(a.valor_estimado || 0).toFixed(2)}</td>
+              <td class="px-6 py-4">
+                <span class="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${badgeClass}">
+                  ${a.status}
+                </span>
+              </td>
+            </tr>
+          `;
+        }).join('');
+        lucide.createIcons();
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-rose-400">Erro ao carregar dados.</td></tr>';
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 5. GESTÃO DA EQUIPE (RBAC)
+    // --------------------------------------------------------------------------
+    async function loadTeamUsers() {
+      const tbody = document.getElementById('teamTableBody');
+      tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando membros da equipe...</td></tr>';
+
+      try {
+        const res = await apiFetch('/api/v2/tenant/users');
+        if (!res.ok || !Array.isArray(res.data?.users)) {
+          tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-rose-400">Falha ao carregar equipe.</td></tr>';
+          return;
+        }
+
+        const users = res.data.users;
+        tbody.innerHTML = users.map(u => {
+          const roleLabels = {
+            'admin': '👑 Administrador',
+            'supervisor': '🛡️ Supervisor',
+            'atendente': '🎧 Atendente'
+          };
+          const roleBadgeClass = u.role === 'admin' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : u.role === 'supervisor' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-slate-700/50 text-slate-300 border-slate-600';
+          const isMe = currentUserProfile && currentUserProfile.id === u.id;
+
+          return `
+            <tr class="hover:bg-dark-800/50 transition">
+              <td class="px-6 py-4">
+                <div class="font-medium text-white flex items-center space-x-2">
+                  <span>${u.nome}</span>
+                  ${isMe ? '<span class="text-[10px] bg-brand-600/30 text-brand-300 px-2 py-0.5 rounded font-bold">Você</span>' : ''}
+                </div>
+              </td>
+              <td class="px-6 py-4 font-mono text-xs text-slate-300">${u.email}</td>
+              <td class="px-6 py-4">
+                <span class="text-xs font-semibold px-2.5 py-1 rounded-full border ${roleBadgeClass}">
+                  ${roleLabels[u.role] || u.role}
+                </span>
+              </td>
+              <td class="px-6 py-4">
+                <span class="inline-flex items-center space-x-1.5 text-xs ${u.ativo ? 'text-emerald-400' : 'text-rose-400'}">
+                  <span class="w-1.5 h-1.5 rounded-full ${u.ativo ? 'bg-emerald-400' : 'bg-rose-400'}"></span>
+                  <span>${u.ativo ? 'Ativo' : 'Inativo'}</span>
+                </span>
+              </td>
+              <td class="px-6 py-4 text-xs text-slate-400">${new Date(u.created_at).toLocaleDateString('pt-BR')}</td>
+              <td class="px-6 py-4 text-right space-x-2">
+                ${!isMe ? `
+                  <button onclick="toggleUserStatus('${u.id}', ${u.ativo})" class="px-2.5 py-1 rounded-lg text-xs font-semibold border ${u.ativo ? 'text-rose-400 border-rose-500/30 hover:bg-rose-500/10' : 'text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10'}">
+                    ${u.ativo ? 'Desativar' : 'Ativar'}
+                  </button>
+                  <button onclick="deleteTeamUser('${u.id}', '${u.nome}')" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition" title="Excluir Usuário">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                  </button>
+                ` : '<span class="text-xs text-slate-500 italic">Conta Atual</span>'}
+              </td>
+            </tr>
+          `;
+        }).join('');
+        lucide.createIcons();
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-rose-400">Erro ao carregar equipe.</td></tr>';
+      }
+    }
+
+    function openNewUserModal() {
+      document.getElementById('newUserModal').classList.remove('hidden');
+      document.getElementById('newUserNome').focus();
+    }
+
+    function closeNewUserModal() {
+      document.getElementById('newUserModal').classList.add('hidden');
+    }
+
+    async function handleCreateUser(e) {
+      e.preventDefault();
+      const nome = document.getElementById('newUserNome').value.trim();
+      const email = document.getElementById('newUserEmail').value.trim();
+      const password = document.getElementById('newUserPassword').value;
+      const role = document.getElementById('newUserRole').value;
+
+      const btn = document.getElementById('btnSubmitNewUser');
+      btn.disabled = true;
+
+      try {
+        const res = await apiFetch('/api/v2/tenant/users', {
+          method: 'POST',
+          body: JSON.stringify({ nome, email, password, role })
+        });
+
+        if (res.ok) {
+          closeNewUserModal();
+          alert(`✅ Membro "${nome}" cadastrado com sucesso!`);
+          await loadTeamUsers();
+        } else {
+          alert('❌ Falha ao cadastrar: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (err) {
+        alert('Erro ao cadastrar usuário.');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function toggleUserStatus(userId, currentStatus) {
+      try {
+        const res = await apiFetch(`/api/v2/tenant/users/${userId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ ativo: !currentStatus })
+        });
+        if (res.ok) {
+          await loadTeamUsers();
+        } else {
+          alert('Falha ao alterar status do usuário.');
+        }
+      } catch (e) {}
+    }
+
+    async function deleteTeamUser(userId, userName) {
+      if (!confirm(`Tem certeza que deseja remover "${userName}" da sua equipe?`)) return;
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/users/${userId}`, {
+          method: 'DELETE'
+        });
+        if (res.ok) {
+          await loadTeamUsers();
+        } else {
+          alert('Falha ao excluir usuário: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (e) {}
+    }
+
+    // --------------------------------------------------------------------------
+    // 6. GESTÃO DO WHATSAPP (STATUS & QR CODE POLLING)
     // --------------------------------------------------------------------------
     async function checkWhatsAppStatus() {
       try {
@@ -661,7 +1780,7 @@
         const badge = document.getElementById('instanceStatusBadge');
 
         document.getElementById('instanceNameText').textContent = instanceName || 'Não configurada';
-        document.getElementById('instancePhoneText').textContent = numeroTelefone || 'Nenhum';
+        document.getElementById('instancePhoneText').textContent = numeroTelefone ? `+${numeroTelefone}` : 'Nenhum';
 
         if (status === 'open') {
           dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
@@ -702,7 +1821,7 @@
     }
 
     // --------------------------------------------------------------------------
-    // 2. REGRAS DA IA (tenant_ai_configs)
+    // 7. REGRAS DA IA & HORÁRIOS
     // --------------------------------------------------------------------------
     async function loadAiConfig() {
       try {
@@ -715,12 +1834,33 @@
           document.getElementById('aiSobreEmpresa').value = c.sobre_empresa || '';
           
           if (Array.isArray(c.servicos_oferecidos)) {
-            document.getElementById('aiServicosOferecidos').value = c.servicos_oferecidos.join('\n');
+            document.getElementById('aiServicosOferecidos').value = c.servicos_oferecidos.map(s => typeof s === 'object' ? (s.nome || JSON.stringify(s)) : s).join('\n');
           }
           document.getElementById('aiServicosRecusados').value = c.servicos_recusados || '';
           
+          // Regras e Horários de Agendamento
           if (c.regras_agendamento && typeof c.regras_agendamento === 'object') {
-            document.getElementById('aiRegrasAgendamento').value = c.regras_agendamento.descricao || JSON.stringify(c.regras_agendamento, null, 2);
+            const r = c.regras_agendamento;
+            if (r.horario_inicio) document.getElementById('aiHorarioInicio').value = r.horario_inicio;
+            if (r.horario_fim) document.getElementById('aiHorarioFim').value = r.horario_fim;
+
+            // Checkboxes de dias
+            const dias = r.dias_atendimento || r.dias || [];
+            if (Array.isArray(dias) && dias.length > 0) {
+              document.querySelectorAll('input[name="aiDias"]').forEach(cb => {
+                cb.checked = dias.includes(cb.value);
+              });
+            }
+
+            // Checkboxes de slots
+            const slots = r.slots_agendamento || r.slots_disponiveis || [];
+            if (Array.isArray(slots) && slots.length > 0) {
+              document.querySelectorAll('input[name="aiSlots"]').forEach(cb => {
+                cb.checked = slots.includes(cb.value);
+              });
+            }
+
+            document.getElementById('aiRegrasAgendamento').value = r.politica_agendamento || r.politica_visita_gratuita || r.descricao || '';
           }
         }
       } catch (e) {}
@@ -733,6 +1873,10 @@
       saveBtn.innerHTML = '<span>Salvando...</span>';
 
       const servicosRaw = document.getElementById('aiServicosOferecidos').value.split('\n').map(s => s.trim()).filter(Boolean);
+      
+      const diasSelecionados = Array.from(document.querySelectorAll('input[name="aiDias"]:checked')).map(cb => cb.value);
+      const slotsSelecionados = Array.from(document.querySelectorAll('input[name="aiSlots"]:checked')).map(cb => cb.value);
+
       const payload = {
         tom_de_voz: document.getElementById('aiTomDeVoz').value,
         pausa_automatica_minutos: parseInt(document.getElementById('aiPausaMinutos').value, 10) || 45,
@@ -741,7 +1885,11 @@
         servicos_oferecidos: servicosRaw,
         servicos_recusados: document.getElementById('aiServicosRecusados').value.trim(),
         regras_agendamento: {
-          descricao: document.getElementById('aiRegrasAgendamento').value.trim()
+          horario_inicio: document.getElementById('aiHorarioInicio').value,
+          horario_fim: document.getElementById('aiHorarioFim').value,
+          dias_atendimento: diasSelecionados,
+          slots_agendamento: slotsSelecionados,
+          politica_agendamento: document.getElementById('aiRegrasAgendamento').value.trim()
         }
       };
 
@@ -752,9 +1900,9 @@
         });
 
         if (res.ok) {
-          alert('✅ Configurações de IA salvas com sucesso!');
+          alert('✅ Configurações e horários de agendamento salvos com sucesso!');
         } else {
-          alert('❌ Falha ao salvar: ' + (res.data?.error || 'Erro desconhecido'));
+          alert('❌ Falha ao salvar: ' + (res.data?.error || 'Erro'));
         }
       } catch (err) {
         alert('❌ Erro de conexão com o servidor.');
@@ -766,165 +1914,8 @@
     }
 
     // --------------------------------------------------------------------------
-    // 3. LEADS & CONVERSAS (CRM COM SWITCH DE PAUSA DA IA)
+    // 8. DOSSIÊ PERMANENTE DO CLIENTE
     // --------------------------------------------------------------------------
-    async function loadLeads() {
-      try {
-        const res = await apiFetch('/api/v2/tenant/leads');
-        const tbody = document.getElementById('leadsTableBody');
-        if (!res.ok || !Array.isArray(res.data?.leads)) {
-          tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-rose-400">Falha ao carregar leads.</td></tr>';
-          return;
-        }
-
-        const leads = res.data.leads;
-        let qualifiedCount = 0;
-        let aiActiveCount = 0;
-        let humanCount = 0;
-
-        if (leads.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">Nenhum atendimento registrado até o momento.</td></tr>';
-          document.getElementById('statLeadsCount').textContent = '0';
-          document.getElementById('statAiActiveCount').textContent = '0';
-          document.getElementById('statHumanCount').textContent = '0';
-          return;
-        }
-
-        tbody.innerHTML = '';
-        leads.forEach(lead => {
-          const dados = lead.dados_lead || {};
-          const isLeadQualified = dados && dados.servico;
-          if (isLeadQualified) qualifiedCount++;
-
-          const isPaused = lead.is_paused || lead.status_atendimento === 'pausa_humana';
-          if (isPaused) humanCount++;
-          else aiActiveCount++;
-
-          const phone = lead.remote_jid.replace(/@.*$/, '');
-          const clientName = lead.client_name || dados.nome || 'Cliente';
-
-          const urgenciaBadges = {
-            'imediata': 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-            'alta': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-            'media': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-            'baixa': 'bg-slate-500/10 text-slate-400 border-slate-500/20'
-          };
-          const urgBadgeClass = urgenciaBadges[dados.urgencia] || urgenciaBadges['media'];
-
-          const tr = document.createElement('tr');
-          tr.className = 'hover:bg-dark-800/50 transition';
-          tr.innerHTML = `
-            <td class="px-6 py-4">
-              <div class="font-medium text-white">${clientName}</div>
-              <div class="text-xs text-slate-400 font-mono">+${phone}</div>
-            </td>
-            <td class="px-6 py-4">
-              <span class="text-slate-200">${dados.servico || '<span class="text-slate-500 italic">Em sondagem</span>'}</span>
-            </td>
-            <td class="px-6 py-4">
-              <span class="text-slate-300">${dados.bairro_cidade || '<span class="text-slate-500 italic">Não informado</span>'}</span>
-            </td>
-            <td class="px-6 py-4">
-              <span class="text-[11px] font-semibold uppercase px-2.5 py-1 rounded-full border ${urgBadgeClass}">
-                ${dados.urgencia || 'Normal'}
-              </span>
-            </td>
-            <td class="px-6 py-4">
-              ${isPaused ? 
-                `<span class="inline-flex items-center space-x-1.5 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
-                   <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                   <span>Pausa Humana</span>
-                 </span>` :
-                `<span class="inline-flex items-center space-x-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
-                   <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                   <span>IA Ativa</span>
-                 </span>`
-              }
-            </td>
-            <td class="px-6 py-4 text-right space-x-2">
-              <!-- SWITCH DE PAUSA DA IA -->
-              <button onclick="toggleAi('${lead.id}', '${isPaused ? 'resume' : 'pause'}')" class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${isPaused ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-600' : 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border-amber-500/30'}">
-                ${isPaused ? 'Reativar IA' : 'Pausar IA'}
-              </button>
-
-              <button onclick="openMessagesModal('${lead.id}', '${clientName}', '${phone}')" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-dark-700 transition" title="Ver mensagens">
-                <i data-lucide="message-square" class="w-4 h-4"></i>
-              </button>
-
-              <button onclick="openDossierModal('${lead.remote_jid}', '${clientName}', '${phone}')" class="p-1.5 text-slate-400 hover:text-brand-400 rounded-lg hover:bg-dark-700 transition" title="Ver Dossiê Permanente">
-                <i data-lucide="brain" class="w-4 h-4"></i>
-              </button>
-            </td>
-          `;
-          tbody.appendChild(tr);
-        });
-
-        document.getElementById('statLeadsCount').textContent = qualifiedCount;
-        document.getElementById('statAiActiveCount').textContent = aiActiveCount;
-        document.getElementById('statHumanCount').textContent = humanCount;
-        lucide.createIcons();
-      } catch (e) {}
-    }
-
-    // Toggle de Pausa da IA
-    async function toggleAi(sessionId, action) {
-      try {
-        const res = await apiFetch('/api/v2/tenant/leads/toggle-ai', {
-          method: 'POST',
-          body: JSON.stringify({ sessionId, action })
-        });
-        if (res.ok) {
-          await loadLeads();
-        } else {
-          alert('Falha ao alterar status da IA: ' + (res.data?.error || 'Erro desconhecido'));
-        }
-      } catch (err) {
-        alert('Erro ao comunicar com o servidor.');
-      }
-    }
-
-    // Modal de Histórico de Mensagens
-    async function openMessagesModal(sessionId, clientName, phone) {
-      document.getElementById('modalClientTitle').textContent = `Histórico: ${clientName}`;
-      document.getElementById('modalClientPhone').textContent = `+${phone}`;
-      const container = document.getElementById('modalMessagesContainer');
-      container.innerHTML = '<div class="text-center text-slate-500 text-sm py-8">Carregando histórico...</div>';
-      document.getElementById('messagesModal').classList.remove('hidden');
-
-      try {
-        const res = await apiFetch(`/api/v2/tenant/leads/${sessionId}/messages`);
-        if (res.ok && Array.isArray(res.data?.messages)) {
-          if (res.data.messages.length === 0) {
-            container.innerHTML = '<div class="text-center text-slate-500 text-sm py-8">Nenhuma mensagem registrada.</div>';
-            return;
-          }
-
-          container.innerHTML = '';
-          res.data.messages.forEach(m => {
-            const isUser = m.role === 'user';
-            const msgDiv = document.createElement('div');
-            msgDiv.className = `flex flex-col ${isUser ? 'items-start' : 'items-end'}`;
-            msgDiv.innerHTML = `
-              <div class="max-w-[80%] rounded-2xl p-3.5 text-sm ${isUser ? 'bg-dark-800 text-slate-200 border border-slate-700' : 'bg-brand-600 text-white'}">
-                <div class="text-[10px] font-semibold uppercase tracking-wider mb-1 opacity-70">${isUser ? 'Cliente' : 'Assistente Virtual / Humano'}</div>
-                <div class="whitespace-pre-wrap">${m.content}</div>
-                <div class="text-[9px] text-right mt-1 opacity-60">${new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
-              </div>
-            `;
-            container.appendChild(msgDiv);
-          });
-          container.scrollTop = container.scrollHeight;
-        }
-      } catch (e) {
-        container.innerHTML = '<div class="text-center text-rose-400 text-sm py-8">Erro ao carregar mensagens.</div>';
-      }
-    }
-
-    function closeMessagesModal() {
-      document.getElementById('messagesModal').classList.add('hidden');
-    }
-
-    // Modal de Dossiê Permanente do Cliente
     async function openDossierModal(remoteJid, clientName, phone) {
       document.getElementById('dossierClientTitle').textContent = `Dossiê: ${clientName}`;
       document.getElementById('dossierClientPhone').textContent = `+${phone}`;
@@ -957,7 +1948,7 @@
             }
           } else {
             document.getElementById('dossierAddress').textContent = 'Perfil em fase inicial de coleta.';
-            document.getElementById('dossierSummary').textContent = 'Lead em processo de qualificação no WhatsApp.';
+            document.getElementById('dossierSummary').textContent = 'Lead em processo de atendimento no WhatsApp.';
             document.getElementById('dossierAppointments').innerHTML = '<div class="text-xs text-slate-500">Sem agendamentos registrados.</div>';
           }
         }

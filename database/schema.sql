@@ -30,8 +30,10 @@ CREATE TABLE IF NOT EXISTS users (
     nome VARCHAR(100) NOT NULL,
     email VARCHAR(150) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) DEFAULT 'admin',
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    role VARCHAR(20) DEFAULT 'admin', -- 'admin', 'supervisor', 'atendente'
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_users_tenant_email ON users(tenant_id, email);
 CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
@@ -111,6 +113,8 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     remote_jid VARCHAR(60) NOT NULL,
     client_name VARCHAR(150),
     status_atendimento VARCHAR(30) DEFAULT 'ia_ativa', -- 'ia_ativa', 'pausa_humana', 'transbordado'
+    etapa_funil VARCHAR(30) DEFAULT 'novo', -- 'novo', 'qualificacao', 'manual', 'agendado', 'concluido', 'perdido'
+    atendente_id UUID REFERENCES users(id) ON DELETE SET NULL,
     paused_until TIMESTAMPTZ,
     dados_lead JSONB DEFAULT '{}',
     last_interaction TIMESTAMPTZ DEFAULT NOW(),
@@ -176,4 +180,41 @@ BEGIN
     ) THEN
         ALTER TABLE chat_sessions ADD COLUMN created_at TIMESTAMPTZ DEFAULT NOW();
     END IF;
+
+    -- Garante colunas ativo e updated_at em users
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'ativo'
+    ) THEN
+        ALTER TABLE users ADD COLUMN ativo BOOLEAN DEFAULT TRUE;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE users ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+
+    -- Garante colunas etapa_funil e atendente_id em chat_sessions
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'chat_sessions' AND column_name = 'etapa_funil'
+    ) THEN
+        ALTER TABLE chat_sessions ADD COLUMN etapa_funil VARCHAR(30) DEFAULT 'novo';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'chat_sessions' AND column_name = 'atendente_id'
+    ) THEN
+        ALTER TABLE chat_sessions ADD COLUMN atendente_id UUID REFERENCES users(id) ON DELETE SET NULL;
+    END IF;
+
+    -- Atualiza constraint users_role_check para suportar admin, supervisor, atendente, operador
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'supervisor', 'atendente', 'operador'));
+
+    -- Índices adicionais para tabelas adaptadas
+    CREATE INDEX IF NOT EXISTS idx_chat_sessions_etapa_funil ON chat_sessions(etapa_funil);
 END $$;
