@@ -6,6 +6,8 @@
 const { query } = require('../database/db');
 const evolutionService = require('../services/evolution.service');
 const messageCache = require('../services/message-cache.service');
+const audioTranscriptionService = require('../services/audio-transcription.service');
+const ttsService = require('../services/tts.service');
 
 class WebhookController {
   constructor() {
@@ -83,6 +85,142 @@ class WebhookController {
         );
       }
       return { handled: true, event: 'connection.update' };
+    }
+
+    // ============================================================================
+    // 2. ATENDIMENTO E LOG DE CHAMADAS DE VOZ E VÍDEO NO WHATSAPP
+    // ============================================================================
+    if (payload.event === 'call') {
+      const callData = payload.data || {};
+      const callStatus = callData.status; // 'offer', 'ringing', 'reject', etc.
+      const isVideo = !!callData.isVideo;
+      const callerJid = callData.from || callData.id;
+
+      if (!callerJid || callerJid.includes('@g.us')) {
+        return { handled: true, action: 'call_ignored' };
+      }
+
+      const effectiveJid = callerJid.includes('@') ? callerJid : `${callerJid}@s.whatsapp.net`;
+      const { tenantId, instanceName } = await this.resolveTenantAndSession(payload);
+
+      // Rejeita a chamada na Evolution API para não tocar infinitamente
+      if (callData.id) {
+        await evolutionService.rejectCall(instanceName, callData.id).catch(() => {});
+      }
+
+      // Se for apenas encerramento/recusa, não duplica mensagens
+      if (callStatus && callStatus !== 'offer' && callStatus !== 'ringing') {
+        return { handled: true, event: 'call_status_update', status: callStatus };
+      }
+
+      const callTypeDesc = isVideo ? 'vídeo' : 'voz';
+      const callMediaType = isVideo ? 'call_video' : 'call_voice';
+      const callText = `[Chamada de ${callTypeDesc} recebida]`;
+
+      console.log(`[Webhook] Chamada de ${callTypeDesc} recebida de ${effectiveJid} para tenant ${tenantId}`);
+
+      // Obtém ou cria a sessão no CRM
+      let sessionRes = await query(
+        `SELECT id, status_atendimento, paused_until, dados_lead 
+         FROM chat_sessions 
+         WHERE tenant_id = $1 AND remote_jid = $2`,
+        [tenantId, effectiveJid]
+      );
+
+      let session;
+      if (sessionRes.rowCount === 0) {
+        const newSession = await query(
+          `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, last_interaction)
+           VALUES ($1, $2, $3, 'ia_ativa', now())
+           RETURNING id, status_atendimento, paused_until, dados_lead`,
+          [tenantId, effectiveJid, 'Cliente Chamada']
+        );
+        session = newSession.rows[0];
+      } else {
+        session = sessionRes.rows[0];
+        await query(
+          `UPDATE chat_sessions SET last_interaction = now() WHERE id = $1`,
+          [session.id]
+        );
+      }
+
+      // Registra a tentativa de chamada no histórico
+      await query(
+        `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, message_id)
+         VALUES ($1, $2, 'user', $3, $4, $5)`,
+        [session.id, tenantId, callText, callMediaType, `call_${Date.now()}`]
+      );
+
+      // Busca configurações de chamada e IA do tenant
+      const aiConfigRes = await query(
+        `SELECT atender_chamadas, mensagem_chamada, responder_com_audio, voz_ia, modo_atendimento 
+         FROM tenant_ai_configs WHERE tenant_id = $1`,
+        [tenantId]
+      );
+      const aiConfig = aiConfigRes.rows[0] || {};
+
+      // Se o tenant estiver em modo 100% manual, não envia resposta automática
+      if (aiConfig.modo_atendimento === 'manual') {
+        console.log(`[Webhook] Tenant em modo manual. Chamada registrada sem resposta automática.`);
+        return { handled: true, action: 'call_logged_manual_mode', isVideo, callerJid: effectiveJid };
+      }
+
+      // Se o contato estiver em pausa humana ou manual
+      const isContactManual = (
+        session.status_atendimento === 'manual' ||
+        session.status_atendimento === 'pausa_humana' ||
+        session.status_atendimento === 'transbordado' ||
+        (session.paused_until && new Date(session.paused_until) > new Date())
+      );
+      if (isContactManual) {
+        console.log(`[Webhook] Contato ${effectiveJid} em atendimento manual. Chamada registrada.`);
+        return { handled: true, action: 'call_logged_contact_manual', isVideo, callerJid: effectiveJid };
+      }
+
+      // Se atender_chamadas estiver ativo (padrão true), envia resposta acolhedora da Nat
+      if (aiConfig.atender_chamadas !== false) {
+        let msgChamada = aiConfig.mensagem_chamada ||
+          `Olá! Vi que você me ligou por chamada de ${callTypeDesc}. 😊 Como sou a Nat, assistente virtual da WarNat Tech, e nossos especialistas costumam estar em atendimentos externos e visitas técnicas em campo, nosso atendimento aqui pelo WhatsApp é realizado com total agilidade por mensagens de áudio e texto!\n\nComo posso te ajudar agora? Pode me mandar um áudio ou escrever por aqui que já te oriento imediatamente!`;
+
+        msgChamada = msgChamada.replace(/chamada(\s+de\s+(voz|vídeo))?/i, `chamada de ${callTypeDesc}`);
+
+        let sendRes;
+        let sentMediaType = 'text';
+
+        if (aiConfig.responder_com_audio === 'sempre') {
+          try {
+            await evolutionService.sendPresence(instanceName, effectiveJid, 'recording');
+            const speech = await ttsService.generateSpeech(msgChamada, { voice: aiConfig.voz_ia || 'nova' });
+            sendRes = await evolutionService.sendWhatsAppAudio(instanceName, effectiveJid, speech.base64);
+            sentMediaType = 'audio';
+          } catch (ttsErr) {
+            console.warn('[Webhook] Falha no TTS para chamada, enviando texto:', ttsErr.message);
+            sendRes = await evolutionService.sendTextMessage(instanceName, effectiveJid, msgChamada);
+          }
+        } else {
+          await evolutionService.sendPresence(instanceName, effectiveJid, 'composing');
+          sendRes = await evolutionService.sendTextMessage(instanceName, effectiveJid, msgChamada);
+        }
+
+        if (sendRes?.messageId) {
+          await messageCache.setBotSent(sendRes.messageId, 60);
+          await query(
+            `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, message_id)
+             VALUES ($1, $2, 'assistant', $3, $4, $5)`,
+            [session.id, tenantId, msgChamada, sentMediaType, sendRes.messageId]
+          );
+        }
+
+        return {
+          handled: true,
+          action: 'call_answered_with_bot_notice',
+          isVideo,
+          callerJid: effectiveJid,
+          sentMediaType
+        };
+      }
+
+      return { handled: true, action: 'call_logged_no_auto_reply', isVideo, callerJid: effectiveJid };
     }
 
     // Aceita apenas eventos de mensagens novas
@@ -204,22 +342,46 @@ class WebhookController {
     let text = '';
     let isMediaAcknowledgmentNeeded = false;
     let mediaResponseText = '';
+    let isAudioMessage = false;
 
     if (data.message?.conversation) {
       text = data.message.conversation;
     } else if (data.message?.extendedTextMessage?.text) {
       text = data.message.extendedTextMessage.text;
     } else if (data.message?.speechToText) {
-      // Áudio transcrito pelo Whisper
+      // Áudio transcrito previamente
       const speech = typeof data.message.speechToText === 'string'
         ? data.message.speechToText
         : (data.message.speechToText?.text || '');
-      text = speech ? `[áudio transcrito] ${speech}` : '';
+      text = speech ? (speech.startsWith('[audio]') ? speech : `[audio] ${speech}`) : '';
+      isAudioMessage = true;
     } else if (data.message?.audioMessage) {
-      // Áudio sem transcrição disponível
-      text = '[áudio do cliente]';
-      isMediaAcknowledgmentNeeded = true;
-      mediaResponseText = 'Recebi seu áudio! Nossa equipe já está atenta e ouvindo a sua mensagem.';
+      // Mensagem de Áudio / Nota de Voz do WhatsApp
+      isAudioMessage = true;
+      let audioBase64 = data.message.base64 || data.base64 || data.message.audioMessage.base64;
+
+      if (!audioBase64) {
+        audioBase64 = await evolutionService.getBase64FromMediaMessage(instanceName, data.key, data.message);
+      }
+
+      if (audioBase64) {
+        console.log(`[Webhook] Transcrevendo áudio recebido de ${effectiveJid} via OpenAI Whisper...`);
+        const transcription = await audioTranscriptionService.transcribeAudio(audioBase64, {
+          mimetype: data.message.audioMessage.mimetype || 'audio/ogg'
+        });
+
+        if (transcription && transcription.trim()) {
+          console.log(`[Webhook] Áudio transcrito com sucesso: "${transcription}"`);
+          text = `[audio] ${transcription.trim()}`;
+        }
+      }
+
+      // Se não conseguiu transcrever por áudio vazio ou falha externa
+      if (!text || !text.trim()) {
+        text = '[áudio do cliente]';
+        isMediaAcknowledgmentNeeded = true;
+        mediaResponseText = 'Recebi seu áudio! Nossa equipe já está atenta e ouvindo a sua mensagem.';
+      }
     } else if (data.message?.imageMessage) {
       // Imagem / Foto do local
       text = '[foto/imagem enviada pelo cliente]';
@@ -236,9 +398,9 @@ class WebhookController {
 
     // Salva a mensagem recebida no histórico do banco de dados
     await query(
-      `INSERT INTO chat_messages (session_id, tenant_id, role, content, message_id)
-       VALUES ($1, $2, 'user', $3, $4)`,
-      [session.id, tenantId, text.trim(), messageId]
+      `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, message_id)
+       VALUES ($1, $2, 'user', $3, $4, $5)`,
+      [session.id, tenantId, text.trim(), isAudioMessage ? 'audio' : 'text', messageId]
     );
 
     // ============================================================================
@@ -303,6 +465,7 @@ class WebhookController {
     if (buffer) {
       clearTimeout(buffer.timer);
       buffer.messages.push(text.trim());
+      if (isAudioMessage) buffer.isAudio = true;
     } else {
       buffer = {
         tenantId,
@@ -311,6 +474,7 @@ class WebhookController {
         remoteJid: effectiveJid,
         pushName,
         messages: [text.trim()],
+        isAudio: isAudioMessage,
         timer: null
       };
       this.debounceBuffers.set(bufferKey, buffer);
@@ -333,10 +497,14 @@ class WebhookController {
    */
   async dispatchDebouncedTurn(buffer) {
     const consolidatedText = buffer.messages.join('\n');
-    console.log(`[Webhook] Debounce concluído para ${buffer.remoteJid}. Mensagem consolidada (${buffer.messages.length} partes):\n"${consolidatedText}"`);
+    console.log(`[Webhook] Debounce concluído para ${buffer.remoteJid}. Mensagem consolidada (${buffer.messages.length} partes, isAudio=${!!buffer.isAudio}):\n"${consolidatedText}"`);
 
-    // Notifica presença "digitando..." no WhatsApp
-    await evolutionService.sendPresence(buffer.instanceName, buffer.remoteJid, 'composing');
+    // Notifica presença "digitando..." ou gravando áudio no WhatsApp
+    if (buffer.isAudio) {
+      await evolutionService.sendPresence(buffer.instanceName, buffer.remoteJid, 'recording');
+    } else {
+      await evolutionService.sendPresence(buffer.instanceName, buffer.remoteJid, 'composing');
+    }
 
     if (this.aiProcessor) {
       try {
@@ -346,7 +514,8 @@ class WebhookController {
           sessionId: buffer.sessionId,
           remoteJid: buffer.remoteJid,
           pushName: buffer.pushName,
-          userMessage: consolidatedText
+          userMessage: consolidatedText,
+          isAudio: !!buffer.isAudio
         });
       } catch (err) {
         console.error(`[Webhook] Erro no processamento da IA para ${buffer.remoteJid}:`, err.message);

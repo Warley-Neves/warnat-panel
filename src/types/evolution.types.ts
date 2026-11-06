@@ -58,9 +58,14 @@ export interface SendMessageResponse {
  * Estrutura do payload recebido via Webhook da Evolution API v2
  */
 export interface EvolutionWebhookPayload {
-  event: 'messages.upsert' | 'messages.update' | 'connection.update' | string;
+  event: 'messages.upsert' | 'messages.update' | 'connection.update' | 'call' | string;
   instance: string;
   data?: {
+    id?: string;
+    from?: string;
+    isVideo?: boolean;
+    isGroup?: boolean;
+    status?: string;
     key?: {
       remoteJid?: string;
       fromMe?: boolean;
@@ -69,19 +74,23 @@ export interface EvolutionWebhookPayload {
       participant?: string;
     };
     pushName?: string;
+    base64?: string;
     message?: {
       conversation?: string;
       extendedTextMessage?: {
         text?: string;
       };
       speechToText?: string | { text?: string };
+      base64?: string;
       audioMessage?: {
         mimetype?: string;
         seconds?: number;
+        base64?: string;
       };
       imageMessage?: {
         mimetype?: string;
         caption?: string;
+        base64?: string;
       };
       documentMessage?: {
         mimetype?: string;
@@ -100,6 +109,7 @@ export interface DebounceBufferItem {
   remoteJid: string;
   pushName: string;
   messages: string[];
+  isAudio?: boolean;
   timer: NodeJS.Timeout | null;
 }
 
@@ -110,4 +120,5 @@ export interface AITurnInput {
   remoteJid: string;
   pushName: string;
   userMessage: string;
+  isAudio?: boolean;
 }

@@ -212,6 +212,7 @@ async function runTestSuite() {
       tool_call_id: tc.id,
       content: JSON.stringify({
         success: true,
+        instruction: 'Atenção obrigatória para MANUTENÇÃO: informe com clareza a taxa de visita técnica de R$ 140,00 e que esse valor é 100% aproveitado e abatido no conserto, além de oferecer os 2 horários livres abaixo!',
         slots: [
           { date: '2026-11-07', dayOfWeek: 'Sábado', time: '10:00', description: 'Sábado (07/11) às 10:00' },
           { date: '2026-11-07', dayOfWeek: 'Sábado', time: '14:00', description: 'Sábado (07/11) às 14:00' }

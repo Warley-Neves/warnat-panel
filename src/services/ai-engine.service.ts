@@ -12,6 +12,7 @@ import { evolutionService } from './evolution.service';
 import { messageCache } from './message-cache.service';
 import promptCompilerInstance from './prompt-compiler.service';
 import { CustomerService } from './customer.service';
+import { ttsService } from './tts.service';
 import {
   Tenant,
   TenantAiConfig,
@@ -604,17 +605,44 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
       finalAssistantText = 'Opa, com certeza! Só para eu te orientar certinho: a visita técnica seria para uma *nova instalação* de câmeras ou para *manutenção / conserto* de câmeras que você já tem no local?';
     }
 
-    // 5. Envia resposta ao WhatsApp via Evolution API
-    console.log(`📤 [AIEngine] Enviando resposta humanizada para ${remoteJid}...`);
-    const sendRes = await evolutionService.sendTextMessage(instanceName, remoteJid, finalAssistantText);
+    // 5. Envia resposta ao WhatsApp via Evolution API (Áudio TTS ou Texto)
+    const modoRespostaAudio = (aiConfig as any).responder_com_audio || 'quando_receber_audio';
+    const hasAudioInput = !!turn.isAudio || (typeof userMessage === 'string' && userMessage.startsWith('[audio]'));
+    const shouldSendAudio = (
+      modoRespostaAudio === 'sempre' ||
+      (modoRespostaAudio === 'quando_receber_audio' && hasAudioInput)
+    );
 
-    if (sendRes.messageId) {
+    let sendRes: any;
+    let sentMediaType = 'text';
+
+    if (shouldSendAudio) {
+      console.log(`🎙️ [AIEngine] Gerando áudio humanizado (Voz: ${(aiConfig as any).voz_ia || 'nova'}) para ${remoteJid}...`);
+      try {
+        await evolutionService.sendPresence(instanceName, remoteJid, 'recording');
+        const speech = await ttsService.generateSpeech(finalAssistantText, {
+          voice: (aiConfig as any).voz_ia || 'nova'
+        });
+        sendRes = await evolutionService.sendWhatsAppAudio(instanceName, remoteJid, speech.base64);
+        sentMediaType = 'audio';
+      } catch (audioErr: any) {
+        console.warn(`⚠️ [AIEngine] Falha ao sintetizar áudio TTS (${audioErr.message}). Fallback para texto.`);
+        sendRes = await evolutionService.sendTextMessage(instanceName, remoteJid, finalAssistantText);
+        sentMediaType = 'text';
+      }
+    } else {
+      console.log(`📤 [AIEngine] Enviando resposta humanizada em texto para ${remoteJid}...`);
+      sendRes = await evolutionService.sendTextMessage(instanceName, remoteJid, finalAssistantText);
+      sentMediaType = 'text';
+    }
+
+    if (sendRes?.messageId) {
       await messageCache.setBotSent(sendRes.messageId, 60);
 
       await query(
-        `INSERT INTO chat_messages (session_id, tenant_id, role, content, message_id)
-         VALUES ($1, $2, 'assistant', $3, $4);`,
-        [sessionId, tenantId, finalAssistantText.trim(), sendRes.messageId]
+        `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, message_id)
+         VALUES ($1, $2, 'assistant', $3, $4, $5);`,
+        [sessionId, tenantId, finalAssistantText.trim(), sentMediaType, sendRes.messageId]
       );
 
       await query(`UPDATE chat_sessions SET last_interaction = NOW() WHERE id = $1;`, [sessionId]);
@@ -622,8 +650,9 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
 
     return {
       success: true,
-      messageId: sendRes.messageId,
+      messageId: sendRes?.messageId,
       replyText: finalAssistantText,
+      mediaType: sentMediaType,
       toolCallsExecuted
     };
   }

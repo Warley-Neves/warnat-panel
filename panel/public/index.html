@@ -714,6 +714,68 @@
             </div>
           </div>
 
+          <!-- BLOCO: ATENDIMENTO DE CHAMADAS (VOZ & VÍDEO) E RESPOSTA POR ÁUDIO (WHISPER + TTS) -->
+          <div class="p-6 bg-dark-800/60 rounded-2xl border border-slate-700/80 space-y-6">
+            <div class="flex items-center space-x-2 text-white font-bold text-sm">
+              <i data-lucide="mic" class="w-4 h-4 text-emerald-400"></i>
+              <span>Atendimento de Chamadas (Voz & Vídeo) e Respostas por Áudio</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- MODO DE RESPOSTA POR ÁUDIO -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Modo de Resposta por Áudio da IA</label>
+                <select id="aiResponderComAudio" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+                  <option value="quando_receber_audio">Responder com áudio apenas quando o cliente enviar áudio (Híbrido Inteligente)</option>
+                  <option value="sempre">Sempre responder por áudio (Nota de voz com waveform)</option>
+                  <option value="nunca">Apenas mensagens de texto</option>
+                </select>
+                <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                  Quando ativo, a assistente sintetiza a fala com inteligência artificial humanizada e envia como nota de voz no WhatsApp.
+                </p>
+              </div>
+
+              <!-- VOZ DA ASSISTENTE (TTS) -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Voz da Assistente Virtual (OpenAI TTS)</label>
+                <select id="aiVozIa" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+                  <option value="nova">Natália (Nova) - Feminina suave, acolhedora e calorosa (Oficial da Nat)</option>
+                  <option value="shimmer">Shimmer - Feminina expressiva, clara e dinâmica</option>
+                  <option value="alloy">Alloy - Neutra corporativa e formal</option>
+                  <option value="fable">Fable - Amigável e expressiva</option>
+                  <option value="echo">Echo - Masculina suave</option>
+                  <option value="onyx">Onyx - Masculina formal e firme</option>
+                </select>
+                <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                  Voz oficial em português do Brasil utilizada pela Nat para se comunicar com os clientes.
+                </p>
+              </div>
+
+              <!-- TOGGLE: ATENDER CHAMADAS DE VOZ & VÍDEO -->
+              <div class="md:col-span-2 bg-dark-900/50 p-4 rounded-xl border border-slate-700/60">
+                <label class="flex items-start space-x-3 cursor-pointer">
+                  <input type="checkbox" id="aiAtenderChamadas" checked class="mt-1 rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <div>
+                    <span class="text-sm font-semibold text-white flex items-center space-x-2">
+                      <i data-lucide="phone-call" class="w-4 h-4 text-brand-400"></i>
+                      <span>Acolhimento Automático de Chamadas de Voz & Vídeo</span>
+                    </span>
+                    <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                      Ao receber uma ligação de voz ou chamada de vídeo no WhatsApp, a Nat atende imediatamente enviando uma mensagem explicativa de acolhimento e transferindo para áudio/texto ágil no WhatsApp.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <!-- MENSAGEM DE ACOLHIMENTO DE CHAMADAS -->
+              <div class="md:col-span-2">
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Mensagem Personalizada para Chamadas Recebidas</label>
+                <textarea id="aiMensagemChamada" rows="3" placeholder="Olá! Vi que você tentou me ligar por chamada..." class="w-full bg-dark-850 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+                <p class="text-xs text-slate-500 mt-1">Deixe em branco para usar a mensagem padrão humanizada da Nat.</p>
+              </div>
+            </div>
+          </div>
+
         </form>
       </div>
     </section>
@@ -1789,11 +1851,26 @@
             const isUser = m.role === 'user';
             const msgDiv = document.createElement('div');
             msgDiv.className = `flex flex-col ${isUser ? 'items-start' : 'items-end'}`;
+
+            const isCallVoice = m.media_type === 'call_voice' || (m.content && m.content.includes('[Chamada de voz'));
+            const isCallVideo = m.media_type === 'call_video' || (m.content && m.content.includes('[Chamada de vídeo'));
+            const isAudio = m.media_type === 'audio' || (m.content && m.content.startsWith('[audio]'));
+
+            let mediaBadge = '';
+            if (isCallVoice) {
+              mediaBadge = '<div class="inline-flex items-center space-x-1 px-2.5 py-0.5 mb-2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30"><span>📞 Chamada de Voz Recebida</span></div>';
+            } else if (isCallVideo) {
+              mediaBadge = '<div class="inline-flex items-center space-x-1 px-2.5 py-0.5 mb-2 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30"><span>📹 Chamada de Vídeo Recebida</span></div>';
+            } else if (isAudio) {
+              mediaBadge = `<div class="inline-flex items-center space-x-1 px-2.5 py-0.5 mb-1.5 rounded-full text-[10px] font-bold ${isUser ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/30'}"><span>🎙️ ${isUser ? 'Áudio do Cliente (Transcrito)' : 'Nota de Voz da Assistente (Nat)'}</span></div>`;
+            }
+
             msgDiv.innerHTML = `
               <div class="max-w-[85%] rounded-2xl p-3.5 text-sm ${isUser ? 'bg-dark-800 text-slate-200 border border-slate-700/80' : 'bg-brand-600 text-white shadow-md'}">
                 <div class="text-[10px] font-semibold uppercase tracking-wider mb-1 opacity-70 flex items-center space-x-1">
-                  <span>${isUser ? 'Cliente' : 'Atendente / IA'}</span>
+                  <span>${isUser ? 'Cliente' : 'Atendente / IA (Nat)'}</span>
                 </div>
+                ${mediaBadge}
                 <div class="whitespace-pre-wrap leading-relaxed">${m.content}</div>
                 <div class="text-[9px] text-right mt-1.5 opacity-60">${new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
@@ -2276,6 +2353,11 @@
           document.getElementById('aiWhatsappNotificacao').value = c.whatsapp_notificacao_humana || '';
           document.getElementById('aiSobreEmpresa').value = c.sobre_empresa || '';
           
+          if (c.responder_com_audio) document.getElementById('aiResponderComAudio').value = c.responder_com_audio;
+          if (c.voz_ia) document.getElementById('aiVozIa').value = c.voz_ia;
+          if (c.atender_chamadas !== undefined) document.getElementById('aiAtenderChamadas').checked = !!c.atender_chamadas;
+          if (c.mensagem_chamada !== undefined) document.getElementById('aiMensagemChamada').value = c.mensagem_chamada || '';
+
           if (Array.isArray(c.servicos_oferecidos)) {
             document.getElementById('aiServicosOferecidos').value = c.servicos_oferecidos.map(s => typeof s === 'object' ? (s.nome || JSON.stringify(s)) : s).join('\n');
           }
@@ -2331,6 +2413,10 @@
         pausa_automatica_minutos: parseInt(document.getElementById('aiPausaMinutos').value, 10) || 45,
         whatsapp_notificacao_humana: document.getElementById('aiWhatsappNotificacao').value.trim(),
         sobre_empresa: document.getElementById('aiSobreEmpresa').value.trim(),
+        responder_com_audio: document.getElementById('aiResponderComAudio').value,
+        voz_ia: document.getElementById('aiVozIa').value,
+        atender_chamadas: document.getElementById('aiAtenderChamadas').checked,
+        mensagem_chamada: document.getElementById('aiMensagemChamada').value.trim(),
         servicos_oferecidos: servicosRaw,
         servicos_recusados: document.getElementById('aiServicosRecusados').value.trim(),
         regras_agendamento: {

@@ -12,6 +12,7 @@ const messageCache = require('./message-cache.service');
 const promptCompiler = require('./prompt-compiler.service');
 const calendarService = require('../calendar/google-calendar');
 const leadsCrm = require('../crm/leads-crm');
+const ttsService = require('./tts.service');
 
 // Carregar variáveis de ambiente
 const envPath = path.resolve(__dirname, '..', '.env');
@@ -428,6 +429,10 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       };
     }
 
+    const instructionMsg = isClearlyMaintenance
+      ? 'Atenção obrigatória para MANUTENÇÃO: informe com clareza a taxa de visita técnica de R$ 140,00 e que esse valor é 100% aproveitado e abatido no conserto, além de oferecer os 2 horários livres abaixo!'
+      : 'Para NOVA INSTALAÇÃO: informe que a visita técnica de avaliação de pontos cegos e cabeamento é 100% gratuita e sem compromisso, além de oferecer os 2 horários livres abaixo!';
+
     try {
       // 1. Tenta obter slots reais via Google Calendar
       if (calendarService.isConfigured && calendarService.isConfigured()) {
@@ -436,6 +441,7 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
           return {
             success: true,
             totalFound: slots.length,
+            instruction: instructionMsg,
             slots: slots.map(s => ({
               date: s.date,
               dayOfWeek: s.dayOfWeek,
@@ -473,6 +479,7 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
     return {
       success: true,
       totalFound: 2,
+      instruction: instructionMsg,
       slots: [
         { date: dStr, dayOfWeek: dayName, time: s1, description: `${dayName} (${dBr}) às ${s1}` },
         { date: dStr, dayOfWeek: dayName, time: s2, description: `${dayName} (${dBr}) às ${s2}` }
@@ -807,7 +814,7 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
   /**
    * Processa a rodada de atendimento (turn) da IA para a mensagem do cliente
    */
-  async processTurn({ tenantId, instanceName, sessionId, remoteJid, pushName, userMessage }) {
+  async processTurn({ tenantId, instanceName, sessionId, remoteJid, pushName, userMessage, isAudio }) {
     // 1. Carrega dados do Tenant e Configuração de IA
     const tenantRes = await query(`SELECT id, nome_empresa, plano FROM tenants WHERE id = $1`, [tenantId]);
     if (tenantRes.rowCount === 0) throw new Error(`Tenant não encontrado: ${tenantId}`);
@@ -1065,31 +1072,60 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       return null;
     }
 
-    // 4. Envia resposta ao WhatsApp via Evolution API
-    console.log(`[AIEngine] Enviando resposta humanizada da IA para ${remoteJid}...`);
-    const sendRes = await evolutionService.sendTextMessage(instanceName, remoteJid, finalAssistantText);
+    // 4. Decide se a resposta será enviada em Áudio (TTS) ou Texto
+    const modoRespostaAudio = aiConfig.responder_com_audio || 'quando_receber_audio';
+    const hasAudioInput = !!isAudio || (typeof userMessage === 'string' && userMessage.startsWith('[audio]'));
+    const shouldSendAudio = (
+      modoRespostaAudio === 'sempre' ||
+      (modoRespostaAudio === 'quando_receber_audio' && hasAudioInput)
+    );
 
-    if (sendRes.messageId) {
+    let sendRes;
+    let sentMediaType = 'text';
+
+    if (shouldSendAudio) {
+      console.log(`[AIEngine] Gerando áudio humanizado (Voz: ${aiConfig.voz_ia || 'nova'}) para ${remoteJid}...`);
+      try {
+        await evolutionService.sendPresence(instanceName, remoteJid, 'recording');
+        const speech = await ttsService.generateSpeech(finalAssistantText, {
+          voice: aiConfig.voz_ia || 'nova'
+        });
+
+        sendRes = await evolutionService.sendWhatsAppAudio(instanceName, remoteJid, speech.base64);
+        sentMediaType = 'audio';
+      } catch (audioErr) {
+        console.warn(`[AIEngine] Aviso ao gerar/enviar áudio TTS (${audioErr.message}). Fallback para texto.`);
+        sendRes = await evolutionService.sendTextMessage(instanceName, remoteJid, finalAssistantText);
+        sentMediaType = 'text';
+      }
+    } else {
+      console.log(`[AIEngine] Enviando resposta humanizada em texto para ${remoteJid}...`);
+      sendRes = await evolutionService.sendTextMessage(instanceName, remoteJid, finalAssistantText);
+      sentMediaType = 'text';
+    }
+
+    if (sendRes && sendRes.messageId) {
       // 5. Grava no Cache Anti-Loop (TTL 60s)
       await messageCache.setBotSent(sendRes.messageId, 60);
 
       // 6. Salva no banco de dados na tabela chat_messages
       await query(
-        `INSERT INTO chat_messages (session_id, tenant_id, role, content, message_id)
-         VALUES ($1, $2, 'assistant', $3, $4)`,
-        [sessionId, tenantId, finalAssistantText.trim(), sendRes.messageId]
+        `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, message_id)
+         VALUES ($1, $2, 'assistant', $3, $4, $5)`,
+        [sessionId, tenantId, finalAssistantText.trim(), sentMediaType, sendRes.messageId]
       );
 
       // 7. Atualiza interação na sessão
       await query(`UPDATE chat_sessions SET last_interaction = now() WHERE id = $1`, [sessionId]);
 
-      console.log(`[AIEngine] Resposta enviada e persistida com sucesso (messageId: ${sendRes.messageId}).`);
+      console.log(`[AIEngine] Resposta enviada (${sentMediaType}) e persistida com sucesso (messageId: ${sendRes.messageId}).`);
     }
 
     return {
       success: true,
-      messageId: sendRes.messageId,
-      replyText: finalAssistantText
+      messageId: sendRes ? sendRes.messageId : null,
+      replyText: finalAssistantText,
+      mediaType: sentMediaType
     };
   }
 }

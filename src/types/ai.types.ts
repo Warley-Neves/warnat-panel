@@ -39,6 +39,7 @@ export interface TurnProcessingResult {
   success: boolean;
   messageId?: string;
   replyText?: string;
+  mediaType?: string;
   toolCallsExecuted: string[];
   error?: string;
 }

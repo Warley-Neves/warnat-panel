@@ -210,7 +210,11 @@ async function handleV2Routes(req, res, pathname, method, body) {
         regras_agendamento,
         instrucoes_personalizadas,
         whatsapp_notificacao_humana,
-        pausa_automatica_minutos
+        pausa_automatica_minutos,
+        atender_chamadas,
+        mensagem_chamada,
+        responder_com_audio,
+        voz_ia
       } = body;
 
       await query(
@@ -229,8 +233,12 @@ async function handleV2Routes(req, res, pathname, method, body) {
            instrucoes_personalizadas,
            whatsapp_notificacao_humana, 
            pausa_automatica_minutos,
+           atender_chamadas,
+           mensagem_chamada,
+           responder_com_audio,
+           voz_ia,
            updated_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, now())
          ON CONFLICT (tenant_id)
          DO UPDATE SET
            modo_atendimento = COALESCE(EXCLUDED.modo_atendimento, tenant_ai_configs.modo_atendimento),
@@ -246,6 +254,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
            instrucoes_personalizadas = EXCLUDED.instrucoes_personalizadas,
            whatsapp_notificacao_humana = EXCLUDED.whatsapp_notificacao_humana,
            pausa_automatica_minutos = EXCLUDED.pausa_automatica_minutos,
+           atender_chamadas = COALESCE(EXCLUDED.atender_chamadas, tenant_ai_configs.atender_chamadas),
+           mensagem_chamada = COALESCE(EXCLUDED.mensagem_chamada, tenant_ai_configs.mensagem_chamada),
+           responder_com_audio = COALESCE(EXCLUDED.responder_com_audio, tenant_ai_configs.responder_com_audio),
+           voz_ia = COALESCE(EXCLUDED.voz_ia, tenant_ai_configs.voz_ia),
            updated_at = now()`,
         [
           tenantId,
@@ -261,7 +273,11 @@ async function handleV2Routes(req, res, pathname, method, body) {
           JSON.stringify(typeof regras_agendamento === 'object' ? regras_agendamento : {}),
           instrucoes_personalizadas || null,
           whatsapp_notificacao_humana || null,
-          parseInt(pausa_automatica_minutos, 10) || 45
+          parseInt(pausa_automatica_minutos, 10) || 45,
+          atender_chamadas !== undefined ? !!atender_chamadas : true,
+          mensagem_chamada || null,
+          responder_com_audio || 'quando_receber_audio',
+          voz_ia || 'nova'
         ]
       );
 
@@ -474,7 +490,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
     if (messagesMatch && method === 'GET') {
       const sessionId = messagesMatch[1];
       const msgsRes = await query(
-        `SELECT id, role, content, message_id, created_at 
+        `SELECT id, role, content, media_type, media_url, message_id, created_at 
          FROM chat_messages 
          WHERE session_id = $1 AND tenant_id = $2 
          ORDER BY created_at ASC`,

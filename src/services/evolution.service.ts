@@ -262,6 +262,120 @@ export class EvolutionApiService {
       // Falha de presença não é impeditiva para o fluxo
     }
   }
+
+  /**
+   * Envia uma mensagem de áudio (nota de voz PTT) para o WhatsApp e retorna o key.id
+   */
+  public async sendWhatsAppAudio(
+    instanceName: string,
+    to: string,
+    audioBase64OrUrl: string,
+    options: { delay?: number; ptt?: boolean; encoding?: boolean; mimetype?: string } = {}
+  ): Promise<SendMessageResponse> {
+    if (!instanceName || !to || !audioBase64OrUrl) {
+      throw new Error('instanceName, to e audioBase64OrUrl são obrigatórios para envio de áudio.');
+    }
+
+    const cleanNumber = String(to).replace(/@.*$/, '').replace(/\D/g, '');
+    const cleanAudio = audioBase64OrUrl.replace(/^data:audio\/[^;]+;base64,/, '').trim();
+
+    const payloadAudio = {
+      number: cleanNumber,
+      audio: cleanAudio,
+      delay: options.delay || 1500,
+      encoding: options.encoding !== undefined ? options.encoding : true
+    };
+
+    let res = await this.request(`/message/sendWhatsAppAudio/${instanceName}`, {
+      method: 'POST',
+      body: JSON.stringify(payloadAudio)
+    });
+
+    if (!res.ok) {
+      const payloadMedia = {
+        number: cleanNumber,
+        mediatype: 'audio',
+        mimetype: options.mimetype || 'audio/mp4',
+        media: cleanAudio,
+        ptt: options.ptt !== undefined ? options.ptt : true,
+        delay: options.delay || 1500
+      };
+
+      res = await this.request(`/message/sendMedia/${instanceName}`, {
+        method: 'POST',
+        body: JSON.stringify(payloadMedia)
+      });
+    }
+
+    if (!res.ok) {
+      console.warn(`[EvolutionService] Aviso ao enviar áudio para ${cleanNumber}:`, res.data?.error || res.data);
+      const fallbackId = `SIM_AUDIO_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      return {
+        success: false,
+        messageId: fallbackId,
+        simulated: true,
+        error: res.data
+      };
+    }
+
+    const messageId =
+      res.data?.key?.id ||
+      res.data?.id ||
+      (res.data?.message && res.data.message.key?.id) ||
+      `SIM_AUDIO_${Date.now()}`;
+
+    return {
+      success: true,
+      messageId,
+      data: res.data
+    };
+  }
+
+  /**
+   * Baixa a mídia (base64) de uma mensagem recebida
+   */
+  public async getBase64FromMediaMessage(
+    instanceName: string,
+    messageKey: any,
+    messageData: any
+  ): Promise<string | null> {
+    try {
+      const payload = {
+        message: {
+          key: messageKey,
+          message: messageData
+        },
+        convertToMp4: false
+      };
+
+      const res = await this.request(`/chat/getBase64FromMediaMessage/${instanceName}`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok && res.data) {
+        return res.data.base64 || res.data.data?.base64 || null;
+      }
+      return null;
+    } catch (e: any) {
+      console.warn('[EvolutionService] Falha ao extrair base64 da mídia:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Rejeita chamada de voz ou vídeo
+   */
+  public async rejectCall(instanceName: string, callId: string): Promise<void> {
+    try {
+      await this.request(`/call/reject/${instanceName}`, {
+        method: 'POST',
+        body: JSON.stringify({ callId })
+      });
+    } catch {
+      // Ignora falha de rejeição
+    }
+  }
 }
 
 export const evolutionService = new EvolutionApiService();

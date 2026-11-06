@@ -77,6 +77,10 @@ export interface TenantAiConfig {
   instrucoes_personalizadas?: string | null;
   whatsapp_notificacao_humana?: string | null;
   pausa_automatica_minutos: number; // default 45
+  atender_chamadas?: boolean; // default true
+  mensagem_chamada?: string | null;
+  responder_com_audio?: 'quando_receber_audio' | 'sempre' | 'nunca'; // default 'quando_receber_audio'
+  voz_ia?: string; // 'nova', 'shimmer', 'alloy', 'echo', etc.
   updated_at: Date;
 }
 
@@ -149,6 +153,8 @@ export interface ChatMessage {
   role: MessageRole;
   content: string;
   message_id?: string | null;
+  media_type?: string | null; // 'text', 'audio', 'call_voice', 'call_video', 'image', 'document'
+  media_url?: string | null;
   created_at: Date;
 }
 

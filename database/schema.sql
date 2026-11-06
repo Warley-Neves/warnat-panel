@@ -82,6 +82,10 @@ ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS responsavel_tecnico VARCH
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS regiao_atendimento VARCHAR(150) DEFAULT 'Belo Horizonte, Barreiro e Grande BH';
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS taxa_manutencao_reais NUMERIC(10,2) DEFAULT 140.00;
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS instrucoes_personalizadas TEXT;
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS atender_chamadas BOOLEAN DEFAULT true;
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS mensagem_chamada TEXT DEFAULT 'Olá! Vi que você tentou me ligar por chamada. Como sou a assistente virtual Nat e nossos técnicos estão em visitas técnicas em campo, nosso atendimento aqui pelo WhatsApp é realizado com total agilidade por mensagens de áudio e texto! Como posso te ajudar agora? Pode me mandar um áudio ou escrever aqui o que precisa!';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS responder_com_audio VARCHAR(30) DEFAULT 'quando_receber_audio';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS voz_ia VARCHAR(20) DEFAULT 'nova';
 
 -- ------------------------------------------------------------------------------
 -- 5. Dossiê Permanente do Cliente Final (Memória de Longo Prazo)
@@ -158,11 +162,17 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     role VARCHAR(20) NOT NULL, -- 'user', 'assistant', 'system'
     content TEXT NOT NULL,
     message_id VARCHAR(150), -- Rastreamento único Evolution API (anti-loop)
+    media_type VARCHAR(30) DEFAULT 'text', -- 'text', 'audio', 'call_voice', 'call_video', 'image', 'document'
+    media_url TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_flow ON chat_messages(session_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_tenant ON chat_messages(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_msg_id ON chat_messages(message_id);
+
+-- Migrações seguras idempotentes para chat_messages
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS media_type VARCHAR(30) DEFAULT 'text';
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS media_url TEXT;
 
 -- ------------------------------------------------------------------------------
 -- ADAPTAÇÃO IDEMPOTENTE PARA TABELAS PRÉ-EXISTENTES
