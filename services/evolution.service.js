@@ -447,6 +447,58 @@ class EvolutionApiService {
   }
 
   /**
+   * Envia arquivo de mídia (documento, imagem, vídeo) e retorna o key.id
+   * @param {string} instanceName Nome da instância
+   * @param {string} to Número do destinatário
+   * @param {string} mediaBase64OrUrl Base64 ou URL do arquivo
+   * @param {object} options { mediatype: 'document'|'image'|'video', mimetype: string, fileName: string, caption: string, delay: number }
+   * @returns {Promise<{ success: boolean, messageId: string, data: object }>}
+   */
+  async sendMediaMessage(instanceName, to, mediaBase64OrUrl, options = {}) {
+    if (!instanceName || !to || !mediaBase64OrUrl) {
+      throw new Error('instanceName, to e mediaBase64OrUrl são obrigatórios.');
+    }
+
+    let cleanNumber = String(to).replace(/@.*$/, '').replace(/\D/g, '');
+    const cleanMedia = typeof mediaBase64OrUrl === 'string'
+      ? mediaBase64OrUrl.replace(/^data:[^;]+;base64,/, '').trim()
+      : mediaBase64OrUrl;
+
+    const payload = {
+      number: cleanNumber,
+      mediatype: options.mediatype || 'document',
+      mimetype: options.mimetype || 'application/pdf',
+      caption: options.caption ? options.caption.trim() : '',
+      fileName: options.fileName || options.filename || 'documento.pdf',
+      media: cleanMedia,
+      delay: options.delay || 1500
+    };
+
+    const res = await this.request(`/message/sendMedia/${instanceName}`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      console.warn(`[EvolutionService] Aviso ao enviar mídia para ${cleanNumber}:`, res.data?.error || res.data);
+      const fallbackId = `SIM_MEDIA_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      return {
+        success: false,
+        messageId: fallbackId,
+        simulated: true,
+        error: res.data
+      };
+    }
+
+    const messageId = res.data?.key?.id || res.data?.id || (res.data?.message && res.data.message.key?.id);
+    return {
+      success: true,
+      messageId: messageId || `SIM_MEDIA_${Date.now()}`,
+      data: res.data
+    };
+  }
+
+  /**
    * Rejeita chamada de voz ou vídeo recebida
    * @param {string} instanceName
    * @param {string} callId

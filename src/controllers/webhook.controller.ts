@@ -324,13 +324,14 @@ export class WebhookController {
       // Atualiza ou cria sessão ativando o modo pausa humana
       const sessionRes = await query<{ id: string }>(
         `INSERT INTO chat_sessions (
-           tenant_id, remote_jid, status_atendimento, paused_until, last_interaction
-         ) VALUES ($1, $2, 'pausa_humana', $3, NOW())
+           tenant_id, remote_jid, status_atendimento, paused_until, last_interaction, first_human_reply_at
+         ) VALUES ($1, $2, 'pausa_humana', $3, NOW(), NOW())
          ON CONFLICT (tenant_id, remote_jid) 
          DO UPDATE SET 
            status_atendimento = 'pausa_humana',
            paused_until = $3,
-           last_interaction = NOW()
+           last_interaction = NOW(),
+           first_human_reply_at = COALESCE(chat_sessions.first_human_reply_at, NOW())
          RETURNING id;`,
         [tenantId, effectiveJid, pausedUntil]
       );
@@ -453,11 +454,26 @@ export class WebhookController {
         mediaResponseText = 'Recebi o seu vídeo! Nossa equipe já está verificando os detalhes da gravação.';
       }
     } else if (data.message?.documentMessage) {
-      if (data.message.documentMessage.caption && data.message.documentMessage.caption.trim()) {
-        text = data.message.documentMessage.caption.trim();
+      const doc = data.message.documentMessage;
+      const fileName = doc.fileName || doc.filename || 'documento';
+      if (doc.caption && doc.caption.trim()) {
+        text = `[Documento: ${fileName}] ${doc.caption.trim()}`;
       } else {
-        text = '[documento enviado pelo cliente]';
+        text = `[Documento anexado: ${fileName}]`;
       }
+    } else if (data.message?.locationMessage) {
+      const loc = data.message.locationMessage;
+      const lat = loc.degreesLatitude;
+      const long = loc.degreesLongitude;
+      const name = loc.name ? ` (${loc.name})` : '';
+      const address = loc.address ? ` - ${loc.address}` : '';
+      text = `[Localização compartilhada: https://maps.google.com/?q=${lat},${long}${name}${address}]`;
+    } else if (data.message?.contactMessage || data.message?.contactsArrayMessage) {
+      const contact = data.message.contactMessage || data.message.contactsArrayMessage?.contacts?.[0];
+      const dispName = contact?.displayName || 'Contato';
+      text = `[Contato compartilhado: ${dispName}]`;
+    } else if (data.message?.stickerMessage) {
+      text = '[Figurinha enviada pelo cliente]';
     }
 
     // Proteção contra payload vazio: não permite quebrar a LLM
@@ -465,11 +481,28 @@ export class WebhookController {
       return { handled: true, action: 'empty_payload_ignored' };
     }
 
+    let detectedMediaType = 'text';
+    if (isAudioMessage) detectedMediaType = 'audio';
+    else if (data.message?.imageMessage) detectedMediaType = 'image';
+    else if (data.message?.videoMessage) detectedMediaType = 'video';
+    else if (data.message?.documentMessage) detectedMediaType = 'document';
+    else if (data.message?.locationMessage) detectedMediaType = 'location';
+    else if (data.message?.contactMessage || data.message?.contactsArrayMessage) detectedMediaType = 'contact';
+    else if (data.message?.stickerMessage) detectedMediaType = 'sticker';
+
     // Salva a mensagem recebida no histórico do chat
     await query(
       `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, message_id)
        VALUES ($1, $2, 'user', $3, $4, $5);`,
-      [session.id, tenantId, text.trim(), isAudioMessage ? 'audio' : 'text', messageId || null]
+      [session.id, tenantId, text.trim(), detectedMediaType, messageId || null]
+    );
+
+    // Atualiza queued_at para cálculo de TME
+    await query(
+      `UPDATE chat_sessions 
+       SET queued_at = COALESCE(queued_at, NOW()), last_interaction = NOW()
+       WHERE id = $1 AND tenant_id = $2;`,
+      [session.id, tenantId]
     );
 
     // ============================================================================

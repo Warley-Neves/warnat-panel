@@ -426,6 +426,70 @@ export class EvolutionApiService {
   }
 
   /**
+   * Envia arquivo de mídia (documento, imagem, vídeo) e retorna o key.id
+   */
+  public async sendMediaMessage(
+    instanceName: string,
+    to: string,
+    mediaBase64OrUrl: string,
+    options: {
+      mediatype?: string;
+      mimetype?: string;
+      fileName?: string;
+      filename?: string;
+      caption?: string;
+      delay?: number;
+    } = {}
+  ): Promise<{ success: boolean; messageId?: string; simulated?: boolean; error?: any; data?: any }> {
+    if (!instanceName || !to || !mediaBase64OrUrl) {
+      throw new Error('instanceName, to e mediaBase64OrUrl são obrigatórios.');
+    }
+
+    let cleanNumber = String(to).replace(/@.*$/, '').replace(/\D/g, '');
+    const cleanMedia = typeof mediaBase64OrUrl === 'string'
+      ? mediaBase64OrUrl.replace(/^data:[^;]+;base64,/, '').trim()
+      : mediaBase64OrUrl;
+
+    const payload = {
+      number: cleanNumber,
+      mediatype: options.mediatype || 'document',
+      mimetype: options.mimetype || 'application/pdf',
+      caption: options.caption ? options.caption.trim() : '',
+      fileName: options.fileName || options.filename || 'documento.pdf',
+      media: cleanMedia,
+      delay: options.delay || 1500
+    };
+
+    const res = await this.request(`/message/sendMedia/${instanceName}`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      console.warn(`[EvolutionService] Aviso ao enviar mídia para ${cleanNumber}:`, res.data?.error || res.data);
+      const fallbackId = `SIM_MEDIA_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      return {
+        success: false,
+        messageId: fallbackId,
+        simulated: true,
+        error: res.data
+      };
+    }
+
+    const messageId =
+      res.data?.key?.id ||
+      res.data?.id ||
+      (res.data?.message && res.data.message.key?.id) ||
+      `SIM_MEDIA_${Date.now()}`;
+
+    return {
+      success: true,
+      messageId,
+      data: res.data
+    };
+  }
+
+  /**
    * Baixa a mídia (base64) de uma mensagem recebida
    */
   public async getBase64FromMediaMessage(

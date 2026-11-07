@@ -292,4 +292,80 @@ BEGIN
     CREATE INDEX IF NOT EXISTS idx_agenda_bloqueios_tenant_data ON agenda_bloqueios(tenant_id, data);
     CREATE INDEX IF NOT EXISTS idx_agenda_bloqueios_recorrencia ON agenda_bloqueios(tenant_id, tipo_recorrencia, dia_semana);
     CREATE INDEX IF NOT EXISTS idx_agenda_bloqueios_intervalo ON agenda_bloqueios(tenant_id, data, data_fim);
+
+    -- --------------------------------------------------------------------------
+    -- 9. GESTÃO DE DEPARTAMENTOS / SETORES OMNICHANNEL
+    -- --------------------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS departments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        nome VARCHAR(100) NOT NULL,
+        descricao TEXT,
+        cor VARCHAR(30) DEFAULT '#3b82f6',
+        ativo BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_departments_tenant ON departments(tenant_id);
+
+    -- --------------------------------------------------------------------------
+    -- 10. RESPOSTAS RÁPIDAS (CANNED RESPONSES)
+    -- --------------------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS canned_responses (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        atalho VARCHAR(50) NOT NULL,
+        titulo VARCHAR(120) NOT NULL,
+        conteudo TEXT NOT NULL,
+        categoria VARCHAR(60) DEFAULT 'Geral',
+        criado_por UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT uk_tenant_canned_shortcut UNIQUE(tenant_id, atalho)
+    );
+    CREATE INDEX IF NOT EXISTS idx_canned_lookup ON canned_responses(tenant_id, atalho);
+
+    -- --------------------------------------------------------------------------
+    -- 11. NOTAS INTERNAS PRIVADAS DA EQUIPE
+    -- --------------------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS chat_internal_notes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        author_name VARCHAR(100) NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_internal_notes_session ON chat_internal_notes(session_id, created_at ASC);
+
+    -- --------------------------------------------------------------------------
+    -- 12. TRILHA DE AUDITORIA E HISTÓRICO DE EVENTOS DO TICKET
+    -- --------------------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS ticket_audit_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        tipo_evento VARCHAR(50) NOT NULL,
+        descricao TEXT NOT NULL,
+        metadados JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticket_audit_session ON ticket_audit_events(session_id, created_at ASC);
+
+    -- --------------------------------------------------------------------------
+    -- COLUNAS ADITIVAS EM CHAT_SESSIONS (FILA, CONCORRÊNCIA E SLA)
+    -- --------------------------------------------------------------------------
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS department_id UUID REFERENCES departments(id) ON DELETE SET NULL;
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS priority INT DEFAULT 3;
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS locked_by UUID REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS queued_at TIMESTAMPTZ;
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS first_human_reply_at TIMESTAMPTZ;
+    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
+
+    CREATE INDEX IF NOT EXISTS idx_chat_sessions_dept ON chat_sessions(tenant_id, department_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_sessions_locked ON chat_sessions(locked_by, locked_at);
+    CREATE INDEX IF NOT EXISTS idx_chat_sessions_queue ON chat_sessions(tenant_id, queued_at, priority DESC);
 END $$;

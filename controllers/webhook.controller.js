@@ -304,13 +304,14 @@ class WebhookController {
       const pausedUntil = new Date(Date.now() + (pausaMinutos * 60 * 1000));
 
       const sessionRes = await query(
-        `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, paused_until, last_interaction)
-         VALUES ($1, $2, $3, 'pausa_humana', $4, now())
+        `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, paused_until, last_interaction, first_human_reply_at)
+         VALUES ($1, $2, $3, 'pausa_humana', $4, now(), now())
          ON CONFLICT (tenant_id, remote_jid) 
          DO UPDATE SET 
            status_atendimento = 'pausa_humana',
            paused_until = $4,
-           last_interaction = now()
+           last_interaction = now(),
+           first_human_reply_at = COALESCE(chat_sessions.first_human_reply_at, now())
          RETURNING id`,
         [tenantId, effectiveJid, pushName, pausedUntil]
       );
@@ -429,11 +430,29 @@ class WebhookController {
         mediaResponseText = 'Recebi o seu vídeo! Nossa equipe já está verificando os detalhes da gravação.';
       }
     } else if (data.message?.documentMessage) {
-      if (data.message.documentMessage.caption && data.message.documentMessage.caption.trim()) {
-        text = data.message.documentMessage.caption.trim();
+      const doc = data.message.documentMessage;
+      const fileName = doc.fileName || doc.filename || 'documento';
+      if (doc.caption && doc.caption.trim()) {
+        text = `[Documento: ${fileName}] ${doc.caption.trim()}`;
       } else {
-        text = '[documento enviado pelo cliente]';
+        text = `[Documento anexado: ${fileName}]`;
       }
+    } else if (data.message?.locationMessage) {
+      // Localização geográfica compartilhada (Google Maps link)
+      const loc = data.message.locationMessage;
+      const lat = loc.degreesLatitude;
+      const long = loc.degreesLongitude;
+      const name = loc.name ? ` (${loc.name})` : '';
+      const address = loc.address ? ` - ${loc.address}` : '';
+      text = `[Localização compartilhada: https://maps.google.com/?q=${lat},${long}${name}${address}]`;
+    } else if (data.message?.contactMessage || data.message?.contactsArrayMessage) {
+      // Contato ou lista de contatos (vCard)
+      const contact = data.message.contactMessage || data.message.contactsArrayMessage?.contacts?.[0];
+      const dispName = contact?.displayName || 'Contato';
+      text = `[Contato compartilhado: ${dispName}]`;
+    } else if (data.message?.stickerMessage) {
+      // Figurinha / Sticker
+      text = '[Figurinha enviada pelo cliente]';
     }
 
     // Proteção contra payload vazio: não deixa quebrar a LLM
@@ -441,11 +460,29 @@ class WebhookController {
       return { handled: true, action: 'empty_payload_ignored' };
     }
 
+    // Determina o tipo de mídia exato para persistência
+    let detectedMediaType = 'text';
+    if (isAudioMessage) detectedMediaType = 'audio';
+    else if (data.message?.imageMessage) detectedMediaType = 'image';
+    else if (data.message?.videoMessage) detectedMediaType = 'video';
+    else if (data.message?.documentMessage) detectedMediaType = 'document';
+    else if (data.message?.locationMessage) detectedMediaType = 'location';
+    else if (data.message?.contactMessage || data.message?.contactsArrayMessage) detectedMediaType = 'contact';
+    else if (data.message?.stickerMessage) detectedMediaType = 'sticker';
+
     // Salva a mensagem recebida no histórico do banco de dados
     await query(
       `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, message_id)
        VALUES ($1, $2, 'user', $3, $4, $5)`,
-      [session.id, tenantId, text.trim(), isAudioMessage ? 'audio' : 'text', messageId]
+      [session.id, tenantId, text.trim(), detectedMediaType, messageId]
+    );
+
+    // Atualiza queued_at para cálculo preciso de TME quando cliente aguarda
+    await query(
+      `UPDATE chat_sessions 
+       SET queued_at = COALESCE(queued_at, now()), last_interaction = now()
+       WHERE id = $1 AND tenant_id = $2`,
+      [session.id, tenantId]
     );
 
     // ============================================================================

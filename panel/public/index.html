@@ -478,7 +478,15 @@
             <p class="text-xs text-slate-400 mt-1">Fila ao vivo de conversas, atendimento manual, retorno de ligações e envio de áudios</p>
           </div>
 
-          <div class="flex items-center space-x-3">
+          <div class="flex items-center space-x-2 sm:space-x-3">
+            <button onclick="openCannedResponsesModal()" class="bg-dark-800 hover:bg-dark-750 text-slate-300 font-medium px-3 py-2 rounded-xl text-xs border border-slate-700 flex items-center space-x-1.5 transition" title="Respostas Rápidas com atalhos (/atalho)">
+              <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span class="hidden sm:inline">Mensagens Rápidas</span>
+            </button>
+            <button onclick="openDepartmentsModal()" class="bg-dark-800 hover:bg-dark-750 text-slate-300 font-medium px-3 py-2 rounded-xl text-xs border border-slate-700 flex items-center space-x-1.5 transition" title="Departamentos e Setores de Atendimento">
+              <i data-lucide="users" class="w-3.5 h-3.5 text-brand-400"></i>
+              <span class="hidden sm:inline">Departamentos</span>
+            </button>
             <button onclick="openNewAtendimentoModal()" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2 rounded-xl text-xs flex items-center space-x-2 shadow-lg shadow-brand-600/25 transition">
               <i data-lucide="plus-circle" class="w-4 h-4"></i>
               <span>Novo Atendimento</span>
@@ -490,32 +498,46 @@
           </div>
         </div>
 
-        <!-- KPI CARDS DA CENTRAL -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div class="bg-dark-900/60 border border-slate-800 p-4 rounded-xl">
+        <!-- KPI CARDS DA CENTRAL (COM SLA / TMA / TME) -->
+        <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
+          <div class="bg-dark-900/60 border border-slate-800 p-3.5 rounded-xl">
             <span class="text-xs text-slate-400 font-medium">Total de Conversas</span>
-            <div id="atendKpiTotal" class="text-xl font-bold text-white mt-1">0</div>
+            <div id="atendKpiTotal" class="text-lg font-bold text-white mt-1">0</div>
           </div>
-          <div class="bg-dark-900/60 border border-emerald-500/20 p-4 rounded-xl">
+          <div class="bg-dark-900/60 border border-emerald-500/20 p-3.5 rounded-xl">
             <span class="text-xs text-emerald-400 font-medium flex items-center space-x-1">
               <i data-lucide="bot" class="w-3.5 h-3.5"></i>
-              <span>Automação (IA Nat)</span>
+              <span>Automação (IA)</span>
             </span>
-            <div id="atendKpiAi" class="text-xl font-bold text-emerald-400 mt-1">0</div>
+            <div id="atendKpiAi" class="text-lg font-bold text-emerald-400 mt-1">0</div>
           </div>
-          <div class="bg-dark-900/60 border border-amber-500/20 p-4 rounded-xl">
+          <div class="bg-dark-900/60 border border-amber-500/20 p-3.5 rounded-xl">
             <span class="text-xs text-amber-400 font-medium flex items-center space-x-1">
               <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
-              <span>Atendimento Manual</span>
+              <span>Atend. Manual</span>
             </span>
-            <div id="atendKpiManual" class="text-xl font-bold text-amber-400 mt-1">0</div>
+            <div id="atendKpiManual" class="text-lg font-bold text-amber-400 mt-1">0</div>
           </div>
-          <div class="bg-dark-900/60 border border-purple-500/20 p-4 rounded-xl">
+          <div class="bg-dark-900/60 border border-purple-500/20 p-3.5 rounded-xl">
             <span class="text-xs text-purple-400 font-medium flex items-center space-x-1">
               <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
-              <span>Chamadas Recebidas</span>
+              <span>Chamadas</span>
             </span>
-            <div id="atendKpiCalls" class="text-xl font-bold text-purple-400 mt-1">0</div>
+            <div id="atendKpiCalls" class="text-lg font-bold text-purple-400 mt-1">0</div>
+          </div>
+          <div class="bg-dark-900/60 border border-blue-500/20 p-3.5 rounded-xl" title="Tempo Médio de Atendimento">
+            <span class="text-xs text-blue-400 font-medium flex items-center space-x-1">
+              <i data-lucide="timer" class="w-3.5 h-3.5"></i>
+              <span>TMA Médio</span>
+            </span>
+            <div id="atendKpiTma" class="text-lg font-bold text-blue-400 mt-1">-- min</div>
+          </div>
+          <div class="bg-dark-900/60 border border-cyan-500/20 p-3.5 rounded-xl" title="Tempo Médio de Espera na fila">
+            <span class="text-xs text-cyan-400 font-medium flex items-center space-x-1">
+              <i data-lucide="hourglass" class="w-3.5 h-3.5"></i>
+              <span>TME Fila</span>
+            </span>
+            <div id="atendKpiTme" class="text-lg font-bold text-cyan-400 mt-1">-- min</div>
           </div>
         </div>
 
@@ -572,7 +594,7 @@
 
           <!-- PAINEL DE CHAT ATIVO NA CENTRAL -->
           <div id="atendChatPanel" class="hidden flex-1 flex flex-col h-full">
-            <!-- CABEÇALHO DA CONVERSA -->
+            <!-- CABEÇALHO DA CONVERSA COM CONCORRÊNCIA E FILAS -->
             <div class="p-4 border-b border-slate-800 bg-dark-900/60 flex flex-wrap items-center justify-between gap-3">
               <div class="flex items-center space-x-3">
                 <div class="w-10 h-10 rounded-full bg-brand-600/30 border border-brand-500/40 flex items-center justify-center text-brand-300 font-bold text-sm">
@@ -582,23 +604,43 @@
                   <div class="flex items-center space-x-2">
                     <h4 id="atendActiveName" class="text-sm font-bold text-white">Cliente</h4>
                     <span id="atendActiveModeBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">🤖 IA Ativa</span>
+                    <span id="deskLockBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">🔓 Fila Livre</span>
                   </div>
-                  <p id="atendActivePhone" class="text-xs text-slate-400 font-mono mt-0.5">-</p>
+                  <div class="flex items-center space-x-2 mt-0.5">
+                    <p id="atendActivePhone" class="text-xs text-slate-400 font-mono">-</p>
+                    <span id="deskDeptBadge" class="text-[10px] text-slate-400 font-medium"></span>
+                  </div>
                 </div>
               </div>
 
               <!-- BOTÕES DE AÇÃO RÁPIDA -->
-              <div class="flex items-center space-x-2">
+              <div class="flex items-center space-x-1.5 sm:space-x-2 flex-wrap">
+                <!-- ASSUMIR / LIBERAR RESPONSABILIDADE -->
+                <button onclick="handleClaimDeskTicket()" id="btnDeskClaim" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/30 transition flex items-center space-x-1.5 shadow-sm" title="Assumir responsabilidade primária deste atendimento">
+                  <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+                  <span>Assumir</span>
+                </button>
+                <button onclick="handleReleaseDeskTicket()" id="btnDeskRelease" class="hidden px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-700 hover:bg-slate-650 text-slate-200 transition flex items-center space-x-1.5" title="Liberar ticket de volta para a fila geral">
+                  <i data-lucide="unlock" class="w-3.5 h-3.5"></i>
+                  <span>Liberar</span>
+                </button>
+
+                <!-- TRANSFERIR ATENDIMENTO -->
+                <button onclick="openTransferModal()" id="btnDeskTransfer" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-600/20 text-purple-300 border border-purple-500/30 hover:bg-purple-600/30 transition flex items-center space-x-1.5 shadow-sm" title="Transferir atendimento para outro atendente ou departamento">
+                  <i data-lucide="arrow-right-left" class="w-3.5 h-3.5"></i>
+                  <span>Transferir</span>
+                </button>
+
                 <!-- BOTÃO DE ATENDER / LIGAR -->
                 <button onclick="handleDeskCallCustomer()" id="btnDeskCall" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center space-x-1.5 shadow-sm" title="Ligar ou retornar chamada para este cliente">
                   <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
-                  <span>Ligar / Atender</span>
+                  <span>Ligar</span>
                 </button>
 
                 <!-- BOTÃO DE ASSUMIR / ALTERNAR IA -->
                 <button onclick="handleDeskToggleAi()" id="btnDeskToggleAi" class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center space-x-1.5 bg-amber-600/20 text-amber-300 border-amber-500/30 hover:bg-amber-600/30">
                   <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
-                  <span>Atender Manual</span>
+                  <span>Manual</span>
                 </button>
 
                 <!-- VER DOSSIÊ -->
@@ -608,9 +650,53 @@
               </div>
             </div>
 
-            <!-- HISTÓRICO DE MENSAGENS -->
+            <!-- SUB-ABAS DA CONVERSA: WHATSAPP | NOTAS INTERNAS | AUDITORIA -->
+            <div class="px-4 py-2 bg-dark-900 border-b border-slate-800 flex items-center space-x-2 text-xs">
+              <button type="button" onclick="switchDeskSubTab('chat')" id="deskSubTabBtn-chat" class="px-3 py-1.5 rounded-lg font-semibold bg-brand-600 text-white transition flex items-center space-x-1.5 shadow">
+                <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+                <span>WhatsApp</span>
+              </button>
+              <button type="button" onclick="switchDeskSubTab('notes')" id="deskSubTabBtn-notes" class="px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition flex items-center space-x-1.5">
+                <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                <span>Notas Internas</span>
+                <span id="deskNotesCountBadge" class="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300">0</span>
+              </button>
+              <button type="button" onclick="switchDeskSubTab('audit')" id="deskSubTabBtn-audit" class="px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition flex items-center space-x-1.5">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                <span>Auditoria & SLA</span>
+              </button>
+            </div>
+
+            <!-- SUB-ABA 1: HISTÓRICO DE MENSAGENS WHATSAPP -->
             <div id="atendChatMessagesContainer" class="flex-1 p-5 overflow-y-auto space-y-3.5 custom-scrollbar max-h-[460px] bg-dark-900/30">
               <div class="text-center text-slate-500 text-xs py-8">Carregando mensagens...</div>
+            </div>
+
+            <!-- SUB-ABA 2: NOTAS INTERNAS PRIVADAS DA EQUIPE -->
+            <div id="atendNotesContainer" class="hidden flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar max-h-[460px] bg-dark-900/30">
+              <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs flex items-center space-x-2">
+                <i data-lucide="lock" class="w-4 h-4 shrink-0 text-amber-400"></i>
+                <span><strong>Privado:</strong> Notas e orientações entre a equipe. O cliente <u>nunca</u> visualiza estas notas no WhatsApp.</span>
+              </div>
+              <div id="atendNotesList" class="space-y-2.5">
+                <div class="text-center text-slate-500 text-xs py-6">Nenhuma nota interna registrada.</div>
+              </div>
+              <div class="pt-3 border-t border-slate-800">
+                <form onsubmit="handleSendDeskInternalNote(event)" class="flex items-center space-x-2">
+                  <input type="text" id="deskNoteInput" placeholder="Escreva uma anotação confidencial sobre o lead..." class="flex-1 bg-dark-800 border border-slate-700 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+                  <button type="submit" class="bg-amber-600 hover:bg-amber-500 text-white font-medium px-4 py-2 rounded-xl text-xs transition flex items-center space-x-1.5 shrink-0">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                    <span>Salvar Nota</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <!-- SUB-ABA 3: HISTÓRICO DE AUDITORIA & EVENTOS -->
+            <div id="atendAuditContainer" class="hidden flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar max-h-[460px] bg-dark-900/30">
+              <div id="atendAuditList" class="space-y-2.5">
+                <div class="text-center text-slate-500 text-xs py-6">Carregando histórico de auditoria...</div>
+              </div>
             </div>
 
             <!-- BARRA DE GRAVAÇÃO DE ÁUDIO (MOSTRADA ENQUANTO GRAVA) -->
@@ -629,26 +715,33 @@
               </div>
             </div>
 
-            <!-- FORMULÁRIO DE ENVIO MANUAL (TEXTO OU DISPARO DE GRAVAÇÃO DE ÁUDIO) -->
-            <form id="atendChatForm" onsubmit="handleSendDeskTextMessage(event)" class="p-3 bg-dark-900 border-t border-slate-800 flex items-center space-x-2">
-              <!-- BOTÃO GRAVAR ÁUDIO -->
-              <button type="button" onclick="startDeskAudioRecording()" id="btnDeskRecordAudio" class="p-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-emerald-400 border border-slate-700 transition flex items-center justify-center shrink-0" title="Gravar e Enviar Áudio pelo Microfone">
-                <i data-lucide="mic" class="w-4 h-4"></i>
-              </button>
+            <!-- FORMULÁRIO DE ENVIO MANUAL COM AUTOCOMPLETE DE MENSAGENS RÁPIDAS E UPLOAD DE MÍDIA RICA -->
+            <div class="relative">
+              <!-- POPUP AUTOCOMPLETE DE RESPOSTAS RÁPIDAS (/atalho) -->
+              <div id="cannedAutocompletePopup" class="hidden absolute bottom-full left-4 right-4 mb-2 bg-dark-850 border border-slate-700 rounded-xl shadow-2xl p-2 z-30 max-h-48 overflow-y-auto">
+                <div class="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider">Respostas Rápidas Sugeridas</div>
+                <div id="cannedAutocompleteItems" class="space-y-1 mt-1"></div>
+              </div>
 
-              <!-- BOTÃO UPLOAD DE ÁUDIO -->
-              <button type="button" onclick="document.getElementById('deskAudioFileInput').click()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-brand-400 border border-slate-700 transition flex items-center justify-center shrink-0" title="Anexar arquivo de áudio">
-                <i data-lucide="paperclip" class="w-4 h-4"></i>
-              </button>
-              <input type="file" id="deskAudioFileInput" accept="audio/*" class="hidden" onchange="handleDeskAudioFileUpload(event)">
+              <form id="atendChatForm" onsubmit="handleSendDeskTextMessage(event)" class="p-3 bg-dark-900 border-t border-slate-800 flex items-center space-x-2">
+                <!-- BOTÃO GRAVAR ÁUDIO -->
+                <button type="button" onclick="startDeskAudioRecording()" id="btnDeskRecordAudio" class="p-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-emerald-400 border border-slate-700 transition flex items-center justify-center shrink-0" title="Gravar e Enviar Áudio pelo Microfone">
+                  <i data-lucide="mic" class="w-4 h-4"></i>
+                </button>
 
-              <input type="text" id="atendChatInput" placeholder="Digitar mensagem manual para o WhatsApp..." class="flex-1 bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500">
-              
-              <button type="submit" id="btnDeskSendMsg" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2.5 rounded-xl text-xs transition flex items-center space-x-1.5 shrink-0">
-                <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                <span>Enviar</span>
-              </button>
-            </form>
+                <!-- BOTÃO UPLOAD DE MÍDIA RICA (DOCUMENTO / IMAGEM / VÍDEO / ÁUDIO) -->
+                <button type="button" onclick="openSendMediaModal()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-dark-750 text-slate-300 hover:text-brand-400 border border-slate-700 transition flex items-center justify-center shrink-0" title="Anexar documento, imagem, vídeo ou planilha">
+                  <i data-lucide="paperclip" class="w-4 h-4"></i>
+                </button>
+
+                <input type="text" id="atendChatInput" oninput="handleCannedAutocomplete(event)" onkeydown="handleCannedKeydown(event)" placeholder="Digitar mensagem manual (digite / para respostas rápidas)..." class="flex-1 bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500" autocomplete="off">
+                
+                <button type="submit" id="btnDeskSendMsg" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2.5 rounded-xl text-xs transition flex items-center space-x-1.5 shrink-0">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                  <span>Enviar</span>
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       </div>
@@ -1972,6 +2065,242 @@
   </div>
 
   <!-- ============================================================================ -->
+  <!-- MODAL: TRANSFERÊNCIA DE ATENDIMENTO (ENTRE ATENDENTES OU SETORES) -->
+  <!-- ============================================================================ -->
+  <div id="transferModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl fade-in overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
+            <i data-lucide="arrow-right-left" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-white text-base">Transferir Atendimento</h4>
+            <p class="text-xs text-slate-400">Preserva 100% do histórico e registra evento na auditoria</p>
+          </div>
+        </div>
+        <button onclick="closeTransferModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form onsubmit="handleConfirmTransfer(event)" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Transferir para Departamento / Setor</label>
+          <select id="transferDeptSelect" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+            <option value="">-- Manter departamento atual --</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Atribuir a Atendente Específico</label>
+          <select id="transferUserSelect" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+            <option value="">-- Deixar na fila geral do setor (Sem atendente fixo) --</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Motivo da Transferência / Observação Interna</label>
+          <textarea id="transferReasonInput" rows="3" placeholder="Ex: Cliente solicitou suporte financeiro para negociação de boleto..." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-purple-500 resize-none"></textarea>
+        </div>
+
+        <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+          <button type="button" onclick="closeTransferModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-dark-800 border border-slate-700 transition">Cancelar</button>
+          <button type="submit" id="btnConfirmTransfer" class="px-5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/25 transition flex items-center space-x-1.5">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Confirmar Transferência</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
+  <!-- MODAL: GERENCIAMENTO DE MENSAGENS RÁPIDAS (CANNED RESPONSES) -->
+  <!-- ============================================================================ -->
+  <div id="cannedResponsesModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl fade-in overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20">
+            <i data-lucide="zap" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-white text-base">Mensagens Rápidas (/atalho)</h4>
+            <p class="text-xs text-slate-400">Respostas pré-definidas para acelerar o atendimento corporativo</p>
+          </div>
+        </div>
+        <button onclick="closeCannedResponsesModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-12 flex-1 overflow-hidden">
+        <!-- LISTA DE RESPOSTAS (5 COLS) -->
+        <div class="md:col-span-5 border-r border-slate-800 p-4 flex flex-col space-y-3 bg-dark-900/40">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Atalhos Criados</span>
+            <button type="button" onclick="resetCannedForm()" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white flex items-center space-x-1">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Novo</span>
+            </button>
+          </div>
+          <div id="cannedListContainer" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar max-h-[400px]">
+            <div class="text-center text-slate-500 text-xs py-8">Carregando respostas rápidas...</div>
+          </div>
+        </div>
+
+        <!-- FORMULÁRIO DE CRIAÇÃO / EDIÇÃO (7 COLS) -->
+        <div class="md:col-span-7 p-6 overflow-y-auto">
+          <form onsubmit="handleSaveCannedResponse(event)" class="space-y-4">
+            <input type="hidden" id="cannedEditId" value="">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Atalho de Disparo (com barra inicial /)</label>
+              <input type="text" id="cannedAtalhoInput" placeholder="ex: /pix, /boasvindas, /horario" required class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 font-mono">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Título / Identificador</label>
+              <input type="text" id="cannedTituloInput" placeholder="ex: Chave PIX e Instruções de Pagamento" required class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Categoria (Opcional)</label>
+              <input type="text" id="cannedCategoriaInput" placeholder="ex: Financeiro, Vendas, Boas-vindas" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Conteúdo da Mensagem</label>
+              <textarea id="cannedConteudoInput" rows="6" placeholder="Texto que será inserido automaticamente quando o operador digitar o atalho..." required class="w-full bg-dark-800 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-amber-500 resize-none font-sans leading-relaxed"></textarea>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+              <button type="button" onclick="handleDeleteCannedResponse()" id="btnDeleteCanned" class="hidden px-3.5 py-2 rounded-xl text-xs font-medium text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 transition">Excluir</button>
+              <div class="flex items-center space-x-2 ml-auto">
+                <button type="button" onclick="resetCannedForm()" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-dark-800 border border-slate-700 transition">Limpar</button>
+                <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/25 transition">Salvar Mensagem</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
+  <!-- MODAL: GERENCIAMENTO DE DEPARTAMENTOS & FILAS DE ATENDIMENTO -->
+  <!-- ============================================================================ -->
+  <div id="departmentsModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl fade-in overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+            <i data-lucide="users" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-white text-base">Departamentos e Filas de Atendimento</h4>
+            <p class="text-xs text-slate-400">Organize sua equipe em setores (Vendas, Suporte, Financeiro, etc.)</p>
+          </div>
+        </div>
+        <button onclick="closeDepartmentsModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-12 flex-1 overflow-hidden">
+        <!-- LISTA DE DEPARTAMENTOS (5 COLS) -->
+        <div class="md:col-span-5 border-r border-slate-800 p-4 flex flex-col space-y-3 bg-dark-900/40">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">Setores Ativos</span>
+            <button type="button" onclick="resetDeptForm()" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white flex items-center space-x-1">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Novo</span>
+            </button>
+          </div>
+          <div id="deptListContainer" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar max-h-[400px]">
+            <div class="text-center text-slate-500 text-xs py-8">Carregando departamentos...</div>
+          </div>
+        </div>
+
+        <!-- FORMULÁRIO DE CRIAÇÃO / EDIÇÃO (7 COLS) -->
+        <div class="md:col-span-7 p-6 overflow-y-auto">
+          <form onsubmit="handleSaveDepartment(event)" class="space-y-4">
+            <input type="hidden" id="deptEditId" value="">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Nome do Setor / Fila</label>
+              <input type="text" id="deptNomeInput" placeholder="ex: Suporte Técnico, Financeiro, Vendas" required class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Descrição</label>
+              <input type="text" id="deptDescricaoInput" placeholder="ex: Fila de atendimento para dúvidas pós-venda..." class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Cor do Crachá / Badge</label>
+              <div class="flex items-center space-x-3">
+                <input type="color" id="deptCorInput" value="#3b82f6" class="w-10 h-10 rounded-lg bg-dark-800 border border-slate-700 cursor-pointer">
+                <span class="text-xs text-slate-400">Identificação visual nos tickets</span>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+              <button type="button" onclick="handleDeleteDepartment()" id="btnDeleteDept" class="hidden px-3.5 py-2 rounded-xl text-xs font-medium text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 transition">Excluir</button>
+              <div class="flex items-center space-x-2 ml-auto">
+                <button type="button" onclick="resetDeptForm()" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-dark-800 border border-slate-700 transition">Limpar</button>
+                <button type="submit" class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25 transition">Salvar Setor</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
+  <!-- MODAL: ENVIO DE MÍDIA RICA (DOCUMENTO / IMAGEM / VÍDEO / ÁUDIO) -->
+  <!-- ============================================================================ -->
+  <div id="sendMediaModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl fade-in overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-lg bg-brand-500/10 text-brand-400 flex items-center justify-center border border-brand-500/20">
+            <i data-lucide="paperclip" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-white text-base">Enviar Arquivo / Documento</h4>
+            <p class="text-xs text-slate-400">PDF, DOCX, XLSX, Imagens, Vídeos ou Áudios via WhatsApp</p>
+          </div>
+        </div>
+        <button onclick="closeSendMediaModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form onsubmit="handleSendRichMedia(event)" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Selecione o Arquivo</label>
+          <input type="file" id="richMediaFileInput" onchange="handleRichMediaFileSelect(event)" required class="w-full bg-dark-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-600 file:text-white hover:file:bg-brand-500 cursor-pointer">
+          <div id="mediaFilePreviewInfo" class="mt-2 text-xs text-slate-400 hidden"></div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5">Legenda / Descrição (Opcional)</label>
+          <input type="text" id="richMediaCaptionInput" placeholder="Ex: Segue a proposta comercial e manual..." class="w-full bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+          <button type="button" onclick="closeSendMediaModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-dark-800 border border-slate-700 transition">Cancelar</button>
+          <button type="submit" id="btnSubmitSendMedia" class="px-5 py-2 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-500 text-white shadow-lg shadow-brand-600/25 transition flex items-center space-x-1.5">
+            <i data-lucide="send" class="w-4 h-4"></i>
+            <span>Enviar Arquivo</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
   <!-- JAVASCRIPT DO PAINEL SAAS MULTI-TENANT -->
   <!-- ============================================================================ -->
   <script>
@@ -2005,6 +2334,15 @@
     let currentCrmView = 'kanban'; // 'kanban' ou 'table'
     let activeChatSession = null; // { id, clientName, phone, remoteJid, isPaused }
     let currentTenantMode = 'automacao';
+
+    // Variáveis Globais de Atendimento Compartilhado & Helpdesk Corporativo
+    let cannedResponsesCache = [];
+    let departmentsCache = [];
+    let tenantUsersCache = [];
+    let activeDeskSubTab = 'chat';
+    let selectedMediaFile = null;
+    let selectedMediaBase64 = null;
+    let selectedMediaMime = '';
 
     // Utilitário para requisições autenticadas
     async function apiFetch(endpoint, options = {}) {
@@ -2863,6 +3201,12 @@
         if (kpiCalls) kpiCalls.textContent = stats.chamadas || rawAtendimentosList.filter(l => (parseInt(l.total_chamadas, 10) || 0) > 0).length;
         if (queueBadge) queueBadge.textContent = `${rawAtendimentosList.length} contatos`;
 
+        // Carrega Analytics de Helpdesk (TMA e TME) e dados auxiliares
+        loadHelpdeskAnalytics();
+        loadCannedResponses();
+        loadDepartments();
+        loadTenantUsers();
+
         renderAtendimentosList();
 
         // Se houver atendimento ativo no Desk, sincroniza estado e mensagens
@@ -2932,6 +3276,24 @@
 
         const lastInteraction = lead.last_interaction ? new Date(lead.last_interaction).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
 
+        const isLocked = !!lead.is_locked;
+        const lockText = isLocked ? (lead.locked_by_nome || 'Ocupado') : 'Livre';
+        const lockBadgeHtml = isLocked
+          ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center space-x-0.5" title="Em atendimento por ${escapeHtml(lead.locked_by_nome)}"><i data-lucide="lock" class="w-2.5 h-2.5"></i><span>${escapeHtml(lockText)}</span></span>`
+          : `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 flex items-center space-x-0.5"><i data-lucide="unlock" class="w-2.5 h-2.5"></i><span>Livre</span></span>`;
+
+        const deptBadgeHtml = lead.department_nome ? `
+          <span class="text-[9px] font-medium px-1.5 py-0.5 rounded" style="background-color: ${lead.department_cor || '#3b82f6'}22; color: ${lead.department_cor || '#60a5fa'}; border: 1px solid ${lead.department_cor || '#3b82f6'}40;">
+            ${escapeHtml(lead.department_nome)}
+          </span>
+        ` : '';
+
+        const priorityBadgeHtml = (parseInt(lead.priority, 10) || 0) > 0 ? `
+          <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            ⚡ Alta
+          </span>
+        ` : '';
+
         return `
           <div onclick="selectDeskAtendimento('${lead.id}')" class="p-3.5 rounded-xl border transition cursor-pointer ${isSelected ? 'bg-brand-950/40 border-brand-500/70 shadow-md ring-1 ring-brand-500/30' : 'bg-dark-900/60 hover:bg-dark-800/80 border-slate-800 hover:border-slate-700'}">
             <div class="flex items-start justify-between gap-2">
@@ -2940,15 +3302,22 @@
                   ${(lead.client_name || 'C').charAt(0).toUpperCase()}
                 </div>
                 <div class="min-w-0">
-                  <h5 class="text-xs font-bold text-white truncate">${escapeHtml(lead.client_name)}</h5>
-                  <p class="text-[11px] text-slate-400 font-mono">+${phone}</p>
+                  <div class="flex items-center space-x-1.5">
+                    <h5 class="text-xs font-bold text-white truncate">${escapeHtml(lead.client_name)}</h5>
+                    ${priorityBadgeHtml}
+                  </div>
+                  <div class="flex items-center space-x-1 mt-0.5">
+                    <p class="text-[11px] text-slate-400 font-mono">+${phone}</p>
+                    ${deptBadgeHtml}
+                  </div>
                 </div>
               </div>
               <div class="text-right shrink-0">
                 <span class="text-[10px] text-slate-500 font-mono">${lastInteraction}</span>
-                <div class="mt-0.5">
+                <div class="mt-0.5 flex items-center justify-end space-x-1">
+                  ${lockBadgeHtml}
                   <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${isManual ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}">
-                    ${isManual ? '👤 Manual' : '🤖 IA Nat'}
+                    ${isManual ? '👤 Manual' : '🤖 IA'}
                   </span>
                 </div>
               </div>
@@ -3002,8 +3371,12 @@
 
     function updateDeskHeaderUi(lead) {
       const isManual = !!lead.is_manual;
-      const deskAiBadge = document.getElementById('deskAiBadge');
+      const deskAiBadge = document.getElementById('atendActiveModeBadge');
       const btnDeskToggleAi = document.getElementById('btnDeskToggleAi');
+      const deskLockBadge = document.getElementById('deskLockBadge');
+      const btnDeskClaim = document.getElementById('btnDeskClaim');
+      const btnDeskRelease = document.getElementById('btnDeskRelease');
+      const deskDeptBadge = document.getElementById('deskDeptBadge');
 
       if (deskAiBadge) {
         if (isManual) {
@@ -3020,10 +3393,35 @@
           btnDeskToggleAi.innerHTML = '<i data-lucide="bot" class="w-3.5 h-3.5"></i><span>Passar para IA</span>';
           btnDeskToggleAi.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center space-x-1.5 bg-emerald-600/20 text-emerald-300 border-emerald-500/30 hover:bg-emerald-600/30 shadow-sm';
         } else {
-          btnDeskToggleAi.innerHTML = '<i data-lucide="user-check" class="w-3.5 h-3.5"></i><span>Atender Manual</span>';
+          btnDeskToggleAi.innerHTML = '<i data-lucide="user-check" class="w-3.5 h-3.5"></i><span>Manual</span>';
           btnDeskToggleAi.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center space-x-1.5 bg-amber-600/20 text-amber-300 border-amber-500/30 hover:bg-amber-600/30 shadow-sm';
         }
       }
+
+      if (deskDeptBadge) {
+        if (lead.department_nome) {
+          deskDeptBadge.textContent = `| ${lead.department_nome}`;
+          deskDeptBadge.style.color = lead.department_cor || '#60a5fa';
+          deskDeptBadge.classList.remove('hidden');
+        } else {
+          deskDeptBadge.classList.add('hidden');
+        }
+      }
+
+      if (deskLockBadge) {
+        if (lead.is_locked) {
+          deskLockBadge.innerHTML = `🔒 Atendido por: ${escapeHtml(lead.locked_by_nome || 'Operador')}`;
+          deskLockBadge.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30';
+          if (btnDeskClaim) btnDeskClaim.classList.add('hidden');
+          if (btnDeskRelease) btnDeskRelease.classList.remove('hidden');
+        } else {
+          deskLockBadge.innerHTML = '🔓 Fila Livre';
+          deskLockBadge.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700';
+          if (btnDeskClaim) btnDeskClaim.classList.remove('hidden');
+          if (btnDeskRelease) btnDeskRelease.classList.add('hidden');
+        }
+      }
+
       lucide.createIcons();
     }
 
@@ -3043,14 +3441,20 @@
       document.getElementById('atendEmptyState')?.classList.add('hidden');
       document.getElementById('atendChatPanel')?.classList.remove('hidden');
 
-      document.getElementById('deskClientTitle').textContent = lead.client_name;
-      document.getElementById('deskClientPhone').textContent = `+${phone}`;
-      document.getElementById('deskClientAvatar').textContent = (lead.client_name || 'C').charAt(0).toUpperCase();
+      const activeNameEl = document.getElementById('atendActiveName');
+      const activePhoneEl = document.getElementById('atendActivePhone');
+      const activeAvatarEl = document.getElementById('atendActiveAvatar');
+      if (activeNameEl) activeNameEl.textContent = lead.client_name;
+      if (activePhoneEl) activePhoneEl.textContent = `+${phone}`;
+      if (activeAvatarEl) activeAvatarEl.textContent = (lead.client_name || 'C').charAt(0).toUpperCase();
 
       updateDeskHeaderUi(lead);
       renderAtendimentosList();
 
+      // Reset subtab para Chat e carrega histórico
+      switchDeskSubTab('chat');
       await refreshDeskMessages();
+      loadDeskNotesCount();
       document.getElementById('atendChatInput')?.focus();
     }
 
@@ -4716,6 +5120,662 @@
 
     function closeDossierModal() {
       document.getElementById('dossierModal').classList.add('hidden');
+    }
+
+    // ==========================================================================
+    // MÓDULO HELPDESK CORPORATIVO & ATENDIMENTO COMPARTILHADO (OMNICHANNEL)
+    // ==========================================================================
+
+    // 1. CARREGAMENTO DE ANALYTICS (TMA & TME)
+    async function loadHelpdeskAnalytics() {
+      try {
+        const res = await apiFetch('/api/v2/tenant/analytics/helpdesk');
+        if (res.ok && res.data?.analytics) {
+          const a = res.data.analytics;
+          const tmaEl = document.getElementById('atendKpiTma');
+          const tmeEl = document.getElementById('atendKpiTme');
+          if (tmaEl) tmaEl.textContent = (a.tma_minutos !== null ? a.tma_minutos : 0) + ' min';
+          if (tmeEl) tmeEl.textContent = (a.tme_minutos !== null ? a.tme_minutos : 0) + ' min';
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar analytics helpdesk:', e);
+      }
+    }
+
+    // 2. CONTROLE DE CONCORRÊNCIA (ASSUMIR E LIBERAR TICKET)
+    async function handleClaimDeskTicket() {
+      if (!activeDeskSession) return;
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/claim`, { method: 'POST' });
+        if (res.ok) {
+          const lead = rawAtendimentosList.find(l => l.id === activeDeskSession.id);
+          if (lead) {
+            lead.is_locked = true;
+            lead.locked_by = res.data?.locked_by;
+            lead.locked_by_nome = currentUserProfile?.nome || 'Você';
+            updateDeskHeaderUi(lead);
+          }
+          await loadAtendimentos();
+        } else {
+          alert('Não foi possível assumir o ticket: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (e) {
+        alert('Erro ao assumir atendimento.');
+      }
+    }
+
+    async function handleReleaseDeskTicket() {
+      if (!activeDeskSession) return;
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/release`, { method: 'POST' });
+        if (res.ok) {
+          const lead = rawAtendimentosList.find(l => l.id === activeDeskSession.id);
+          if (lead) {
+            lead.is_locked = false;
+            lead.locked_by = null;
+            lead.locked_by_nome = null;
+            updateDeskHeaderUi(lead);
+          }
+          await loadAtendimentos();
+        } else {
+          alert('Não foi possível liberar o ticket: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (e) {
+        alert('Erro ao liberar atendimento.');
+      }
+    }
+
+    // 3. TRANSFERÊNCIA DE ATENDIMENTO
+    async function loadTenantUsers() {
+      try {
+        const res = await apiFetch('/api/v2/tenant/users');
+        if (res.ok && Array.isArray(res.data?.users)) {
+          tenantUsersCache = res.data.users;
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar operadores do tenant:', e);
+      }
+    }
+
+    function openTransferModal() {
+      if (!activeDeskSession) return;
+      const deptSelect = document.getElementById('transferDeptSelect');
+      const userSelect = document.getElementById('transferUserSelect');
+      const reasonInput = document.getElementById('transferReasonInput');
+
+      if (deptSelect) {
+        deptSelect.innerHTML = '<option value="">-- Manter departamento atual --</option>' +
+          departmentsCache.map(d => `<option value="${d.id}">${escapeHtml(d.nome)}</option>`).join('');
+      }
+
+      if (userSelect) {
+        userSelect.innerHTML = '<option value="">-- Fila geral do setor (Sem atendente fixo) --</option>' +
+          tenantUsersCache.map(u => `<option value="${u.id}">${escapeHtml(u.nome || u.email)} (${u.role || 'atendente'})</option>`).join('');
+      }
+
+      if (reasonInput) reasonInput.value = '';
+      document.getElementById('transferModal')?.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeTransferModal() {
+      document.getElementById('transferModal')?.classList.add('hidden');
+    }
+
+    async function handleConfirmTransfer(e) {
+      if (e) e.preventDefault();
+      if (!activeDeskSession) return;
+
+      const deptId = document.getElementById('transferDeptSelect')?.value || null;
+      const userId = document.getElementById('transferUserSelect')?.value || null;
+      const reason = document.getElementById('transferReasonInput')?.value.trim() || 'Transferência solicitada pelo operador';
+
+      const btn = document.getElementById('btnConfirmTransfer');
+      if (btn) btn.disabled = true;
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/transfer`, {
+          method: 'POST',
+          body: JSON.stringify({ department_id: deptId, target_user_id: userId, reason })
+        });
+
+        if (res.ok) {
+          closeTransferModal();
+          alert('Atendimento transferido com sucesso! O histórico foi integralmente preservado.');
+          await refreshDeskMessages();
+          await loadAtendimentos();
+        } else {
+          alert('Falha na transferência: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (err) {
+        alert('Erro ao transferir atendimento.');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    // 4. SUB-ABAS DO DESK (WHATSAPP / NOTAS INTERNAS / AUDITORIA)
+    function switchDeskSubTab(tab) {
+      activeDeskSubTab = tab;
+      const btnChat = document.getElementById('deskSubTabBtn-chat');
+      const btnNotes = document.getElementById('deskSubTabBtn-notes');
+      const btnAudit = document.getElementById('deskSubTabBtn-audit');
+
+      const boxChat = document.getElementById('atendChatMessagesContainer');
+      const boxNotes = document.getElementById('atendNotesContainer');
+      const boxAudit = document.getElementById('atendAuditContainer');
+
+      [btnChat, btnNotes, btnAudit].forEach(b => {
+        if (b) b.className = 'px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition flex items-center space-x-1.5';
+      });
+
+      if (boxChat) boxChat.classList.add('hidden');
+      if (boxNotes) boxNotes.classList.add('hidden');
+      if (boxAudit) boxAudit.classList.add('hidden');
+
+      if (tab === 'chat') {
+        if (btnChat) btnChat.className = 'px-3 py-1.5 rounded-lg font-semibold bg-brand-600 text-white transition flex items-center space-x-1.5 shadow';
+        if (boxChat) boxChat.classList.remove('hidden');
+      } else if (tab === 'notes') {
+        if (btnNotes) btnNotes.className = 'px-3 py-1.5 rounded-lg font-semibold bg-amber-600 text-white transition flex items-center space-x-1.5 shadow';
+        if (boxNotes) boxNotes.classList.remove('hidden');
+        loadDeskNotes();
+      } else if (tab === 'audit') {
+        if (btnAudit) btnAudit.className = 'px-3 py-1.5 rounded-lg font-semibold bg-purple-600 text-white transition flex items-center space-x-1.5 shadow';
+        if (boxAudit) boxAudit.classList.remove('hidden');
+        loadDeskAuditTrail();
+      }
+      lucide.createIcons();
+    }
+
+    // 5. NOTAS INTERNAS PRIVADAS
+    async function loadDeskNotesCount() {
+      if (!activeDeskSession) return;
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/internal-notes`);
+        const countBadge = document.getElementById('deskNotesCountBadge');
+        if (res.ok && Array.isArray(res.data?.notes) && countBadge) {
+          countBadge.textContent = res.data.notes.length;
+        }
+      } catch (e) {}
+    }
+
+    async function loadDeskNotes() {
+      if (!activeDeskSession) return;
+      const listEl = document.getElementById('atendNotesList');
+      if (!listEl) return;
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/internal-notes`);
+        if (res.ok && Array.isArray(res.data?.notes)) {
+          const notes = res.data.notes;
+          const countBadge = document.getElementById('deskNotesCountBadge');
+          if (countBadge) countBadge.textContent = notes.length;
+
+          if (notes.length === 0) {
+            listEl.innerHTML = '<div class="text-center text-slate-500 text-xs py-8">Nenhuma nota interna registrada até o momento.</div>';
+            return;
+          }
+
+          listEl.innerHTML = notes.map(n => `
+            <div class="p-3 bg-dark-800/90 border border-slate-700/80 rounded-xl space-y-1">
+              <div class="flex items-center justify-between text-[10px] text-slate-400">
+                <span class="font-bold text-amber-300 flex items-center space-x-1">
+                  <i data-lucide="user" class="w-3 h-3"></i>
+                  <span>${escapeHtml(n.author_nome || n.author_email || 'Equipe')}</span>
+                </span>
+                <span>${new Date(n.created_at).toLocaleString('pt-BR')}</span>
+              </div>
+              <p class="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">${escapeHtml(n.note)}</p>
+            </div>
+          `).join('');
+          lucide.createIcons();
+        }
+      } catch (e) {
+        listEl.innerHTML = '<div class="text-center text-rose-400 text-xs py-6">Erro ao carregar notas internas.</div>';
+      }
+    }
+
+    async function handleSendDeskInternalNote(e) {
+      if (e) e.preventDefault();
+      if (!activeDeskSession) return;
+
+      const input = document.getElementById('deskNoteInput');
+      const note = input ? input.value.trim() : '';
+      if (!note) return;
+
+      input.value = '';
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/internal-notes`, {
+          method: 'POST',
+          body: JSON.stringify({ note })
+        });
+        if (res.ok) {
+          await loadDeskNotes();
+        } else {
+          alert('Erro ao salvar nota interna: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (err) {
+        alert('Erro ao salvar nota interna.');
+      }
+    }
+
+    // 6. HISTÓRICO DE AUDITORIA & SLA
+    async function loadDeskAuditTrail() {
+      if (!activeDeskSession) return;
+      const listEl = document.getElementById('atendAuditList');
+      if (!listEl) return;
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/audit-trail`);
+        if (res.ok && Array.isArray(res.data?.audit_events)) {
+          const events = res.data.audit_events;
+          if (events.length === 0) {
+            listEl.innerHTML = '<div class="text-center text-slate-500 text-xs py-8">Nenhum evento registrado nesta conversa.</div>';
+            return;
+          }
+
+          listEl.innerHTML = events.map(ev => {
+            let eventIcon = 'info';
+            let iconColor = 'text-blue-400';
+            if (ev.event_type.includes('claim')) { eventIcon = 'lock'; iconColor = 'text-blue-400'; }
+            else if (ev.event_type.includes('release')) { eventIcon = 'unlock'; iconColor = 'text-slate-400'; }
+            else if (ev.event_type.includes('transfer')) { eventIcon = 'arrow-right-left'; iconColor = 'text-purple-400'; }
+            else if (ev.event_type.includes('note')) { eventIcon = 'file-text'; iconColor = 'text-amber-400'; }
+
+            const payloadStr = ev.payload ? JSON.stringify(ev.payload, null, 2) : '';
+
+            return `
+              <div class="p-3 bg-dark-800/80 border border-slate-700/60 rounded-xl space-y-1">
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="font-bold text-white flex items-center space-x-1.5">
+                    <i data-lucide="${eventIcon}" class="w-3.5 h-3.5 ${iconColor}"></i>
+                    <span class="uppercase font-mono text-[10px] tracking-wider text-slate-300">${escapeHtml(ev.event_type)}</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400 font-mono">${new Date(ev.created_at).toLocaleString('pt-BR')}</span>
+                </div>
+                <div class="text-[11px] text-slate-300">
+                  <span class="text-slate-500">Operador:</span> ${escapeHtml(ev.author_nome || ev.author_email || 'Sistema')}
+                </div>
+                ${payloadStr ? `<pre class="text-[10px] bg-dark-900 p-2 rounded text-slate-400 overflow-x-auto font-mono mt-1">${escapeHtml(payloadStr)}</pre>` : ''}
+              </div>
+            `;
+          }).join('');
+          lucide.createIcons();
+        }
+      } catch (e) {
+        listEl.innerHTML = '<div class="text-center text-rose-400 text-xs py-6">Erro ao carregar auditoria.</div>';
+      }
+    }
+
+    // 7. AUTOCOMPLETE DE MENSAGENS RÁPIDAS (/atalho)
+    async function loadCannedResponses() {
+      try {
+        const res = await apiFetch('/api/v2/tenant/canned-responses');
+        if (res.ok && Array.isArray(res.data?.canned_responses)) {
+          cannedResponsesCache = res.data.canned_responses;
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar respostas rápidas:', e);
+      }
+    }
+
+    function handleCannedAutocomplete(e) {
+      const input = e.target;
+      const text = input.value;
+      const popup = document.getElementById('cannedAutocompletePopup');
+      const itemsContainer = document.getElementById('cannedAutocompleteItems');
+      if (!popup || !itemsContainer) return;
+
+      // Detecta se o texto termina com /termo
+      const match = text.match(/(^|\s)\/([a-zA-Z0-9_-]*)$/);
+      if (!match) {
+        popup.classList.add('hidden');
+        return;
+      }
+
+      const queryTerm = match[2].toLowerCase();
+      const filtered = cannedResponsesCache.filter(c => {
+        const cleanShortcut = c.atalho.replace(/^\//, '').toLowerCase();
+        return cleanShortcut.includes(queryTerm) || c.titulo.toLowerCase().includes(queryTerm);
+      });
+
+      if (filtered.length === 0) {
+        popup.classList.add('hidden');
+        return;
+      }
+
+      itemsContainer.innerHTML = filtered.map(c => `
+        <div onclick="selectCannedResponse('${escapeJsArg(c.atalho)}')" class="p-2 rounded-lg hover:bg-dark-800 cursor-pointer flex items-center justify-between text-xs transition border border-transparent hover:border-slate-700">
+          <div>
+            <span class="font-mono font-bold text-amber-400 mr-2">${escapeHtml(c.atalho)}</span>
+            <span class="text-white font-medium">${escapeHtml(c.titulo)}</span>
+          </div>
+          <span class="text-[10px] text-slate-500 uppercase">${escapeHtml(c.categoria || 'Geral')}</span>
+        </div>
+      `).join('');
+
+      popup.classList.remove('hidden');
+    }
+
+    function selectCannedResponse(shortcut) {
+      const item = cannedResponsesCache.find(c => c.atalho === shortcut);
+      if (!item) return;
+
+      const input = document.getElementById('atendChatInput');
+      if (input) {
+        input.value = input.value.replace(/(^|\s)\/[a-zA-Z0-9_-]*$/, (m, prefix) => prefix + item.conteudo);
+        input.focus();
+      }
+
+      document.getElementById('cannedAutocompletePopup')?.classList.add('hidden');
+    }
+
+    function handleCannedKeydown(e) {
+      const popup = document.getElementById('cannedAutocompletePopup');
+      if (popup && !popup.classList.contains('hidden')) {
+        if (e.key === 'Escape') {
+          popup.classList.add('hidden');
+        } else if (e.key === 'Tab' || e.key === 'Enter') {
+          const firstItem = popup.querySelector('[onclick]');
+          if (firstItem) {
+            e.preventDefault();
+            firstItem.click();
+          }
+        }
+      }
+    }
+
+    // Gerenciador de Mensagens Rápidas (Modal CRUD)
+    function openCannedResponsesModal() {
+      renderCannedList();
+      resetCannedForm();
+      document.getElementById('cannedResponsesModal')?.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeCannedResponsesModal() {
+      document.getElementById('cannedResponsesModal')?.classList.add('hidden');
+    }
+
+    function renderCannedList() {
+      const container = document.getElementById('cannedListContainer');
+      if (!container) return;
+
+      if (cannedResponsesCache.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-500 text-xs py-8">Nenhum atalho criado ainda. Clique em "Novo" para começar.</div>';
+        return;
+      }
+
+      container.innerHTML = cannedResponsesCache.map(c => `
+        <div onclick="editCannedResponse('${c.id}')" class="p-2.5 rounded-xl bg-dark-800/80 hover:bg-dark-750 border border-slate-700/60 cursor-pointer transition space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs font-bold text-amber-400">${escapeHtml(c.atalho)}</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 uppercase">${escapeHtml(c.categoria || 'Geral')}</span>
+          </div>
+          <div class="text-xs font-medium text-white truncate">${escapeHtml(c.titulo)}</div>
+        </div>
+      `).join('');
+    }
+
+    function editCannedResponse(id) {
+      const item = cannedResponsesCache.find(c => c.id === id);
+      if (!item) return;
+
+      document.getElementById('cannedEditId').value = item.id;
+      document.getElementById('cannedAtalhoInput').value = item.atalho;
+      document.getElementById('cannedTituloInput').value = item.titulo;
+      document.getElementById('cannedCategoriaInput').value = item.categoria || '';
+      document.getElementById('cannedConteudoInput').value = item.conteudo;
+      document.getElementById('btnDeleteCanned')?.classList.remove('hidden');
+    }
+
+    function resetCannedForm() {
+      document.getElementById('cannedEditId').value = '';
+      document.getElementById('cannedAtalhoInput').value = '';
+      document.getElementById('cannedTituloInput').value = '';
+      document.getElementById('cannedCategoriaInput').value = '';
+      document.getElementById('cannedConteudoInput').value = '';
+      document.getElementById('btnDeleteCanned')?.classList.add('hidden');
+    }
+
+    async function handleSaveCannedResponse(e) {
+      if (e) e.preventDefault();
+      const id = document.getElementById('cannedEditId')?.value;
+      let atalho = document.getElementById('cannedAtalhoInput')?.value.trim() || '';
+      if (!atalho.startsWith('/')) atalho = '/' + atalho;
+      const titulo = document.getElementById('cannedTituloInput')?.value.trim();
+      const categoria = document.getElementById('cannedCategoriaInput')?.value.trim() || null;
+      const conteudo = document.getElementById('cannedConteudoInput')?.value.trim();
+
+      const url = id ? `/api/v2/tenant/canned-responses/${id}` : '/api/v2/tenant/canned-responses';
+      const method = id ? 'PUT' : 'POST';
+
+      try {
+        const res = await apiFetch(url, {
+          method,
+          body: JSON.stringify({ atalho, titulo, categoria, conteudo })
+        });
+        if (res.ok) {
+          await loadCannedResponses();
+          renderCannedList();
+          resetCannedForm();
+        } else {
+          alert('Erro ao salvar resposta rápida: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (err) {
+        alert('Erro ao salvar resposta rápida.');
+      }
+    }
+
+    async function handleDeleteCannedResponse() {
+      const id = document.getElementById('cannedEditId')?.value;
+      if (!id) return;
+      if (!confirm('Deseja realmente excluir este atalho de resposta rápida?')) return;
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/canned-responses/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          await loadCannedResponses();
+          renderCannedList();
+          resetCannedForm();
+        } else {
+          alert('Erro ao excluir: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (e) {
+        alert('Erro ao excluir resposta rápida.');
+      }
+    }
+
+    // 8. GERENCIADOR DE DEPARTAMENTOS & FILAS (Modal CRUD)
+    async function loadDepartments() {
+      try {
+        const res = await apiFetch('/api/v2/tenant/departments');
+        if (res.ok && Array.isArray(res.data?.departments)) {
+          departmentsCache = res.data.departments;
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar departamentos:', e);
+      }
+    }
+
+    function openDepartmentsModal() {
+      renderDeptList();
+      resetDeptForm();
+      document.getElementById('departmentsModal')?.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeDepartmentsModal() {
+      document.getElementById('departmentsModal')?.classList.add('hidden');
+    }
+
+    function renderDeptList() {
+      const container = document.getElementById('deptListContainer');
+      if (!container) return;
+
+      if (departmentsCache.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-500 text-xs py-8">Nenhum departamento criado. Clique em "Novo" para organizar suas filas.</div>';
+        return;
+      }
+
+      container.innerHTML = departmentsCache.map(d => `
+        <div onclick="editDepartment('${d.id}')" class="p-2.5 rounded-xl bg-dark-800/80 hover:bg-dark-750 border border-slate-700/60 cursor-pointer transition flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-full" style="background-color: ${d.cor || '#3b82f6'}"></span>
+            <span class="text-xs font-bold text-white">${escapeHtml(d.nome)}</span>
+          </div>
+          <span class="text-[10px] text-slate-400">${d.ativo ? 'Ativo' : 'Inativo'}</span>
+        </div>
+      `).join('');
+    }
+
+    function editDepartment(id) {
+      const item = departmentsCache.find(d => d.id === id);
+      if (!item) return;
+
+      document.getElementById('deptEditId').value = item.id;
+      document.getElementById('deptNomeInput').value = item.nome;
+      document.getElementById('deptDescricaoInput').value = item.descricao || '';
+      document.getElementById('deptCorInput').value = item.cor || '#3b82f6';
+      document.getElementById('btnDeleteDept')?.classList.remove('hidden');
+    }
+
+    function resetDeptForm() {
+      document.getElementById('deptEditId').value = '';
+      document.getElementById('deptNomeInput').value = '';
+      document.getElementById('deptDescricaoInput').value = '';
+      document.getElementById('deptCorInput').value = '#3b82f6';
+      document.getElementById('btnDeleteDept')?.classList.add('hidden');
+    }
+
+    async function handleSaveDepartment(e) {
+      if (e) e.preventDefault();
+      const id = document.getElementById('deptEditId')?.value;
+      const nome = document.getElementById('deptNomeInput')?.value.trim();
+      const descricao = document.getElementById('deptDescricaoInput')?.value.trim() || null;
+      const cor = document.getElementById('deptCorInput')?.value || '#3b82f6';
+
+      const url = id ? `/api/v2/tenant/departments/${id}` : '/api/v2/tenant/departments';
+      const method = id ? 'PUT' : 'POST';
+
+      try {
+        const res = await apiFetch(url, {
+          method,
+          body: JSON.stringify({ nome, descricao, cor, ativo: true })
+        });
+        if (res.ok) {
+          await loadDepartments();
+          renderDeptList();
+          resetDeptForm();
+          await loadAtendimentos();
+        } else {
+          alert('Erro ao salvar departamento: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (err) {
+        alert('Erro ao salvar departamento.');
+      }
+    }
+
+    async function handleDeleteDepartment() {
+      const id = document.getElementById('deptEditId')?.value;
+      if (!id) return;
+      if (!confirm('Deseja realmente excluir este departamento? Conversas vinculadas continuarão no sistema.')) return;
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/departments/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          await loadDepartments();
+          renderDeptList();
+          resetDeptForm();
+          await loadAtendimentos();
+        } else {
+          alert('Erro ao excluir: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (e) {
+        alert('Erro ao excluir departamento.');
+      }
+    }
+
+    // 9. UPLOAD E ENVIO DE MÍDIA RICA (DOCUMENTO / IMAGEM / VÍDEO / ÁUDIO)
+    function openSendMediaModal() {
+      if (!activeDeskSession) return;
+      selectedMediaFile = null;
+      selectedMediaBase64 = null;
+      selectedMediaMime = '';
+      document.getElementById('richMediaFileInput').value = '';
+      document.getElementById('richMediaCaptionInput').value = '';
+      const preview = document.getElementById('mediaFilePreviewInfo');
+      if (preview) { preview.classList.add('hidden'); preview.textContent = ''; }
+      document.getElementById('sendMediaModal')?.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeSendMediaModal() {
+      document.getElementById('sendMediaModal')?.classList.add('hidden');
+    }
+
+    function handleRichMediaFileSelect(e) {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      selectedMediaFile = file;
+      selectedMediaMime = file.type || 'application/octet-stream';
+
+      const preview = document.getElementById('mediaFilePreviewInfo');
+      if (preview) {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+        preview.textContent = `Arquivo: ${file.name} (${sizeMb} MB) - ${file.type || 'Tipo não identificado'}`;
+        preview.classList.remove('hidden');
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        selectedMediaBase64 = reader.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function handleSendRichMedia(e) {
+      if (e) e.preventDefault();
+      if (!activeDeskSession || !selectedMediaBase64 || !selectedMediaFile) {
+        alert('Selecione um arquivo válido para enviar.');
+        return;
+      }
+
+      const caption = document.getElementById('richMediaCaptionInput')?.value.trim() || '';
+      const btn = document.getElementById('btnSubmitSendMedia');
+      if (btn) btn.disabled = true;
+
+      // Classifica tipo de mídia (document, image, video, audio)
+      let mediaType = 'document';
+      if (selectedMediaMime.startsWith('image/')) mediaType = 'image';
+      else if (selectedMediaMime.startsWith('video/')) mediaType = 'video';
+      else if (selectedMediaMime.startsWith('audio/')) mediaType = 'audio';
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/leads/${activeDeskSession.id}/media`, {
+          method: 'POST',
+          body: JSON.stringify({
+            media_url: selectedMediaBase64,
+            media_type: mediaType,
+            file_name: selectedMediaFile.name,
+            mime_type: selectedMediaMime,
+            caption
+          })
+        });
+
+        if (res.ok) {
+          closeSendMediaModal();
+          await refreshDeskMessages();
+        } else {
+          alert('Falha ao enviar arquivo via WhatsApp: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (err) {
+        alert('Erro ao enviar arquivo.');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     }
   </script>
 </body>
