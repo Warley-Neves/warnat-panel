@@ -368,4 +368,75 @@ BEGIN
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_dept ON chat_sessions(tenant_id, department_id);
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_locked ON chat_sessions(locked_by, locked_at);
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_queue ON chat_sessions(tenant_id, queued_at, priority DESC);
+
+    -- --------------------------------------------------------------------------
+    -- 13. SAAS BILLING (PAGAR.ME V5), ASSINATURAS, FATURAS E SUPERADMIN
+    -- --------------------------------------------------------------------------
+    -- Extensão de usuários para SuperAdmin
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE;
+    CREATE INDEX IF NOT EXISTS idx_users_is_super_admin ON users(is_super_admin);
+
+    -- Extensão de tenants com ciclo de vida, trial de 7 dias e travas administrativas
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'TRIALING';
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days');
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS is_manually_blocked BOOLEAN DEFAULT FALSE;
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS courtesy_plan VARCHAR(20) DEFAULT NULL;
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS past_due_since TIMESTAMPTZ DEFAULT NULL;
+    CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+
+    -- Tabela de assinaturas (subscriptions)
+    CREATE TABLE IF NOT EXISTS subscriptions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        plan_id VARCHAR(50) NOT NULL,
+        pagarme_subscription_id VARCHAR(100),
+        pagarme_customer_id VARCHAR(100),
+        status VARCHAR(50) DEFAULT 'active',
+        payment_method VARCHAR(30) DEFAULT 'credit_card',
+        current_period_start TIMESTAMPTZ DEFAULT NOW(),
+        current_period_end TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '30 days'),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_subscriptions_tenant ON subscriptions(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_subscriptions_pagarme ON subscriptions(pagarme_subscription_id);
+
+    -- Tabela de faturas (invoices)
+    CREATE TABLE IF NOT EXISTS invoices (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        subscription_id UUID REFERENCES subscriptions(id) ON DELETE SET NULL,
+        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        pagarme_invoice_id VARCHAR(100),
+        amount_cents INT NOT NULL,
+        status VARCHAR(30) DEFAULT 'PENDING',
+        pix_qr_code TEXT,
+        pix_copy_paste TEXT,
+        paid_at TIMESTAMPTZ,
+        due_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_invoices_tenant ON invoices(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_invoices_pagarme ON invoices(pagarme_invoice_id);
+
+    -- Tabela de idempotência de webhooks
+    CREATE TABLE IF NOT EXISTS processed_webhooks (
+        event_id VARCHAR(150) PRIMARY KEY,
+        event_type VARCHAR(100),
+        processed_at TIMESTAMPTZ DEFAULT NOW(),
+        payload JSONB DEFAULT '{}'
+    );
+
+    -- Tabela de logs de auditoria do SuperAdmin
+    CREATE TABLE IF NOT EXISTS admin_audit_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        admin_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        target_tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+        action VARCHAR(60) NOT NULL,
+        details JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_target ON admin_audit_logs(target_tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_logs(created_at DESC);
 END $$;

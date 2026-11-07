@@ -177,6 +177,7 @@ const server = http.createServer(async (req, res) => {
         buffers.push(chunk);
       }
       const dataStr = Buffer.concat(buffers).toString();
+      req.rawBody = dataStr;
       if (dataStr) {
         body = JSON.parse(dataStr);
       }
@@ -194,9 +195,9 @@ const server = http.createServer(async (req, res) => {
 
   try {
     // --------------------------------------------------------------------------
-    // ROTAS DA API V2 (MULTI-TENANT SAAS)
+    // ROTAS DA API V2 (MULTI-TENANT SAAS) & WEBHOOK PAGAR.ME
     // --------------------------------------------------------------------------
-    if (pathname.startsWith('/api/v2/')) {
+    if (pathname.startsWith('/api/v2/') || pathname === '/api/webhooks/pagarme' || pathname === '/api/webhook/pagarme') {
       const handled = await handleV2Routes(req, res, pathname, method, body);
       if (handled !== false) return;
     }
@@ -241,7 +242,7 @@ const server = http.createServer(async (req, res) => {
     // MIDDLEWARE DE PROTEÇÃO: TODAS AS ROTAS /api/* EXIGEM AUTENTICAÇÃO
     // --------------------------------------------------------------------------
     const isCalendarRoute = pathname.startsWith('/api/calendar');
-    const isWebhookRoute = pathname.startsWith('/api/webhook');
+    const isWebhookRoute = pathname.startsWith('/api/webhook') || pathname.startsWith('/api/webhooks');
     const isPublicRoute = pathname.startsWith('/api/public/');
 
     const reqKey = req.headers['apikey'] || parsedUrl.query.apikey || '';

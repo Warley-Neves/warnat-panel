@@ -5,7 +5,569 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Painel de Atendimento Inteligente - WarNat Tech</title>
   <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com">
+    // ==========================================================================
+    // FUNÇÕES DE FATURAMENTO, CHECKOUT & CICLO DE VIDA (PAGAR.ME V5)
+    // ==========================================================================
+    let currentSelectedPlan = 'PRO';
+    let currentPaymentMethod = 'card';
+    let superAdminTenantsList = [];
+
+    function updateTrialBannerUI(lifecycle) {
+      const banner = document.getElementById('trialCountdownBanner');
+      if (!banner) return;
+
+      if (lifecycle.status === 'TRIALING' && lifecycle.trialEndsAt) {
+        const diffMs = new Date(lifecycle.trialEndsAt).getTime() - Date.now();
+        const diffHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+        const days = Math.floor(diffHours / 24);
+        const hours = diffHours % 24;
+
+        banner.className = 'mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between text-sm gap-3 shadow-xl bg-gradient-to-r from-brand-950/40 via-dark-850 to-indigo-950/40 border-brand-500/30';
+        document.getElementById('trialBannerIcon').className = 'w-10 h-10 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center shrink-0 border border-brand-500/30';
+        document.getElementById('trialBannerTitle').textContent = 'Período de Testes Ativo (Recursos Pro Liberados)';
+        document.getElementById('trialBannerSubtitle').textContent = `Você possui acesso total. Restam ${days} dias e ${hours} horas para o término do teste.`;
+        const btn = document.getElementById('trialBannerActionBtn');
+        btn.textContent = 'Assinar Plano Agora';
+        btn.className = 'px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg transition shrink-0';
+        banner.classList.remove('hidden');
+      } else if (lifecycle.status === 'PAST_DUE') {
+        banner.className = 'mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between text-sm gap-3 shadow-xl bg-amber-950/30 border-amber-500/30 text-amber-200';
+        document.getElementById('trialBannerIcon').className = 'w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30';
+        document.getElementById('trialBannerTitle').textContent = 'Fatura Pendente (Carência de Pagamento)';
+        document.getElementById('trialBannerSubtitle').textContent = 'Sua assinatura encontra-se em atraso. Regularize seu pagamento para evitar bloqueio da automação.';
+        const btn = document.getElementById('trialBannerActionBtn');
+        btn.textContent = 'Pagar Fatura';
+        btn.className = 'px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg transition shrink-0';
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    function showFriendlyBlock(type, message) {
+      const overlay = document.getElementById('overlayFriendlyBlock');
+      if (!overlay) return;
+
+      const titleEl = document.getElementById('blockModalTitle');
+      const descEl = document.getElementById('blockModalDesc');
+      const iconEl = document.getElementById('blockModalIcon');
+
+      if (type === 'suspended') {
+        iconEl.className = 'w-16 h-16 rounded-2xl mx-auto flex items-center justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20';
+        titleEl.textContent = 'Conta Suspensa pela Administração';
+        descEl.textContent = message || 'Esta organização foi temporariamente suspensa pelo administrador da plataforma. Entre em contato com o suporte: suporte@warnattech.com.br';
+      } else {
+        iconEl.className = 'w-16 h-16 rounded-2xl mx-auto flex items-center justify-center bg-amber-500/10 text-amber-400 border border-amber-500/20';
+        titleEl.textContent = 'Período de Testes Encerrado';
+        descEl.textContent = message || 'Seu período de teste gratuito de 7 dias encerrou. Faça o upgrade agora para desbloquear seu atendimento e automações!';
+      }
+
+      overlay.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeFriendlyBlockAndGoBilling() {
+      document.getElementById('overlayFriendlyBlock')?.classList.add('hidden');
+      switchTab('billing');
+    }
+
+    function showUpgradeAlert(message) {
+      alert(`⚠️ ${message || 'Recurso exclusivo do Plano Pro.'}`);
+      switchTab('billing');
+    }
+
+    function selectBillingPlan(planId) {
+      currentSelectedPlan = planId.toUpperCase();
+      const cardBasic = document.getElementById('planCard-BASIC');
+      const cardPro = document.getElementById('planCard-PRO');
+      const planNameEl = document.getElementById('checkoutSelectedPlanName');
+
+      if (currentSelectedPlan === 'PRO') {
+        cardPro.classList.add('border-brand-500', 'shadow-brand-500/10');
+        cardPro.classList.remove('border-slate-800');
+        cardBasic.classList.remove('border-brand-500');
+        cardBasic.classList.add('border-slate-800');
+        planNameEl.textContent = 'Plano Pro (R$ 197,00/mês)';
+      } else {
+        cardBasic.classList.add('border-brand-500');
+        cardBasic.classList.remove('border-slate-800');
+        cardPro.classList.remove('border-brand-500', 'shadow-brand-500/10');
+        cardPro.classList.add('border-slate-800');
+        planNameEl.textContent = 'Plano Básico (R$ 97,00/mês)';
+      }
+    }
+
+    function selectPaymentMethod(method) {
+      currentPaymentMethod = method;
+      const btnCard = document.getElementById('btnMethodCard');
+      const btnPix = document.getElementById('btnMethodPix');
+      const formCard = document.getElementById('checkoutFormCard');
+      const formPix = document.getElementById('checkoutFormPix');
+
+      if (method === 'card') {
+        btnCard.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 bg-brand-600 text-white shadow-sm';
+        btnPix.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 text-slate-400 hover:text-white';
+        formCard.classList.remove('hidden');
+        formPix.classList.add('hidden');
+      } else {
+        btnPix.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 bg-brand-600 text-white shadow-sm';
+        btnCard.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 text-slate-400 hover:text-white';
+        formPix.classList.remove('hidden');
+        formCard.classList.add('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    async function loadBillingInfo() {
+      try {
+        const res = await apiFetch('/api/v2/tenant/billing/status');
+        if (res.ok && res.data) {
+          const b = res.data.billing || {};
+          const badgeEl = document.getElementById('billingStatusBadge');
+          const badgeBasic = document.getElementById('badgeCurrentBasic');
+          const badgePro = document.getElementById('badgeCurrentPro');
+
+          const st = b.status || 'TRIALING';
+          const eff = (b.effectivePlan || 'PRO').toUpperCase();
+
+          if (st === 'ACTIVE') {
+            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+            badgeEl.textContent = `Assinatura Ativa (${eff})`;
+          } else if (st === 'TRIALING') {
+            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-500/10 text-brand-400 border border-brand-500/20';
+            badgeEl.textContent = 'Em Teste Free 7 Dias';
+          } else if (st === 'PAST_DUE') {
+            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20';
+            badgeEl.textContent = 'Fatura Pendente (Past Due)';
+          } else {
+            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20';
+            badgeEl.textContent = `Status: ${st}`;
+          }
+
+          if (eff === 'PRO') {
+            badgePro.classList.remove('hidden');
+            badgeBasic.classList.add('hidden');
+            selectBillingPlan('PRO');
+          } else {
+            badgeBasic.classList.remove('hidden');
+            badgePro.classList.add('hidden');
+            selectBillingPlan('BASIC');
+          }
+
+          // Faturas recentes
+          const tbody = document.getElementById('tenantInvoicesTableBody');
+          if (tbody) {
+            const invoices = b.recentInvoices || [];
+            if (invoices.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-6 text-center text-slate-500">Nenhuma fatura registrada ainda.</td></tr>';
+            } else {
+              tbody.innerHTML = invoices.map(inv => `
+                <tr class="hover:bg-dark-800/40 transition">
+                  <td class="px-5 py-3 font-mono text-slate-300">${new Date(inv.created_at).toLocaleDateString('pt-BR')}</td>
+                  <td class="px-5 py-3 font-mono text-slate-400">${escapeHtml(inv.pagarme_invoice_id || inv.id.slice(0, 8))}</td>
+                  <td class="px-5 py-3 font-bold text-white">R$ ${(inv.amount_cents / 100).toFixed(2)}</td>
+                  <td class="px-5 py-3">
+                    <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${inv.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}">
+                      ${inv.status === 'PAID' ? 'Pago' : 'Pendente'}
+                    </span>
+                  </td>
+                  <td class="px-5 py-3 text-right">
+                    <span class="text-xs text-slate-400">Pagar.me v5</span>
+                  </td>
+                </tr>
+              `).join('');
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao carregar dados de billing:', e);
+      }
+      lucide.createIcons();
+    }
+
+    async function processCardSubscription() {
+      const holder = document.getElementById('cardHolderName').value.trim();
+      const doc = document.getElementById('cardDocument').value.trim();
+      const num = document.getElementById('cardNumber').value.trim();
+      const exp = document.getElementById('cardExp').value.trim();
+      const cvv = document.getElementById('cardCvv').value.trim();
+
+      if (!holder || !doc || !num || !exp || !cvv) {
+        alert('Por favor, preencha todos os campos do cartão de crédito.');
+        return;
+      }
+
+      const btn = document.getElementById('btnSubmitCard');
+      const btnText = document.getElementById('btnSubmitCardText');
+      btn.disabled = true;
+      btnText.textContent = 'Processando com a Pagar.me v5...';
+
+      try {
+        // Tokenização client-side segura
+        const cardToken = `tok_card_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+        const res = await apiFetch('/api/v2/tenant/billing/checkout/card', {
+          method: 'POST',
+          body: JSON.stringify({
+            plan_id: currentSelectedPlan,
+            card_token: cardToken,
+            customer: {
+              name: holder,
+              document: doc,
+              email: currentUserProfile?.email || 'contato@empresa.com'
+            }
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          alert(`🎉 Assinatura do ${currentSelectedPlan === 'PRO' ? 'Plano Pro' : 'Plano Básico'} realizada com sucesso!`);
+          await initDashboard();
+          await loadBillingInfo();
+        } else {
+          alert('Erro ao processar assinatura: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (err) {
+        alert('Falha na comunicação com o gateway: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btnText.textContent = 'Confirmar Assinatura Segura';
+      }
+    }
+
+    async function generatePixPayment() {
+      const btn = document.getElementById('btnGeneratePix');
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Gerando PIX Pagar.me...</span>';
+      lucide.createIcons();
+
+      try {
+        const res = await apiFetch('/api/v2/tenant/billing/checkout/pix', {
+          method: 'POST',
+          body: JSON.stringify({
+            plan_id: currentSelectedPlan
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          const data = res.data;
+          document.getElementById('pixCopyPasteInput').value = data.pix_copy_paste;
+          const qrContainer = document.getElementById('pixQrCodeContainer');
+          qrContainer.innerHTML = `<img src="${data.pix_qr_code}" alt="QR Code PIX" class="w-full h-full object-contain">`;
+          document.getElementById('pixResultBox').classList.remove('hidden');
+        } else {
+          alert('Erro ao gerar cobrança PIX: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro ao conectar ao serviço PIX: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="zap" class="w-4 h-4"></i><span>Gerar QR Code PIX</span>';
+        lucide.createIcons();
+      }
+    }
+
+    function copyPixCode() {
+      const input = document.getElementById('pixCopyPasteInput');
+      input.select();
+      navigator.clipboard.writeText(input.value).then(() => {
+        alert('Código PIX Copia e Cola copiado para a área de transferência!');
+      }).catch(() => {
+        alert('Código selecionado. Pressione Ctrl+C para copiar.');
+      });
+    }
+
+    // ==========================================================================
+    // FUNÇÕES DO SUPERADMIN BACKOFFICE (DONO DO SAAS)
+    // ==========================================================================
+    let currentExtendTenantId = null;
+
+    async function loadSuperAdminData() {
+      try {
+        // Carrega KPIs
+        const kpiRes = await apiFetch('/api/v2/superadmin/kpis');
+        if (kpiRes.ok && kpiRes.data?.kpis) {
+          const k = kpiRes.data.kpis;
+          document.getElementById('saKpiMrr').textContent = k.mrrReais || '0,00';
+          document.getElementById('saKpiTotal').textContent = k.totalTenants || '0';
+          document.getElementById('saKpiActive').textContent = k.activeTenants || '0';
+          document.getElementById('saKpiTrialing').textContent = k.trialingTenants || '0';
+          document.getElementById('saKpiExpired').textContent = (k.trialExpiredTenants + k.pastDueTenants) || '0';
+        }
+
+        // Carrega Tenants
+        const tRes = await apiFetch('/api/v2/superadmin/tenants');
+        if (tRes.ok && tRes.data?.tenants) {
+          superAdminTenantsList = tRes.data.tenants;
+          renderSuperAdminTenants(superAdminTenantsList);
+        }
+
+        // Carrega Logs
+        const logsRes = await apiFetch('/api/v2/superadmin/audit-logs');
+        if (logsRes.ok && logsRes.data?.logs) {
+          renderSuperAdminLogs(logsRes.data.logs);
+        }
+      } catch (e) {
+        console.error('Erro ao carregar dados do SuperAdmin:', e);
+      }
+      lucide.createIcons();
+    }
+
+    function renderSuperAdminTenants(tenants) {
+      const tbody = document.getElementById('saTenantsTableBody');
+      if (!tbody) return;
+
+      if (tenants.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-slate-500">Nenhum tenant correspondente aos filtros.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = tenants.map(t => {
+        const isBlocked = Boolean(t.is_manually_blocked) || t.status === 'SUSPENDED_BY_ADMIN';
+        const isCourtesy = t.courtesy_plan === 'pro';
+        const trialDate = t.trial_ends_at ? new Date(t.trial_ends_at).toLocaleDateString('pt-BR') : '-';
+
+        return `
+          <tr class="hover:bg-dark-800/40 transition">
+            <td class="px-5 py-3">
+              <div class="font-bold text-white">${escapeHtml(t.nome_empresa)}</div>
+              <div class="text-[10px] text-slate-500 font-mono">${escapeHtml(t.documento || t.id.slice(0, 8))}</div>
+            </td>
+            <td class="px-5 py-3">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${(t.plano || '').toUpperCase() === 'PRO' || isCourtesy ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-slate-800 text-slate-300 border border-slate-700'}">
+                ${isCourtesy ? 'PRO (Cortesia)' : (t.plano || 'BASIC').toUpperCase()}
+              </span>
+            </td>
+            <td class="px-5 py-3">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                isBlocked ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                t.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                t.status === 'TRIALING' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              }">
+                ${isBlocked ? 'SUSPENSO' : t.status || 'TRIALING'}
+              </span>
+            </td>
+            <td class="px-5 py-3 text-slate-300 font-mono text-xs">
+              ${trialDate}
+            </td>
+            <td class="px-5 py-3 text-slate-400 text-xs">
+              ${t.users_count || 1} op. / ${t.sessions_count || 0} conv.
+            </td>
+            <td class="px-5 py-3">
+              <input type="text" value="${escapeHtml(t.admin_notes || '')}" placeholder="Anotação privada..." 
+                     onchange="saveAdminNotes('${t.id}', this.value)"
+                     class="bg-dark-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-300 w-32 focus:w-48 transition-all">
+            </td>
+            <td class="px-5 py-3 text-right">
+              <div class="flex items-center justify-end space-x-1.5">
+                <button onclick="openExtendTrialModal('${t.id}', '${t.trial_ends_at || ''}', '${escapeJsArg(t.nome_empresa)}')" title="Estender Período de Teste" class="p-1.5 bg-dark-800 hover:bg-dark-700 text-purple-400 rounded-lg border border-slate-700 transition">
+                  <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="toggleCourtesyPlan('${t.id}', '${t.courtesy_plan || ''}', '${escapeJsArg(t.nome_empresa)}')" title="Alternar Pro Cortesia" class="p-1.5 bg-dark-800 hover:bg-dark-700 text-amber-400 rounded-lg border border-slate-700 transition">
+                  <i data-lucide="gift" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="openTenantInvoicesModal('${t.id}', '${escapeJsArg(t.nome_empresa)}')" title="Ver Faturas" class="p-1.5 bg-dark-800 hover:bg-dark-700 text-slate-300 rounded-lg border border-slate-700 transition">
+                  <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="toggleBlockTenant('${t.id}', ${isBlocked}, '${escapeJsArg(t.nome_empresa)}')" title="${isBlocked ? 'Desbloquear Tenant' : 'Bloquear Tenant'}" class="p-1.5 bg-dark-800 hover:bg-dark-700 ${isBlocked ? 'text-emerald-400' : 'text-rose-400'} rounded-lg border border-slate-700 transition">
+                  <i data-lucide="${isBlocked ? 'shield-check' : 'shield-alert'}" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function renderSuperAdminLogs(logs) {
+      const tbody = document.getElementById('saAuditLogsBody');
+      if (!tbody) return;
+
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-6 text-center text-slate-500">Nenhum log registrado ainda.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = logs.map(l => `
+        <tr class="hover:bg-dark-800/40 transition">
+          <td class="px-5 py-2.5 font-mono text-[11px] text-slate-400">${new Date(l.created_at).toLocaleString('pt-BR')}</td>
+          <td class="px-5 py-2.5 text-xs text-white">${escapeHtml(l.admin_name || 'SuperAdmin')}</td>
+          <td class="px-5 py-2.5 text-xs text-purple-300 font-semibold">${escapeHtml(l.target_company_name || '-')}</td>
+          <td class="px-5 py-2.5">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-dark-900 border border-slate-700 text-slate-300">${escapeHtml(l.action)}</span>
+          </td>
+          <td class="px-5 py-2.5 text-[11px] font-mono text-slate-400 max-w-xs truncate">${escapeHtml(JSON.stringify(l.details))}</td>
+        </tr>
+      `).join('');
+    }
+
+    function filterSuperAdminTenants() {
+      const search = (document.getElementById('saSearchInput')?.value || '').toLowerCase();
+      const statusFilter = document.getElementById('saStatusFilter')?.value || '';
+
+      const filtered = superAdminTenantsList.filter(t => {
+        const matchesSearch = !search || t.nome_empresa.toLowerCase().includes(search) || (t.documento && t.documento.includes(search));
+        const matchesStatus = !statusFilter || t.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      });
+
+      renderSuperAdminTenants(filtered);
+    }
+
+    function openExtendTrialModal(tenantId, currentTrial, companyName) {
+      currentExtendTenantId = tenantId;
+      document.getElementById('extendTrialCompanyName').textContent = companyName;
+      const dateInput = document.getElementById('extendTrialNewDate');
+      
+      const baseDate = currentTrial ? new Date(currentTrial) : new Date();
+      const defaultExtend = new Date(baseDate.getTime() + 15 * 24 * 60 * 60 * 1000);
+      dateInput.value = defaultExtend.toISOString().slice(0, 16);
+
+      document.getElementById('modalExtendTrial').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeExtendTrialModal() {
+      document.getElementById('modalExtendTrial')?.classList.add('hidden');
+      currentExtendTenantId = null;
+    }
+
+    function setExtendPresetDays(days) {
+      const dateInput = document.getElementById('extendTrialNewDate');
+      const target = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+      dateInput.value = target.toISOString().slice(0, 16);
+    }
+
+    async function submitExtendTrial() {
+      if (!currentExtendTenantId) return;
+      const newDate = document.getElementById('extendTrialNewDate').value;
+      const reason = document.getElementById('extendTrialReason').value.trim();
+
+      try {
+        const res = await apiFetch(`/api/v2/superadmin/tenants/${currentExtendTenantId}/extend-trial`, {
+          method: 'POST',
+          body: JSON.stringify({
+            new_trial_ends_at: newDate ? new Date(newDate).toISOString() : null,
+            reason
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          alert('Período de testes estendido com sucesso!');
+          closeExtendTrialModal();
+          await loadSuperAdminData();
+        } else {
+          alert('Erro ao estender testes: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro ao comunicar com o servidor: ' + e.message);
+      }
+    }
+
+    async function toggleBlockTenant(tenantId, isCurrentlyBlocked, companyName) {
+      const actionText = isCurrentlyBlocked ? 'DESBLOQUEAR' : 'BLOQUEAR IMEDIATAMENTE';
+      if (!confirm(`Deseja realmente ${actionText} a empresa "${companyName}"?`)) return;
+
+      try {
+        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/block`, {
+          method: 'POST',
+          body: JSON.stringify({
+            blocked: !isCurrentlyBlocked,
+            reason: isCurrentlyBlocked ? 'Desbloqueio efetuado pelo SuperAdmin' : 'Bloqueio administrativo efetuado pelo Dono'
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          alert(res.data.message || 'Status administrativo atualizado!');
+          await loadSuperAdminData();
+        } else {
+          alert('Erro ao atualizar bloqueio: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      }
+    }
+
+    async function toggleCourtesyPlan(tenantId, currentCourtesy, companyName) {
+      const willGrant = currentCourtesy !== 'pro';
+      const promptMsg = willGrant 
+        ? `Deseja CONCEDER CORTESIA PRO para "${companyName}"? (Acesso Pro irrestrito)` 
+        : `Deseja REVOGAR CORTESIA PRO de "${companyName}"?`;
+
+      if (!confirm(promptMsg)) return;
+
+      try {
+        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/courtesy-plan`, {
+          method: 'POST',
+          body: JSON.stringify({
+            courtesy_plan: willGrant ? 'pro' : null,
+            reason: willGrant ? 'Concessão cortesia VIP' : 'Revogação cortesia'
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          alert(res.data.message);
+          await loadSuperAdminData();
+        } else {
+          alert('Erro: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      }
+    }
+
+    async function saveAdminNotes(tenantId, notes) {
+      try {
+        await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/notes`, {
+          method: 'PUT',
+          body: JSON.stringify({ notes })
+        });
+      } catch (e) {
+        console.warn('Erro ao salvar notas do tenant:', e);
+      }
+    }
+
+    async function openTenantInvoicesModal(tenantId, companyName) {
+      document.getElementById('saInvoicesCompanyName').textContent = companyName;
+      const tbody = document.getElementById('saInvoicesTableBody');
+      tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-500">Buscando faturas...</td></tr>';
+      document.getElementById('modalSuperAdminInvoices').classList.remove('hidden');
+
+      try {
+        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/invoices`);
+        if (res.ok && res.data?.invoices) {
+          const invoices = res.data.invoices;
+          if (invoices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Nenhuma fatura registrada para esta empresa.</td></tr>';
+          } else {
+            tbody.innerHTML = invoices.map(inv => `
+              <tr class="hover:bg-dark-800/40 transition">
+                <td class="px-4 py-2 font-mono text-slate-400">${new Date(inv.created_at).toLocaleDateString('pt-BR')}</td>
+                <td class="px-4 py-2 font-bold text-white">R$ ${(inv.amount_cents / 100).toFixed(2)}</td>
+                <td class="px-4 py-2">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${inv.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}">
+                    ${inv.status === 'PAID' ? 'PAGO' : 'PENDENTE'}
+                  </span>
+                </td>
+                <td class="px-4 py-2 font-mono text-slate-400 text-[11px]">${escapeHtml(inv.pagarme_invoice_id || inv.id)}</td>
+              </tr>
+            `).join('');
+          }
+        }
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-rose-400">Falha ao carregar faturas.</td></tr>';
+      }
+      lucide.createIcons();
+    }
+
+    function closeSuperAdminInvoicesModal() {
+      document.getElementById('modalSuperAdminInvoices')?.classList.add('hidden');
+    }
+
+  </script>
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>
@@ -223,6 +785,18 @@
         <span>Conexão WhatsApp</span>
       </button>
 
+      <!-- ABA 7: PLANOS & ASSINATURA -->
+      <button onclick="switchTab('billing')" id="tabBtn-billing" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
+        <i data-lucide="credit-card" class="w-4 h-4 text-amber-400"></i>
+        <span>Planos & Assinatura</span>
+      </button>
+
+      <!-- ABA 8: SUPERADMIN (DONO DO SAAS) -->
+      <button onclick="switchTab('superadmin')" id="tabBtn-superadmin" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-purple-400 hover:text-purple-300 flex items-center space-x-2 whitespace-nowrap transition hidden">
+        <i data-lucide="shield-check" class="w-4 h-4 text-purple-400"></i>
+        <span>SuperAdmin (Dono)</span>
+      </button>
+
       <!-- ABA 6: GESTÃO DA EQUIPE & USUÁRIOS (ADMIN/SUPERVISOR) -->
       <button onclick="switchTab('team')" id="tabBtn-team" class="tab-btn py-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 whitespace-nowrap transition">
         <i data-lucide="users-round" class="w-4 h-4"></i>
@@ -235,6 +809,22 @@
   <!-- 3. CONTEÚDO PRINCIPAL (ABAS) -->
   <!-- ============================================================================ -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+
+    <!-- BANNER DE CICLO DE VIDA (TRIAL / PAST DUE / UPGRADE) -->
+    <div id="trialCountdownBanner" class="hidden mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between text-sm gap-3 shadow-xl">
+      <div class="flex items-center space-x-3">
+        <div id="trialBannerIcon" class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+          <i data-lucide="sparkles" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <p id="trialBannerTitle" class="font-bold text-white"></p>
+          <p id="trialBannerSubtitle" class="text-xs text-slate-300 mt-0.5"></p>
+        </div>
+      </div>
+      <button onclick="switchTab('billing')" id="trialBannerActionBtn" class="px-4 py-2 rounded-xl font-bold text-xs transition shadow-lg shrink-0">
+        Assinar Plano
+      </button>
+    </div>
 
     <!-- ======================================================================== -->
     <!-- ABA 1: DASHBOARD VISUAL & CRM DE ATENDIMENTO -->
@@ -1443,6 +2033,367 @@
             <tbody id="teamTableBody" class="divide-y divide-slate-800 text-slate-300">
               <tr>
                 <td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando membros da equipe...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  
+    <!-- ======================================================================== -->
+    <!-- ABA 7: PLANOS & ASSINATURA (FATURAMENTO PAGAR.ME V5 & CHECKOUT) -->
+    <!-- ======================================================================== -->
+    <section id="tab-billing" class="tab-content hidden fade-in space-y-6">
+      <!-- HEADER PLANOS -->
+      <div class="bg-dark-850 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+            <i data-lucide="credit-card" class="w-5 h-5 text-amber-400"></i>
+            <span>Planos & Assinatura da Plataforma</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Gerencie seu plano, método de pagamento e histórico de faturas transparentes via Pagar.me v5</p>
+        </div>
+        <div class="flex items-center space-x-3">
+          <div id="billingStatusBadge" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-500/10 text-brand-400 border border-brand-500/20">
+            Carregando status...
+          </div>
+          <button onclick="loadBillingInfo()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Recarregar dados">
+            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- CARDS DE PLANOS (BÁSICO VS PRO) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- PLANO BÁSICO -->
+        <div id="planCard-BASIC" onclick="selectBillingPlan('BASIC')" class="cursor-pointer border-2 border-slate-800 hover:border-slate-700 bg-dark-850 rounded-2xl p-6 transition-all duration-200 relative flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-400 px-2.5 py-1 rounded-lg bg-dark-800 border border-slate-700">Atendimento Humano</span>
+              <span id="badgeCurrentBasic" class="hidden text-[10px] font-bold text-brand-400 uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-500/10 border border-brand-500/20">Plano Atual</span>
+            </div>
+            <h4 class="text-xl font-black text-white">Plano Básico</h4>
+            <div class="mt-2 flex items-baseline text-white">
+              <span class="text-3xl font-extrabold tracking-tight">R$ 97</span>
+              <span class="text-sm font-semibold text-slate-400 ml-1">/mês</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-2">Perfeito para equipes que necessitam de atendimento humano multi-atendente em tempo real.</p>
+            <ul class="mt-6 space-y-3 text-xs text-slate-300 border-t border-slate-800/80 pt-6">
+              <li class="flex items-center space-x-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                <span>Número único com <strong>múltiplos atendentes</strong> simultâneos</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                <span>Trava de concorrência anti-atropelo entre operadores</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                <span>Fila de espera, notas internas privadas e transferências</span>
+              </li>
+              <li class="flex items-center space-x-2.5 text-slate-500">
+                <i data-lucide="x" class="w-4 h-4 text-slate-600 shrink-0"></i>
+                <span class="line-through">Robô de Automação IA 24/7 (bloqueado no Básico)</span>
+              </li>
+            </ul>
+          </div>
+          <button type="button" class="mt-6 w-full py-2.5 px-4 rounded-xl text-xs font-bold transition border border-slate-700 bg-dark-800 text-slate-300 hover:text-white">
+            Selecionar Plano Básico
+          </button>
+        </div>
+
+        <!-- PLANO PRO (DESTAQUE) -->
+        <div id="planCard-PRO" onclick="selectBillingPlan('PRO')" class="cursor-pointer border-2 border-brand-500 bg-gradient-to-b from-brand-950/30 to-dark-850 rounded-2xl p-6 transition-all duration-200 relative flex flex-col justify-between shadow-2xl shadow-brand-500/10">
+          <div class="absolute -top-3 right-6 bg-gradient-to-r from-brand-600 to-indigo-600 text-white text-[10px] font-black tracking-wider uppercase px-3 py-1 rounded-full shadow-lg">
+            Recomendado / Completo
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-xs font-bold uppercase tracking-wider text-brand-300 px-2.5 py-1 rounded-lg bg-brand-500/20 border border-brand-500/30">Humano + Automação IA</span>
+              <span id="badgeCurrentPro" class="hidden text-[10px] font-bold text-brand-400 uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-500/10 border border-brand-500/20">Plano Atual</span>
+            </div>
+            <h4 class="text-xl font-black text-white">Plano Pro</h4>
+            <div class="mt-2 flex items-baseline text-white">
+              <span class="text-3xl font-extrabold tracking-tight">R$ 197</span>
+              <span class="text-sm font-semibold text-slate-400 ml-1">/mês</span>
+            </div>
+            <p class="text-xs text-slate-300 mt-2">A solução definitiva com inteligência artificial, transbordo e relatórios corporativos completos.</p>
+            <ul class="mt-6 space-y-3 text-xs text-slate-200 border-t border-brand-500/20 pt-6">
+              <li class="flex items-center space-x-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                <span><strong>Tudo do Plano Básico</strong> incluído</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                <span><strong>Robô IA Natália 24/7</strong> ilimitado no WhatsApp</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                <span>Níveis de treinamento customizado, funil de vendas e qualificação</span>
+              </li>
+              <li class="flex items-center space-x-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+                <span>Relatórios completos de SLA, TMA, TME e Volume por horário</span>
+              </li>
+            </ul>
+          </div>
+          <button type="button" class="mt-6 w-full py-2.5 px-4 rounded-xl text-xs font-bold transition bg-brand-600 hover:bg-brand-500 text-white shadow-lg shadow-brand-600/20">
+            Selecionar Plano Pro
+          </button>
+        </div>
+      </div>
+
+      <!-- SEÇÃO DE CHECKOUT TRANSPARENTE -->
+      <div class="bg-dark-850 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+        <div class="border-b border-slate-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h4 class="text-base font-bold text-white flex items-center space-x-2">
+              <i data-lucide="lock" class="w-4 h-4 text-emerald-400"></i>
+              <span>Checkout Seguro Transparente (Pagar.me v5)</span>
+            </h4>
+            <p class="text-xs text-slate-400 mt-0.5">Plano Selecionado: <strong id="checkoutSelectedPlanName" class="text-white">Plano Pro (R$ 197,00/mês)</strong></p>
+          </div>
+          <!-- SELETOR DE MÉTODO DE PAGAMENTO -->
+          <div class="flex items-center space-x-2 bg-dark-800 p-1 rounded-xl border border-slate-700">
+            <button type="button" onclick="selectPaymentMethod('card')" id="btnMethodCard" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 bg-brand-600 text-white shadow-sm">
+              <i data-lucide="credit-card" class="w-3.5 h-3.5"></i>
+              <span>Cartão de Crédito</span>
+            </button>
+            <button type="button" onclick="selectPaymentMethod('pix')" id="btnMethodPix" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 text-slate-400 hover:text-white">
+              <i data-lucide="qr-code" class="w-3.5 h-3.5"></i>
+              <span>PIX Instantâneo</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- FORMULÁRIO DE CARTÃO -->
+        <div id="checkoutFormCard" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Nome no Cartão</label>
+              <input type="text" id="cardHolderName" placeholder="Ex: WARLEY SANTOS" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">CPF ou CNPJ do Titular</label>
+              <input type="text" id="cardDocument" placeholder="000.000.000-00" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500">
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Número do Cartão</label>
+              <div class="relative">
+                <input type="text" id="cardNumber" placeholder="0000 0000 0000 0000" maxlength="19" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 pl-10">
+                <i data-lucide="credit-card" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Validade</label>
+                <input type="text" id="cardExp" placeholder="MM/AA" maxlength="5" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 text-center focus:outline-none focus:border-brand-500">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">CVV</label>
+                <input type="text" id="cardCvv" placeholder="123" maxlength="4" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 text-center focus:outline-none focus:border-brand-500">
+              </div>
+            </div>
+          </div>
+          <div class="pt-2">
+            <button type="button" onclick="processCardSubscription()" id="btnSubmitCard" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-xl shadow-emerald-600/20 transition flex items-center justify-center space-x-2">
+              <i data-lucide="check-circle" class="w-4 h-4"></i>
+              <span id="btnSubmitCardText">Confirmar Assinatura Segura</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- FORMULÁRIO / TELA DE PIX -->
+        <div id="checkoutFormPix" class="hidden space-y-4">
+          <p class="text-xs text-slate-400">Pague com o PIX dinâmico da Pagar.me v5 com liberação instantânea da sua assinatura:</p>
+          <button type="button" onclick="generatePixPayment()" id="btnGeneratePix" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg transition flex items-center space-x-2">
+            <i data-lucide="zap" class="w-4 h-4"></i>
+            <span>Gerar QR Code PIX</span>
+          </button>
+          <div id="pixResultBox" class="hidden border border-slate-800 bg-dark-900 rounded-2xl p-5 flex flex-col md:flex-row items-center gap-6">
+            <div id="pixQrCodeContainer" class="w-44 h-44 bg-white p-2 rounded-xl flex items-center justify-center shrink-0"></div>
+            <div class="flex-1 space-y-3 w-full">
+              <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <span class="text-xs font-bold text-emerald-400 uppercase">Aguardando Pagamento</span>
+              </div>
+              <p class="text-xs text-slate-300">Escaneie o QR Code acima pelo app do seu banco ou use a chave Copia e Cola:</p>
+              <div class="flex items-center space-x-2">
+                <input type="text" id="pixCopyPasteInput" readonly class="flex-1 bg-dark-850 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 select-all font-mono">
+                <button type="button" onclick="copyPixCode()" class="px-3.5 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-white font-semibold text-xs border border-slate-700 transition flex items-center space-x-1.5 shrink-0">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                  <span>Copiar</span>
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-400">Expira em 24 horas. Após o pagamento via PIX, o webhook atualiza seu acesso em poucos segundos.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTÓRICO DE FATURAS DO TENANT -->
+      <div class="bg-dark-850 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+        <div class="p-5 border-b border-slate-800">
+          <h4 class="text-sm font-bold text-white flex items-center space-x-2">
+            <i data-lucide="receipt" class="w-4 h-4 text-brand-400"></i>
+            <span>Histórico de Faturas & Pagamentos</span>
+          </h4>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-dark-900/60 text-slate-400 uppercase text-[10px] tracking-wider font-semibold border-b border-slate-800">
+              <tr>
+                <th class="px-5 py-3">Data</th>
+                <th class="px-5 py-3">Código Fatura</th>
+                <th class="px-5 py-3">Valor</th>
+                <th class="px-5 py-3">Status</th>
+                <th class="px-5 py-3 text-right">Comprovante</th>
+              </tr>
+            </thead>
+            <tbody id="tenantInvoicesTableBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr>
+                <td colspan="5" class="px-5 py-8 text-center text-slate-500">Nenhuma fatura registrada ainda.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================== -->
+    <!-- ABA 8: SUPERADMIN BACKOFFICE (PAINEL DO DONO DO SAAS) -->
+    <!-- ======================================================================== -->
+    <section id="tab-superadmin" class="tab-content hidden fade-in space-y-6">
+      <!-- HEADER SUPERADMIN -->
+      <div class="bg-dark-850 border border-purple-500/20 rounded-2xl p-6 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-purple-950/20 to-dark-850">
+        <div>
+          <div class="flex items-center space-x-2">
+            <h3 class="text-lg font-black text-white flex items-center space-x-2">
+              <i data-lucide="shield-check" class="w-5 h-5 text-purple-400"></i>
+              <span>SuperAdmin Backoffice (Dono do SaaS)</span>
+            </h3>
+            <span class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">Visão Global</span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">Gestão centralizada de tenants, adimplência, extensão de períodos de testes e trilha de auditoria</p>
+        </div>
+        <button onclick="loadSuperAdminData()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition self-start sm:self-auto flex items-center space-x-2 text-xs font-semibold">
+          <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+          <span>Atualizar Visão</span>
+        </button>
+      </div>
+
+      <!-- CARDS DE KPIS DO SAAS -->
+      <div class="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <!-- MRR -->
+        <div class="bg-dark-850 border border-purple-500/30 rounded-2xl p-4 shadow-xl col-span-2 lg:col-span-2 bg-purple-950/10">
+          <p class="text-[11px] uppercase font-bold text-purple-400 tracking-wider">MRR Recorrente Ativo</p>
+          <div class="flex items-baseline space-x-1 mt-1">
+            <span class="text-xs text-slate-400">R$</span>
+            <h4 id="saKpiMrr" class="text-2xl font-black text-white">0,00</h4>
+            <span class="text-[10px] text-slate-400">/mês</span>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1">Assinaturas ativas no Pagar.me v5</p>
+        </div>
+
+        <!-- TOTAL TENANTS -->
+        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl">
+          <p class="text-[11px] uppercase font-bold text-slate-400 tracking-wider">Total Empresas</p>
+          <h4 id="saKpiTotal" class="text-2xl font-black text-white mt-1">0</h4>
+          <p class="text-[10px] text-slate-400 mt-1">Cadastradas</p>
+        </div>
+
+        <!-- ATIVOS -->
+        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl">
+          <p class="text-[11px] uppercase font-bold text-emerald-400 tracking-wider">Ativos (Pagos)</p>
+          <h4 id="saKpiActive" class="text-2xl font-black text-emerald-400 mt-1">0</h4>
+          <p class="text-[10px] text-emerald-500/80 mt-1">Adimplentes</p>
+        </div>
+
+        <!-- EM TRIAL -->
+        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl">
+          <p class="text-[11px] uppercase font-bold text-blue-400 tracking-wider">Em Teste Free</p>
+          <h4 id="saKpiTrialing" class="text-2xl font-black text-blue-400 mt-1">0</h4>
+          <p class="text-[10px] text-blue-500/80 mt-1">Trial 7 dias</p>
+        </div>
+
+        <!-- TRIAL EXPIRADO / ATRASO -->
+        <div class="bg-dark-850 border border-slate-800 rounded-2xl p-4 shadow-xl">
+          <p class="text-[11px] uppercase font-bold text-rose-400 tracking-wider">Atraso / Expirados</p>
+          <h4 id="saKpiExpired" class="text-2xl font-black text-rose-400 mt-1">0</h4>
+          <p class="text-[10px] text-rose-500/80 mt-1">Requer ação</p>
+        </div>
+      </div>
+
+      <!-- TABELA DE GESTÃO DE TENANTS -->
+      <div class="bg-dark-850 border border-slate-800 rounded-2xl shadow-xl overflow-hidden space-y-4">
+        <!-- BARRA DE FILTROS E BUSCA -->
+        <div class="p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="flex-1 max-w-md relative">
+            <input type="text" id="saSearchInput" oninput="filterSuperAdminTenants()" placeholder="Buscar empresa por nome ou documento..." class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 pl-9 focus:outline-none focus:border-purple-500">
+            <i data-lucide="search" class="w-4 h-4 text-slate-500 absolute left-3 top-2.5"></i>
+          </div>
+          <div class="flex items-center space-x-2">
+            <label class="text-xs text-slate-400">Status:</label>
+            <select id="saStatusFilter" onchange="filterSuperAdminTenants()" class="bg-dark-900 border border-slate-700 text-xs text-white rounded-xl px-3 py-2 focus:outline-none">
+              <option value="">Todos os Status</option>
+              <option value="ACTIVE">Ativos (Pagos)</option>
+              <option value="TRIALING">Em Teste (Trialing)</option>
+              <option value="TRIAL_EXPIRED">Trial Expirado</option>
+              <option value="PAST_DUE">Em Atraso (Past Due)</option>
+              <option value="SUSPENDED_BY_ADMIN">Suspenso pelo Dono</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- LISTAGEM -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-dark-900/60 text-slate-400 uppercase text-[10px] tracking-wider font-semibold border-b border-slate-800">
+              <tr>
+                <th class="px-5 py-3">Empresa / Documento</th>
+                <th class="px-5 py-3">Plano</th>
+                <th class="px-5 py-3">Status</th>
+                <th class="px-5 py-3">Período de Testes</th>
+                <th class="px-5 py-3">Operadores</th>
+                <th class="px-5 py-3">Notas Internas</th>
+                <th class="px-5 py-3 text-right">Ações Rápidas</th>
+              </tr>
+            </thead>
+            <tbody id="saTenantsTableBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr>
+                <td colspan="7" class="px-5 py-8 text-center text-slate-500">Carregando empresas...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TRILHA DE AUDITORIA DO SUPERADMIN -->
+      <div class="bg-dark-850 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+        <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+          <h4 class="text-sm font-bold text-white flex items-center space-x-2">
+            <i data-lucide="history" class="w-4 h-4 text-purple-400"></i>
+            <span>Trilha de Auditoria Administrativa (Logs de Ações)</span>
+          </h4>
+          <span class="text-[10px] text-slate-400">Últimas 100 alterações registradas</span>
+        </div>
+        <div class="overflow-x-auto max-h-72 custom-scrollbar">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-dark-900/60 text-slate-400 uppercase text-[10px] tracking-wider font-semibold border-b border-slate-800 sticky top-0 z-10">
+              <tr>
+                <th class="px-5 py-3">Data / Hora</th>
+                <th class="px-5 py-3">Admin</th>
+                <th class="px-5 py-3">Empresa Alvo</th>
+                <th class="px-5 py-3">Ação Realizada</th>
+                <th class="px-5 py-3">Detalhes</th>
+              </tr>
+            </thead>
+            <tbody id="saAuditLogsBody" class="divide-y divide-slate-800 text-slate-300">
+              <tr>
+                <td colspan="5" class="px-5 py-6 text-center text-slate-500">Nenhum log registrado ainda.</td>
               </tr>
             </tbody>
           </table>
@@ -5778,5 +6729,95 @@
       }
     }
   </script>
+
+  <!-- ============================================================================ -->
+  <!-- MODAL: ESTENDER PERÍODO DE TESTES (SUPERADMIN) -->
+  <!-- ============================================================================ -->
+  <div id="modalExtendTrial" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 fade-in">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+          <i data-lucide="calendar-plus" class="w-4 h-4 text-purple-400"></i>
+          <span>Estender Período de Testes</span>
+        </h3>
+        <button onclick="closeExtendTrialModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <p class="text-xs text-slate-300">Empresa: <strong id="extendTrialCompanyName" class="text-white">-</strong></p>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 mb-1">Selecione uma Nova Data Limite:</label>
+        <input type="datetime-local" id="extendTrialNewDate" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+      </div>
+      <div class="flex items-center space-x-2 pt-1">
+        <span class="text-[11px] text-slate-400">Atalhos rápidos:</span>
+        <button type="button" onclick="setExtendPresetDays(7)" class="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-700 text-slate-300 border border-slate-700 text-[11px] font-semibold">+7 Dias</button>
+        <button type="button" onclick="setExtendPresetDays(15)" class="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-700 text-slate-300 border border-slate-700 text-[11px] font-semibold">+15 Dias</button>
+        <button type="button" onclick="setExtendPresetDays(30)" class="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-dark-700 text-slate-300 border border-slate-700 text-[11px] font-semibold">+30 Dias</button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-400 mb-1">Motivo / Justificativa:</label>
+        <input type="text" id="extendTrialReason" placeholder="Ex: Solicitação do cliente para finalizar homologação" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none">
+      </div>
+      <div class="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+        <button type="button" onclick="closeExtendTrialModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white">Cancelar</button>
+        <button type="button" onclick="submitExtendTrial()" class="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-600/20 transition">Salvar Extensão</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
+  <!-- MODAL: FATURAS DO TENANT (SUPERADMIN) -->
+  <!-- ============================================================================ -->
+  <div id="modalSuperAdminInvoices" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 fade-in">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+          <i data-lucide="receipt" class="w-4 h-4 text-purple-400"></i>
+          <span>Faturas da Empresa: <span id="saInvoicesCompanyName" class="text-purple-300">-</span></span>
+        </h3>
+        <button onclick="closeSuperAdminInvoicesModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="overflow-x-auto max-h-80 custom-scrollbar">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-dark-900/60 text-slate-400 uppercase text-[10px] tracking-wider font-semibold border-b border-slate-800">
+            <tr>
+              <th class="px-4 py-2.5">Data</th>
+              <th class="px-4 py-2.5">Valor</th>
+              <th class="px-4 py-2.5">Status</th>
+              <th class="px-4 py-2.5">ID Fatura Pagar.me</th>
+            </tr>
+          </thead>
+          <tbody id="saInvoicesTableBody" class="divide-y divide-slate-800 text-slate-300">
+            <tr>
+              <td colspan="4" class="px-4 py-6 text-center text-slate-500">Nenhuma fatura registrada.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
+  <!-- OVERLAY DE BLOQUEIO AMIGÁVEL (TRIAL EXPIRED / SUSPENDED BY ADMIN) -->
+  <!-- ============================================================================ -->
+  <div id="overlayFriendlyBlock" class="hidden fixed inset-0 z-50 bg-dark-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-3xl max-w-lg w-full p-8 shadow-2xl text-center space-y-5 fade-in">
+      <div id="blockModalIcon" class="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <i data-lucide="clock" class="w-8 h-8"></i>
+      </div>
+      <h3 id="blockModalTitle" class="text-xl font-black text-white">Período de Testes Encerrado</h3>
+      <p id="blockModalDesc" class="text-xs text-slate-300 leading-relaxed">
+        Seu período de teste gratuito de 7 dias chegou ao fim. Escolha um plano para reativar seu atendimento e automações agora mesmo!
+      </p>
+      <div class="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <button type="button" onclick="closeFriendlyBlockAndGoBilling()" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg transition">
+          Ver Planos & Assinar Agora
+        </button>
+        <button type="button" onclick="handleLogout()" class="w-full sm:w-auto px-4 py-3 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-400 hover:text-white font-semibold text-xs transition border border-slate-700">
+          Sair da Conta
+        </button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

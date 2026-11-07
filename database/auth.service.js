@@ -56,7 +56,8 @@ class AuthService {
       tenantId: user.tenant_id,
       email: user.email,
       role: user.role,
-      nome: user.nome
+      nome: user.nome,
+      isSuperAdmin: !!user.is_super_admin
     };
     return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
   }
@@ -183,7 +184,10 @@ class AuthService {
     const cleanEmail = email.toLowerCase().trim();
     const res = await query(
       `SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role, u.nome, COALESCE(u.ativo, true) as user_ativo,
-              t.nome_empresa, t.plano, t.ativo as tenant_ativo
+              COALESCE(u.is_super_admin, false) as is_super_admin,
+              t.nome_empresa, t.plano, COALESCE(t.status, 'TRIALING') as tenant_status,
+              t.trial_ends_at, COALESCE(t.is_manually_blocked, false) as is_manually_blocked,
+              t.ativo as tenant_ativo
        FROM users u
        JOIN tenants t ON t.id = u.tenant_id
        WHERE u.email = $1`,
@@ -220,7 +224,11 @@ class AuthService {
         role: user.role,
         nome: user.nome,
         empresa: user.nome_empresa,
-        plano: user.plano
+        plano: user.plano,
+        status: user.tenant_status,
+        trialEndsAt: user.trial_ends_at,
+        isManuallyBlocked: user.is_manually_blocked,
+        isSuperAdmin: !!user.is_super_admin
       }
     };
   }
@@ -239,22 +247,23 @@ class AuthService {
       throw new Error(`O e-mail '${cleanEmail}' já está cadastrado.`);
     }
 
-    // 1. Cria Tenant
+    // 1. Cria Tenant com Free Trial de 7 dias
     const tenantRes = await query(
-      `INSERT INTO tenants (nome_empresa, documento, plano, limite_conversas_mes, ativo)
-       VALUES ($1, $2, $3, 300, true)
-       RETURNING id, nome_empresa, documento, plano, limite_conversas_mes, ativo, created_at;`,
-      [nome_empresa.trim(), documento || null, plano]
+      `INSERT INTO tenants (nome_empresa, documento, plano, limite_conversas_mes, ativo, status, trial_ends_at, is_manually_blocked)
+       VALUES ($1, $2, $3, 300, true, 'TRIALING', NOW() + INTERVAL '7 days', false)
+       RETURNING id, nome_empresa, documento, plano, limite_conversas_mes, ativo, status, trial_ends_at, created_at;`,
+      [nome_empresa.trim(), documento || null, plano || 'pro']
     );
     const tenant = tenantRes.rows[0];
 
     // 2. Hash da senha e insere Usuário Administrador
+    const isSuper = cleanEmail.includes('admin@warnattech') || cleanEmail.includes('superadmin');
     const passwordHash = await this.hashPassword(password);
     const userRes = await query(
-      `INSERT INTO users (tenant_id, nome, email, password_hash, role)
-       VALUES ($1, $2, $3, $4, 'admin')
-       RETURNING id, tenant_id, nome, email, role, created_at;`,
-      [tenant.id, nome.trim(), cleanEmail, passwordHash]
+      `INSERT INTO users (tenant_id, nome, email, password_hash, role, is_super_admin)
+       VALUES ($1, $2, $3, $4, 'admin', $5)
+       RETURNING id, tenant_id, nome, email, role, is_super_admin, created_at;`,
+      [tenant.id, nome.trim(), cleanEmail, passwordHash, isSuper]
     );
     const user = userRes.rows[0];
 
@@ -316,7 +325,10 @@ class AuthService {
         role: user.role,
         nome: user.nome,
         empresa: tenant.nome_empresa,
-        plano: tenant.plano
+        plano: tenant.plano,
+        status: tenant.status,
+        trialEndsAt: tenant.trial_ends_at,
+        isSuperAdmin: !!user.is_super_admin
       },
       tenant
     };

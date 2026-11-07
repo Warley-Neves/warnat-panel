@@ -8,6 +8,9 @@ const { query } = require('../../database/db');
 const evolutionService = require('../../services/evolution.service');
 const webhookController = require('../../controllers/webhook.controller');
 const messageCache = require('../../services/message-cache.service');
+const pagarmeService = require('../../services/pagarme.service');
+const entitlementsService = require('../../services/entitlements.service');
+const url = require('url');
 
 async function handleV2Routes(req, res, pathname, method, body) {
   const sendJson = (statusCode, data) => {
@@ -65,6 +68,26 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     // --------------------------------------------------------------------------
+    // 1.1 WEBHOOK PAGAR.ME V5 (PÚBLICO COM VALIDAÇÃO HMAC E IDEMPOTÊNCIA)
+    // --------------------------------------------------------------------------
+    if ((pathname === '/api/v2/webhooks/pagarme' || pathname === '/api/webhooks/pagarme' || pathname === '/api/webhook/pagarme') && method === 'POST') {
+      const sig = req.headers['x-hub-signature'] || req.headers['x-pagarme-signature'] || req.headers['x-signature'] || '';
+      const rawBody = req.rawBody || JSON.stringify(body);
+
+      // Validação HMAC de assinatura se configurada e presente
+      if (sig && !pagarmeService.verifyWebhookSignature(rawBody, sig)) {
+        return sendJson(401, { success: false, error: 'Assinatura inválida do webhook' });
+      }
+
+      try {
+        const result = await pagarmeService.processWebhookEvent(body, rawBody, sig);
+        return sendJson(200, { received: true, ...result });
+      } catch (whErr) {
+        return sendJson(400, { success: false, error: whErr.message });
+      }
+    }
+
+    // --------------------------------------------------------------------------
     // MIDDLEWARE DE PROTEÇÃO JWT: Todas as demais rotas /api/v2/* exigem token
     // --------------------------------------------------------------------------
     const decodedUser = authService.authenticateRequest(req);
@@ -75,14 +98,58 @@ async function handleV2Routes(req, res, pathname, method, body) {
     const tenantId = decodedUser.tenantId;
 
     // --------------------------------------------------------------------------
+    // GUARD DE SUPERADMIN PARA ROTAS /api/v2/superadmin/*
+    // --------------------------------------------------------------------------
+    const isSuperAdminRoute = pathname.startsWith('/api/v2/superadmin');
+    if (isSuperAdminRoute) {
+      let isSuper = Boolean(decodedUser.isSuperAdmin);
+      if (!isSuper && decodedUser.userId) {
+        const uCheck = await query(`SELECT is_super_admin FROM users WHERE id = $1`, [decodedUser.userId]);
+        isSuper = Boolean(uCheck.rows[0]?.is_super_admin);
+      }
+      if (!isSuper) {
+        return sendJson(403, {
+          success: false,
+          error: 'FORBIDDEN_SUPERADMIN_ONLY',
+          message: 'Acesso restrito ao Dono do SaaS (SuperAdmin).'
+        });
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // MOTOR CENTRAL DE ENTITLEMENTS (REGRAS 0-3: BLOQUEIO ADMIN, TRIAL EXPIRED, GRACE PERIOD)
+    // Rotas de billing e contexto de usuário permanecem abertas para regularização
+    // --------------------------------------------------------------------------
+    const isBillingRoute = pathname.startsWith('/api/v2/tenant/billing');
+    const isMeRoute = pathname === '/api/v2/auth/me';
+
+    if (!isSuperAdminRoute && !isBillingRoute && !isMeRoute) {
+      const isWrite = method === 'POST' || method === 'PUT' || method === 'DELETE';
+      const accessResult = await entitlementsService.evaluateAccess(decodedUser, { isWrite });
+      if (!accessResult.allowed) {
+        return sendJson(accessResult.statusCode || 403, {
+          success: false,
+          error: accessResult.error,
+          message: accessResult.message,
+          required_action: accessResult.required_action,
+          status: accessResult.status
+        });
+      }
+    }
+
+    // --------------------------------------------------------------------------
     // 2. CONTEXTO DO USUÁRIO ATUAL (/api/v2/auth/me)
     // --------------------------------------------------------------------------
     if (pathname === '/api/v2/auth/me' && method === 'GET') {
-      const tenantRes = await query(`SELECT id, nome_empresa, plano, limite_conversas_mes FROM tenants WHERE id = $1`, [tenantId]);
+      const tenantRes = await query(`SELECT id, nome_empresa, plano, limite_conversas_mes, status, trial_ends_at, is_manually_blocked, courtesy_plan FROM tenants WHERE id = $1`, [tenantId]);
+      const lifecycle = await entitlementsService.getTenantLifecycle(tenantId);
+      const userRes = await query(`SELECT id, tenant_id, nome, email, role, COALESCE(is_super_admin, false) as is_super_admin FROM users WHERE id = $1`, [decodedUser.userId]);
+      const isSuper = Boolean(decodedUser.isSuperAdmin || userRes.rows[0]?.is_super_admin);
       return sendJson(200, {
         success: true,
-        user: decodedUser,
-        tenant: tenantRes.rows[0] || null
+        user: { ...decodedUser, ...(userRes.rows[0] || {}), isSuperAdmin: isSuper },
+        tenant: tenantRes.rows[0] || null,
+        lifecycle
       });
     }
 
@@ -220,6 +287,18 @@ async function handleV2Routes(req, res, pathname, method, body) {
         return sendJson(400, { success: false, error: 'modo_atendimento deve ser "automacao" ou "manual".' });
       }
 
+      if (modo_atendimento === 'automacao') {
+        const canBots = await entitlementsService.canUseFeature(tenantId, 'automation_bots');
+        if (!canBots) {
+          return sendJson(403, {
+            success: false,
+            error: 'FEATURE_NOT_AVAILABLE_IN_PLAN',
+            required_plan: 'PRO',
+            message: 'Automações e bots inteligentes são exclusivos do Plano Pro. Faça o upgrade para ter acesso.'
+          });
+        }
+      }
+
       await query(
         `UPDATE tenant_ai_configs SET modo_atendimento = $1, updated_at = now() WHERE tenant_id = $2`,
         [modo_atendimento, tenantId]
@@ -235,6 +314,16 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     if (pathname === '/api/v2/tenant/ai-config' && method === 'GET') {
+      const canBots = await entitlementsService.canUseFeature(tenantId, 'automation_bots');
+      if (!canBots) {
+        return sendJson(403, {
+          success: false,
+          error: 'FEATURE_NOT_AVAILABLE_IN_PLAN',
+          required_plan: 'PRO',
+          message: 'Automações e bots inteligentes são exclusivos do Plano Pro. Faça o upgrade para ter acesso.'
+        });
+      }
+
       let configRes = await query(`SELECT * FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
       const tenantRes = await query(`SELECT nome_empresa, plano FROM tenants WHERE id = $1`, [tenantId]);
 
@@ -270,6 +359,16 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     if (pathname === '/api/v2/tenant/ai-config' && method === 'PUT') {
+      const canBots = await entitlementsService.canUseFeature(tenantId, 'automation_bots');
+      if (!canBots) {
+        return sendJson(403, {
+          success: false,
+          error: 'FEATURE_NOT_AVAILABLE_IN_PLAN',
+          required_plan: 'PRO',
+          message: 'Automações e bots inteligentes são exclusivos do Plano Pro. Faça o upgrade para ter acesso.'
+        });
+      }
+
       if (decodedUser.role === 'atendente') {
         return sendJson(403, { success: false, error: 'Apenas Administradores e Supervisores podem alterar as regras e horários da IA.' });
       }
@@ -564,6 +663,16 @@ async function handleV2Routes(req, res, pathname, method, body) {
       }
 
       if (action === 'resume' || action === 'automacao') {
+        const canBots = await entitlementsService.canUseFeature(tenantId, 'automation_bots');
+        if (!canBots) {
+          return sendJson(403, {
+            success: false,
+            error: 'FEATURE_NOT_AVAILABLE_IN_PLAN',
+            required_plan: 'PRO',
+            message: 'Automações e bots inteligentes são exclusivos do Plano Pro. Faça o upgrade para ter acesso.'
+          });
+        }
+
         // Reativa a automação (IA) imediatamente: zera paused_until e seta ia_ativa
         await query(
           `UPDATE chat_sessions 
@@ -1653,6 +1762,337 @@ async function handleV2Routes(req, res, pathname, method, body) {
         success: true,
         customers: custRes.rows
       });
+    }
+
+    // ==========================================================================
+    // 14. FATURAMENTO DO TENANT (BILLING, CHECKOUT TRANSPARENTE, PIX & CARTÃO)
+    // ==========================================================================
+    if (pathname === '/api/v2/tenant/billing/status' && method === 'GET') {
+      const lifecycle = await entitlementsService.getTenantLifecycle(tenantId);
+      const subRes = await query(
+        `SELECT * FROM subscriptions WHERE tenant_id = $1 AND status = 'active' ORDER BY current_period_end DESC LIMIT 1`,
+        [tenantId]
+      );
+      const invRes = await query(
+        `SELECT * FROM invoices WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 5`,
+        [tenantId]
+      );
+
+      return sendJson(200, {
+        success: true,
+        billing: {
+          ...lifecycle,
+          subscription: subRes.rows[0] || null,
+          recentInvoices: invRes.rows
+        }
+      });
+    }
+
+    if (pathname === '/api/v2/tenant/billing/checkout/card' && method === 'POST') {
+      const { plan_id, card_token, customer } = body;
+      if (!plan_id || !card_token) {
+        return sendJson(400, { success: false, error: 'plan_id e card_token são obrigatórios.' });
+      }
+
+      try {
+        const result = await pagarmeService.createCardSubscription({
+          tenantId,
+          planId: plan_id,
+          cardToken: card_token,
+          customer
+        });
+        return sendJson(200, result);
+      } catch (err) {
+        return sendJson(400, { success: false, error: err.message });
+      }
+    }
+
+    if (pathname === '/api/v2/tenant/billing/checkout/pix' && method === 'POST') {
+      const { plan_id, customer } = body;
+      if (!plan_id) {
+        return sendJson(400, { success: false, error: 'plan_id é obrigatório.' });
+      }
+
+      try {
+        const result = await pagarmeService.createPixCharge({
+          tenantId,
+          planId: plan_id,
+          customer
+        });
+        return sendJson(200, result);
+      } catch (err) {
+        return sendJson(400, { success: false, error: err.message });
+      }
+    }
+
+    if (pathname === '/api/v2/tenant/billing/invoices' && method === 'GET') {
+      const invRes = await query(`SELECT * FROM invoices WHERE tenant_id = $1 ORDER BY created_at DESC`, [tenantId]);
+      return sendJson(200, { success: true, invoices: invRes.rows });
+    }
+
+    // ==========================================================================
+    // 15. PAINEL DO DONO DO SAAS (SUPERADMIN BACKOFFICE)
+    // ==========================================================================
+    if (pathname === '/api/v2/superadmin/kpis' && method === 'GET') {
+      const tenantsRes = await query(`
+        SELECT 
+          COUNT(*)::int as total,
+          COUNT(*) FILTER (WHERE status = 'ACTIVE')::int as active,
+          COUNT(*) FILTER (WHERE status = 'TRIALING')::int as trialing,
+          COUNT(*) FILTER (WHERE status = 'TRIAL_EXPIRED')::int as trial_expired,
+          COUNT(*) FILTER (WHERE status = 'PAST_DUE')::int as past_due,
+          COUNT(*) FILTER (WHERE status = 'SUSPENDED_BY_ADMIN' OR is_manually_blocked = true)::int as suspended,
+          COUNT(*) FILTER (WHERE status = 'CANCELED')::int as canceled
+        FROM tenants
+      `);
+
+      const subsRes = await query(`
+        SELECT plan_id, COUNT(*)::int as count
+        FROM subscriptions
+        WHERE status = 'active'
+        GROUP BY plan_id
+      `);
+
+      let mrrCents = 0;
+      let activeSubscriptionsCount = 0;
+      subsRes.rows.forEach(r => {
+        const p = (r.plan_id || '').toUpperCase();
+        const price = p === 'PRO' ? 19700 : 9700;
+        mrrCents += (price * r.count);
+        activeSubscriptionsCount += r.count;
+      });
+
+      if (mrrCents === 0 && (tenantsRes.rows[0]?.active || 0) > 0) {
+        const activeTenants = await query(`SELECT plano FROM tenants WHERE status = 'ACTIVE'`);
+        activeTenants.rows.forEach(t => {
+          const p = (t.plano || '').toUpperCase();
+          mrrCents += (p === 'PRO' ? 19700 : 9700);
+        });
+      }
+
+      return sendJson(200, {
+        success: true,
+        kpis: {
+          totalTenants: tenantsRes.rows[0]?.total || 0,
+          activeTenants: tenantsRes.rows[0]?.active || 0,
+          trialingTenants: tenantsRes.rows[0]?.trialing || 0,
+          trialExpiredTenants: tenantsRes.rows[0]?.trial_expired || 0,
+          pastDueTenants: tenantsRes.rows[0]?.past_due || 0,
+          suspendedTenants: tenantsRes.rows[0]?.suspended || 0,
+          canceledTenants: tenantsRes.rows[0]?.canceled || 0,
+          activeSubscriptions: activeSubscriptionsCount,
+          mrrCents,
+          mrrReais: (mrrCents / 100).toFixed(2),
+          plans: subsRes.rows
+        }
+      });
+    }
+
+    if (pathname === '/api/v2/superadmin/tenants' && method === 'GET') {
+      const urlObj = new URL(req.url, 'http://127.0.0.1');
+      const search = (urlObj.searchParams.get('search') || '').trim().toLowerCase();
+      const statusFilter = (urlObj.searchParams.get('status') || '').trim();
+
+      let sql = `
+        SELECT t.id, t.nome_empresa, t.documento, t.plano, t.status, t.trial_ends_at,
+               t.is_manually_blocked, t.admin_notes, t.courtesy_plan, t.past_due_since, t.created_at,
+               (SELECT COUNT(*)::int FROM users u WHERE u.tenant_id = t.id) as users_count,
+               (SELECT COUNT(*)::int FROM chat_sessions cs WHERE cs.tenant_id = t.id) as sessions_count,
+               (SELECT s.plan_id FROM subscriptions s WHERE s.tenant_id = t.id AND s.status = 'active' ORDER BY s.created_at DESC LIMIT 1) as active_sub_plan,
+               (SELECT i.amount_cents FROM invoices i WHERE i.tenant_id = t.id AND i.status = 'PAID' ORDER BY i.created_at DESC LIMIT 1) as last_paid_amount
+        FROM tenants t
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (search) {
+        params.push(`%${search}%`);
+        sql += ` AND (LOWER(t.nome_empresa) LIKE $${params.length} OR t.documento LIKE $${params.length})`;
+      }
+      if (statusFilter) {
+        params.push(statusFilter);
+        sql += ` AND t.status = $${params.length}`;
+      }
+
+      sql += ` ORDER BY t.created_at DESC`;
+
+      const tRes = await query(sql, params);
+      return sendJson(200, {
+        success: true,
+        count: tRes.rowCount,
+        tenants: tRes.rows
+      });
+    }
+
+    const matchExtendTrial = pathname.match(/^\/api\/v2\/superadmin\/tenants\/([a-f0-9\-]+)\/extend-trial$/);
+    if (matchExtendTrial && method === 'POST') {
+      const targetTenantId = matchExtendTrial[1];
+      const { new_trial_ends_at, additional_days, reason = 'Extensão concedida pelo SuperAdmin' } = body;
+
+      const tOld = await query(`SELECT * FROM tenants WHERE id = $1`, [targetTenantId]);
+      if (tOld.rowCount === 0) {
+        return sendJson(404, { success: false, error: 'Tenant não encontrado.' });
+      }
+      const old = tOld.rows[0];
+
+      let targetDate;
+      if (additional_days && !isNaN(Number(additional_days))) {
+        targetDate = new Date(Date.now() + Number(additional_days) * 24 * 60 * 60 * 1000);
+      } else if (new_trial_ends_at) {
+        targetDate = new Date(new_trial_ends_at);
+      } else {
+        targetDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+      }
+
+      const updatedRes = await query(
+        `UPDATE tenants 
+         SET trial_ends_at = $1, status = 'TRIALING', updated_at = NOW() 
+         WHERE id = $2 
+         RETURNING *`,
+        [targetDate.toISOString(), targetTenantId]
+      );
+
+      await query(
+        `INSERT INTO admin_audit_logs (admin_user_id, target_tenant_id, action, details)
+         VALUES ($1, $2, 'EXTEND_TRIAL', $3)`,
+        [
+          decodedUser.userId,
+          targetTenantId,
+          JSON.stringify({
+            previous_trial: old.trial_ends_at,
+            previous_status: old.status,
+            new_trial: targetDate.toISOString(),
+            new_status: 'TRIALING',
+            reason
+          })
+        ]
+      );
+
+      return sendJson(200, {
+        success: true,
+        message: `Período de teste estendido até ${targetDate.toISOString()}`,
+        tenant: updatedRes.rows[0]
+      });
+    }
+
+    const matchBlock = pathname.match(/^\/api\/v2\/superadmin\/tenants\/([a-f0-9\-]+)\/block$/);
+    if (matchBlock && method === 'POST') {
+      const targetTenantId = matchBlock[1];
+      const { blocked = true, reason = 'Bloqueio administrativo' } = body;
+
+      const tOld = await query(`SELECT * FROM tenants WHERE id = $1`, [targetTenantId]);
+      if (tOld.rowCount === 0) {
+        return sendJson(404, { success: false, error: 'Tenant não encontrado.' });
+      }
+      const old = tOld.rows[0];
+
+      const newStatus = blocked ? 'SUSPENDED_BY_ADMIN' : 'ACTIVE';
+      const updatedRes = await query(
+        `UPDATE tenants 
+         SET is_manually_blocked = $1, status = $2, updated_at = NOW() 
+         WHERE id = $3 
+         RETURNING *`,
+        [Boolean(blocked), newStatus, targetTenantId]
+      );
+
+      await query(
+        `INSERT INTO admin_audit_logs (admin_user_id, target_tenant_id, action, details)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          decodedUser.userId,
+          targetTenantId,
+          blocked ? 'BLOCK_TENANT' : 'UNBLOCK_TENANT',
+          JSON.stringify({
+            previous_blocked: old.is_manually_blocked,
+            previous_status: old.status,
+            new_blocked: Boolean(blocked),
+            new_status: newStatus,
+            reason
+          })
+        ]
+      );
+
+      return sendJson(200, {
+        success: true,
+        message: blocked ? 'Tenant bloqueado com sucesso.' : 'Tenant desbloqueado com sucesso.',
+        tenant: updatedRes.rows[0]
+      });
+    }
+
+    const matchCourtesy = pathname.match(/^\/api\/v2\/superadmin\/tenants\/([a-f0-9\-]+)\/courtesy-plan$/);
+    if (matchCourtesy && method === 'POST') {
+      const targetTenantId = matchCourtesy[1];
+      const { courtesy_plan, reason = 'Concessão de cortesia' } = body;
+
+      const val = courtesy_plan ? String(courtesy_plan).toLowerCase() : null;
+      const updatedRes = await query(
+        `UPDATE tenants SET courtesy_plan = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+        [val, targetTenantId]
+      );
+
+      await query(
+        `INSERT INTO admin_audit_logs (admin_user_id, target_tenant_id, action, details)
+         VALUES ($1, $2, 'FORCE_PLAN_PRO', $3)`,
+        [
+          decodedUser.userId,
+          targetTenantId,
+          JSON.stringify({ courtesy_plan: val, reason })
+        ]
+      );
+
+      return sendJson(200, {
+        success: true,
+        message: val ? `Cortesia Pro concedida!` : 'Cortesia Pro revogada.',
+        courtesy_plan: val,
+        tenant: updatedRes.rows[0]
+      });
+    }
+
+    const matchNotes = pathname.match(/^\/api\/v2\/superadmin\/tenants\/([a-f0-9\-]+)\/notes$/);
+    if (matchNotes && method === 'PUT') {
+      const targetTenantId = matchNotes[1];
+      const { notes } = body;
+
+      await query(
+        `UPDATE tenants SET admin_notes = $1, updated_at = NOW() WHERE id = $2`,
+        [notes || null, targetTenantId]
+      );
+
+      await query(
+        `INSERT INTO admin_audit_logs (admin_user_id, target_tenant_id, action, details)
+         VALUES ($1, $2, 'UPDATE_NOTES', $3)`,
+        [
+          decodedUser.userId,
+          targetTenantId,
+          JSON.stringify({ notes })
+        ]
+      );
+
+      return sendJson(200, { success: true, message: 'Observações do SuperAdmin atualizadas com sucesso.' });
+    }
+
+    const matchTenantInvoices = pathname.match(/^\/api\/v2\/superadmin\/tenants\/([a-f0-9\-]+)\/invoices$/);
+    if (matchTenantInvoices && method === 'GET') {
+      const targetTenantId = matchTenantInvoices[1];
+      const invRes = await query(
+        `SELECT * FROM invoices WHERE tenant_id = $1 ORDER BY created_at DESC`,
+        [targetTenantId]
+      );
+      return sendJson(200, { success: true, invoices: invRes.rows });
+    }
+
+    if (pathname === '/api/v2/superadmin/audit-logs' && method === 'GET') {
+      const logsRes = await query(`
+        SELECT a.id, a.action, a.details, a.created_at,
+               u.nome as admin_name, u.email as admin_email,
+               t.nome_empresa as target_company_name
+        FROM admin_audit_logs a
+        LEFT JOIN users u ON u.id = a.admin_user_id
+        LEFT JOIN tenants t ON t.id = a.target_tenant_id
+        ORDER BY a.created_at DESC
+        LIMIT 100
+      `);
+      return sendJson(200, { success: true, logs: logsRes.rows });
     }
 
     return false; // Rota v2 não correspondida

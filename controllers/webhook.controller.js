@@ -8,6 +8,7 @@ const evolutionService = require('../services/evolution.service');
 const messageCache = require('../services/message-cache.service');
 const audioTranscriptionService = require('../services/audio-transcription.service');
 const ttsService = require('../services/tts.service');
+const entitlementsService = require('../services/entitlements.service');
 
 class WebhookController {
   constructor() {
@@ -488,6 +489,18 @@ class WebhookController {
     // ============================================================================
     // 4. VERIFICAÇÃO DE ATENDIMENTO MANUAL GLOBAL (TENANT) OU POR CONTATO INDIVIDUAL
     // ============================================================================
+    // A0) Checa se o tenant possui a feature 'automation_bots' liberada pelo plano (Regra 4)
+    const canUseBots = await entitlementsService.canUseFeature(tenantId, 'automation_bots');
+    if (!canUseBots) {
+      console.log(`[Webhook] Tenant ${tenantId} sem permissão de automação (Plano Básico ou assinatura inativa). Mensagem salva para atendimento humano.`);
+      return {
+        handled: true,
+        action: 'message_saved_human_queue_only',
+        reason: 'automation_bots_feature_gated',
+        tenantId
+      };
+    }
+
     // A) Checa se o tenant inteiro está configurado em atendimento 100% manual
     const aiConfigRes = await query(
       `SELECT modo_atendimento FROM tenant_ai_configs WHERE tenant_id = $1`,
