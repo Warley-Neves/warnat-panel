@@ -261,10 +261,106 @@ async function runTests() {
     );
 
     // ------------------------------------------------------------------------
-    // TESTE 7: Isolamento Multi-tenant
+    // TESTE 7: Recorrência Semanal (tipo_recorrencia = 'semanal')
+    // ------------------------------------------------------------------------
+    console.log('\n--- 7. Recorrência Semanal Fixa ---');
+    // Cria bloqueio semanal: Todo sábado às 14:00
+    const insWeeklyRes = await query(
+      `INSERT INTO agenda_bloqueios (tenant_id, data, horario, motivo, tipo_recorrencia, dia_semana, dias_semana, tipo_acao)
+       VALUES ($1, NULL, $2, $3, 'semanal', 'sabado', $4, 'bloquear')
+       RETURNING id, tipo_recorrencia, dia_semana, horario`,
+      [tenantA.id, '14:00', 'Folga semanal do técnico 14h', JSON.stringify(['sabado'])]
+    );
+    assert(insWeeklyRes.rowCount === 1, 'Regra semanal (todo sábado 14:00) criada');
+
+    // Verifica se a data futura dateStr1 (sábado) às 14:00 é bloqueada
+    const checkWeeklySlot = await aiEngine.executeCheckSlotTool({
+      tenantId: tenantA.id,
+      date: dateStr1,
+      time: '14:00'
+    });
+    console.log('Check semanal 14:00:', checkWeeklySlot);
+    assert(checkWeeklySlot.available === false, 'Regra semanal bloqueia 14:00 no sábado');
+    assert(checkWeeklySlot.message.includes('Folga semanal do técnico'), 'Mensagem inclui motivo da regra semanal');
+
+    // ------------------------------------------------------------------------
+    // TESTE 8: Intervalo de Recesso / Férias (tipo_recorrencia = 'intervalo')
+    // ------------------------------------------------------------------------
+    console.log('\n--- 8. Intervalo de Recesso / Férias ---');
+    // Definir intervalo de férias que cobre uma semana futura
+    const vacationStart = new Date(d1);
+    vacationStart.setDate(d1.getDate() + 21); // 5 semanas à frente
+    const vacationEnd = new Date(vacationStart);
+    vacationEnd.setDate(vacationStart.getDate() + 7);
+
+    const vacStartStr = formatYMD(vacationStart);
+    const vacEndStr = formatYMD(vacationEnd);
+
+    const insVacationRes = await query(
+      `INSERT INTO agenda_bloqueios (tenant_id, data, data_fim, horario, motivo, tipo_recorrencia, tipo_acao)
+       VALUES ($1, $2, $3, NULL, $4, 'intervalo', 'bloquear')
+       RETURNING id, data, data_fim, tipo_recorrencia`,
+      [tenantA.id, vacStartStr, vacEndStr, 'Recesso de Férias Coletivas da Equipe']
+    );
+    assert(insVacationRes.rowCount === 1, 'Regra de intervalo (férias coletivas) criada');
+
+    // Checar data dentro do recesso
+    const checkVacation = await aiEngine.executeCheckSlotTool({
+      tenantId: tenantA.id,
+      date: vacStartStr,
+      time: '08:00'
+    });
+    console.log('Check intervalo férias:', checkVacation);
+    assert(checkVacation.available === false, 'Intervalo de recesso bloqueia data no período');
+    assert(checkVacation.message.includes('Recesso de Férias Coletivas'), 'Mensagem inclui motivo de recesso');
+
+    // ------------------------------------------------------------------------
+    // TESTE 9: 1-Click Toggle (Trava e Destrava instantânea de slot)
+    // ------------------------------------------------------------------------
+    console.log('\n--- 9. Simulação de 1-Click Toggle de Horário e Dia ---');
+    const toggleDate = dateStr1;
+    const toggleSlot = '12:00';
+
+    // 1. Toggle ON: Inserir se não existir
+    const checkBeforeToggle = await query(
+      `SELECT id FROM agenda_bloqueios WHERE tenant_id = $1 AND data = $2 AND horario = $3`,
+      [tenantA.id, toggleDate, toggleSlot]
+    );
+    assert(checkBeforeToggle.rowCount === 0, 'Slot 12:00 inicialmente livre');
+
+    // Executa ação de toggle (inserção)
+    await query(
+      `INSERT INTO agenda_bloqueios (tenant_id, data, horario, motivo, tipo_recorrencia, tipo_acao)
+       VALUES ($1, $2, $3, 'Trava rápida de 1 clique', 'unica', 'bloquear')`,
+      [tenantA.id, toggleDate, toggleSlot]
+    );
+
+    const checkSlotAfterToggleOn = await aiEngine.executeCheckSlotTool({
+      tenantId: tenantA.id,
+      date: toggleDate,
+      time: toggleSlot
+    });
+    assert(checkSlotAfterToggleOn.available === false, 'Slot 12:00 travado instantaneamente pelo toggle');
+
+    // 2. Toggle OFF: Como já existe, o toggle remove (destrava com 1 clique)
+    const existingLock = await query(
+      `SELECT id FROM agenda_bloqueios WHERE tenant_id = $1 AND data = $2 AND horario = $3`,
+      [tenantA.id, toggleDate, toggleSlot]
+    );
+    await query(`DELETE FROM agenda_bloqueios WHERE id = $1 AND tenant_id = $2`, [existingLock.rows[0].id, tenantA.id]);
+
+    const checkSlotAfterToggleOff = await aiEngine.executeCheckSlotTool({
+      tenantId: tenantA.id,
+      date: toggleDate,
+      time: toggleSlot
+    });
+    assert(checkSlotAfterToggleOff.available === true, 'Slot 12:00 destravado instantaneamente pelo segundo toggle');
+
+    // ------------------------------------------------------------------------
+    // TESTE 10: Isolamento Multi-tenant
     // ------------------------------------------------------------------------
     if (tenantB.id !== tenantA.id) {
-      console.log('\n--- 7. Isolamento Multi-tenant ---');
+      console.log('\n--- 10. Isolamento Multi-tenant ---');
       // O Sábado 2 está travado no Tenant A, mas deve estar livre para o Tenant B (se o B atender no sábado)
       const locksB = await query(
         `SELECT id FROM agenda_bloqueios WHERE tenant_id = $1`,

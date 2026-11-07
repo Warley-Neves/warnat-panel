@@ -269,14 +269,27 @@ BEGIN
     -- Índices adicionais para tabelas adaptadas
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_etapa_funil ON chat_sessions(etapa_funil);
 
-    -- Tabela de bloqueios manuais de agenda (dias e horários)
+    -- Tabela de bloqueios e regras de disponibilidade da agenda (dias, horários e recorrência)
     CREATE TABLE IF NOT EXISTS agenda_bloqueios (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-        data DATE NOT NULL,
+        data DATE,
         horario VARCHAR(10),
+        tipo_recorrencia VARCHAR(30) DEFAULT 'unica', -- 'unica' (data específica), 'semanal' (toda semana), 'intervalo' (período de recesso/férias)
+        dia_semana VARCHAR(20), -- 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'
+        dias_semana JSONB DEFAULT '[]', -- múltiplos dias para recorrência semanal
+        data_fim DATE, -- para intervalos de datas (ex: recesso de fim de ano)
+        tipo_acao VARCHAR(20) DEFAULT 'bloquear', -- 'bloquear' (trava) ou 'liberar' (exceção aberta para agendar)
         motivo VARCHAR(255) DEFAULT 'Bloqueado manualmente no painel',
         created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE agenda_bloqueios ALTER COLUMN data DROP NOT NULL;
+    ALTER TABLE agenda_bloqueios ADD COLUMN IF NOT EXISTS tipo_recorrencia VARCHAR(30) DEFAULT 'unica';
+    ALTER TABLE agenda_bloqueios ADD COLUMN IF NOT EXISTS dia_semana VARCHAR(20);
+    ALTER TABLE agenda_bloqueios ADD COLUMN IF NOT EXISTS dias_semana JSONB DEFAULT '[]';
+    ALTER TABLE agenda_bloqueios ADD COLUMN IF NOT EXISTS data_fim DATE;
+    ALTER TABLE agenda_bloqueios ADD COLUMN IF NOT EXISTS tipo_acao VARCHAR(20) DEFAULT 'bloquear';
     CREATE INDEX IF NOT EXISTS idx_agenda_bloqueios_tenant_data ON agenda_bloqueios(tenant_id, data);
+    CREATE INDEX IF NOT EXISTS idx_agenda_bloqueios_recorrencia ON agenda_bloqueios(tenant_id, tipo_recorrencia, dia_semana);
+    CREATE INDEX IF NOT EXISTS idx_agenda_bloqueios_intervalo ON agenda_bloqueios(tenant_id, data, data_fim);
 END $$;

@@ -676,6 +676,12 @@
               <span>Travar Dia / Horário</span>
             </button>
 
+            <!-- BOTÃO RECORRÊNCIAS & REGRAS FIXAS -->
+            <button onclick="openLockScheduleModal(null, null, 'regras')" class="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-xs font-semibold flex items-center space-x-1.5 transition shadow" title="Gerenciar bloqueios semanais recorrentes, intervalos de recesso ou férias">
+              <i data-lucide="repeat" class="w-3.5 h-3.5 text-purple-400"></i>
+              <span>Recorrências & Férias</span>
+            </button>
+
             <!-- SELETOR DE MODO DE VISUALIZAÇÃO: CALENDÁRIO VS TABELA -->
             <div class="bg-dark-800 p-1 rounded-xl border border-slate-700 flex items-center space-x-1 text-xs">
               <button type="button" onclick="setAppointmentsView('calendar')" id="viewBtn-calendar" class="px-3 py-1.5 rounded-lg font-semibold flex items-center space-x-1.5 bg-brand-600 text-white shadow transition">
@@ -779,6 +785,10 @@
               <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
               <span class="text-slate-300 font-medium">Travado / Bloqueio</span>
             </div>
+            <div class="flex items-center space-x-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+              <span class="text-slate-300 font-medium">Recorrente / Férias</span>
+            </div>
           </div>
         </div>
 
@@ -814,14 +824,36 @@
             </div>
             <div class="flex flex-wrap items-center gap-2">
               <span id="calendarSelectedDayCount" class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">0 agendamento(s)</span>
-              <button type="button" onclick="lockSelectedDayQuick()" class="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[11px] font-semibold flex items-center space-x-1 transition" title="Travar este dia inteiro na agenda">
+              <button type="button" onclick="openLockScheduleModal(selectedCalendarDateStr, null, 'unica')" class="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[11px] font-semibold flex items-center space-x-1 transition" title="Travar ou liberar data específica">
                 <i data-lucide="lock" class="w-3 h-3 text-amber-400"></i>
-                <span>Travar este dia</span>
+                <span>Travar / Liberar Data</span>
               </button>
-              <button type="button" onclick="openLockScheduleModal(selectedCalendarDateStr)" class="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-semibold flex items-center space-x-1 transition" title="Travar um horário específico nesta data">
-                <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
-                <span>Travar horário</span>
+              <button type="button" onclick="openLockScheduleModal(selectedCalendarDateStr, null, 'semanal')" class="px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 text-[11px] font-semibold flex items-center space-x-1 transition" title="Criar regra semanal recorrente para este dia">
+                <i data-lucide="repeat" class="w-3 h-3 text-purple-400"></i>
+                <span>Trava Semanal Fixa</span>
               </button>
+            </div>
+          </div>
+
+          <!-- BARRA DE HORÁRIOS INTERATIVOS DE 1 CLIQUE -->
+          <div id="calendarQuickSlotsBarContainer" class="bg-dark-850 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+              <div class="flex items-center space-x-2">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                <span class="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-1.5">
+                  <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
+                  <span>Horários Deste Dia (Clique para Travar ou Liberar):</span>
+                </span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <button type="button" id="btnQuickToggleDay" onclick="quickToggleDayLock(selectedCalendarDateStr)" class="px-3 py-1 rounded-lg text-[11px] font-bold flex items-center space-x-1 transition shadow border">
+                  <!-- Atualizado via JS -->
+                </button>
+              </div>
+            </div>
+
+            <div id="calendarQuickSlotsGrid" class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+              <!-- Renderizado dinamicamente via JS com botões de 1 clique -->
             </div>
           </div>
 
@@ -1662,19 +1694,19 @@
 
   <!-- ============================================================================ -->
   <!-- ============================================================================ -->
-  <!-- MODAL DE BLOQUEIO DE DIAS / HORÁRIOS DA AGENDA -->
+  <!-- MODAL DE BLOQUEIO E REGRAS DE RECORRÊNCIA DA AGENDA -->
   <!-- ============================================================================ -->
   <div id="lockScheduleModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl fade-in overflow-hidden">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl fade-in overflow-hidden">
       <!-- HEADER -->
       <div class="p-5 border-b border-slate-800 flex items-center justify-between">
         <div class="flex items-center space-x-3">
           <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20">
-            <i data-lucide="lock" class="w-5 h-5"></i>
+            <i data-lucide="calendar-range" class="w-5 h-5"></i>
           </div>
           <div>
-            <h4 class="font-bold text-white text-base">Travar Agenda</h4>
-            <p class="text-xs text-slate-400 mt-0.5">Bloquear dias ou horários para impedir novos agendamentos</p>
+            <h4 class="font-bold text-white text-base">Controle de Agenda & Recorrência</h4>
+            <p class="text-xs text-slate-400 mt-0.5">Trave ou libere datas pontuais, intervalos de férias ou regras semanais fixas</p>
           </div>
         </div>
         <button onclick="closeLockScheduleModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
@@ -1682,75 +1714,222 @@
         </button>
       </div>
 
-      <!-- CORPO DO FORMULÁRIO -->
-      <form id="lockScheduleForm" onsubmit="submitScheduleLock(event)" class="p-6 space-y-4 text-xs text-slate-300">
-        <!-- TIPO DE BLOQUEIO -->
-        <div>
-          <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-2">Tipo de Bloqueio</label>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="flex items-center space-x-2.5 p-3 rounded-xl border border-slate-700 bg-dark-900/60 cursor-pointer hover:border-amber-500 transition">
-              <input type="radio" name="lockTypeRadio" value="dia" id="lockRadioDia" checked onchange="toggleLockType(this.value)" class="text-amber-500 focus:ring-0">
-              <div>
-                <span class="font-semibold text-white block">Dia Inteiro</span>
-                <span class="text-[11px] text-slate-400">Nenhum horário permitido</span>
-              </div>
-            </label>
-            <label class="flex items-center space-x-2.5 p-3 rounded-xl border border-slate-700 bg-dark-900/60 cursor-pointer hover:border-amber-500 transition">
-              <input type="radio" name="lockTypeRadio" value="horario" id="lockRadioHorario" onchange="toggleLockType(this.value)" class="text-amber-500 focus:ring-0">
-              <div>
-                <span class="font-semibold text-white block">Horário Específico</span>
-                <span class="text-[11px] text-slate-400">Ex: 10:00 ou 14:00</span>
-              </div>
-            </label>
-          </div>
-        </div>
+      <!-- TABS DE NAVEGAÇÃO DO MODAL -->
+      <div class="bg-dark-900 px-5 pt-3 border-b border-slate-800 flex items-center space-x-2 text-xs overflow-x-auto">
+        <button type="button" onclick="setLockModalTab('unica')" id="lockTabBtn-unica" class="px-4 py-2 rounded-t-xl font-bold flex items-center space-x-1.5 border-b-2 border-amber-500 text-amber-300 bg-dark-850 transition">
+          <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+          <span>Data Específica</span>
+        </button>
+        <button type="button" onclick="setLockModalTab('semanal')" id="lockTabBtn-semanal" class="px-4 py-2 rounded-t-xl font-semibold flex items-center space-x-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+          <i data-lucide="repeat" class="w-3.5 h-3.5"></i>
+          <span>Toda Semana (Recorrente)</span>
+        </button>
+        <button type="button" onclick="setLockModalTab('intervalo')" id="lockTabBtn-intervalo" class="px-4 py-2 rounded-t-xl font-semibold flex items-center space-x-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+          <i data-lucide="calendar-days" class="w-3.5 h-3.5"></i>
+          <span>Período / Férias</span>
+        </button>
+        <button type="button" onclick="setLockModalTab('regras')" id="lockTabBtn-regras" class="px-4 py-2 rounded-t-xl font-semibold flex items-center space-x-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+          <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>
+          <span>Regras Ativas (<span id="modalActiveRulesCount">0</span>)</span>
+        </button>
+      </div>
 
-        <!-- DATA -->
-        <div>
-          <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">Data a Travar *</label>
-          <input type="date" id="lockInputData" required class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 transition font-mono">
-          <p class="text-[11px] text-slate-400 mt-1">Selecione o dia que deseja bloquear.</p>
-        </div>
+      <!-- CORPO DO MODAL -->
+      <div class="p-6 overflow-y-auto flex-1 text-xs text-slate-300 custom-scrollbar space-y-4">
+        
+        <!-- FORMULÁRIO (Tabs 1, 2 e 3) -->
+        <form id="lockScheduleForm" onsubmit="submitScheduleLock(event)" class="space-y-4">
+          <input type="hidden" id="lockInputTipoRecorrencia" value="unica">
 
-        <!-- HORÁRIO (CONDICIONAL) -->
-        <div id="lockFieldHorario" class="hidden space-y-1.5">
-          <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider">Horário Específico *</label>
-          <div class="flex items-center space-x-2">
-            <input type="time" id="lockInputHorario" step="1800" value="08:00" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 transition font-mono">
-            <div class="flex items-center space-x-1 shrink-0">
-              <button type="button" onclick="setLockQuickTime('08:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">08:00</button>
-              <button type="button" onclick="setLockQuickTime('10:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">10:00</button>
-              <button type="button" onclick="setLockQuickTime('14:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">14:00</button>
-              <button type="button" onclick="setLockQuickTime('16:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">16:00</button>
+          <!-- AÇÃO: TRAVAR VS LIBERAR -->
+          <div class="p-3.5 rounded-xl bg-dark-900/80 border border-slate-700/80 space-y-2">
+            <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider">Ação Desejada</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="flex items-center space-x-2.5 p-3 rounded-xl border border-amber-500/50 bg-amber-500/10 cursor-pointer hover:border-amber-400 transition">
+                <input type="radio" name="lockTipoAcaoRadio" value="bloquear" id="lockActionBloquear" checked class="text-amber-500 focus:ring-0">
+                <div>
+                  <span class="font-bold text-amber-300 block flex items-center space-x-1.5">
+                    <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+                    <span>Bloquear / Não Agendar (Trava)</span>
+                  </span>
+                  <span class="text-[11px] text-slate-400">A IA recusa e não oferece para clientes</span>
+                </div>
+              </label>
+
+              <label class="flex items-center space-x-2.5 p-3 rounded-xl border border-slate-700 bg-dark-800 cursor-pointer hover:border-emerald-500 transition">
+                <input type="radio" name="lockTipoAcaoRadio" value="liberar" id="lockActionLiberar" class="text-emerald-500 focus:ring-0">
+                <div>
+                  <span class="font-bold text-emerald-400 block flex items-center space-x-1.5">
+                    <i data-lucide="unlock" class="w-3.5 h-3.5"></i>
+                    <span>Liberar Agendamentos (Exceção Aberta)</span>
+                  </span>
+                  <span class="text-[11px] text-slate-400">Permite agendamento mesmo se fora do padrão</span>
+                </div>
+              </label>
             </div>
           </div>
-          <p class="text-[11px] text-slate-400">Apenas esse horário específico ficará indisponível.</p>
+
+          <!-- SEÇÃO 1: DATA ESPECÍFICA (TAB 'unica') -->
+          <div id="lockSectionUnica" class="space-y-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">Data do Bloqueio *</label>
+              <input type="date" id="lockInputData" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 transition font-mono">
+              <p class="text-[11px] text-slate-400 mt-1">Essa regra será aplicada exclusivamente nesta data específica.</p>
+            </div>
+          </div>
+
+          <!-- SEÇÃO 2: RECORRENTE SEMANAL (TAB 'semanal') -->
+          <div id="lockSectionSemanal" class="hidden space-y-3">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider">Dias da Semana Que Se Repetem *</label>
+                <div class="flex items-center space-x-1">
+                  <button type="button" onclick="selectWeekdaysPreset('weekdays')" class="px-2 py-0.5 rounded bg-dark-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold border border-slate-700">Seg a Sex</button>
+                  <button type="button" onclick="selectWeekdaysPreset('weekend')" class="px-2 py-0.5 rounded bg-dark-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold border border-slate-700">Fim de Semana</button>
+                  <button type="button" onclick="selectWeekdaysPreset('clear')" class="px-2 py-0.5 rounded bg-dark-800 hover:bg-slate-700 text-rose-300 text-[10px] font-semibold border border-slate-700">Limpar</button>
+                </div>
+              </div>
+
+              <!-- BOTÕES/CHECKBOXES DOS DIAS DA SEMANA -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1" id="weekdayCheckboxesContainer">
+                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-700 bg-dark-900 cursor-pointer hover:border-purple-500 transition">
+                  <input type="checkbox" name="lockWeekdayCheck" value="segunda" class="rounded text-purple-600 focus:ring-0">
+                  <span class="text-xs font-semibold text-slate-200">Segunda-feira</span>
+                </label>
+                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-700 bg-dark-900 cursor-pointer hover:border-purple-500 transition">
+                  <input type="checkbox" name="lockWeekdayCheck" value="terca" class="rounded text-purple-600 focus:ring-0">
+                  <span class="text-xs font-semibold text-slate-200">Terça-feira</span>
+                </label>
+                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-700 bg-dark-900 cursor-pointer hover:border-purple-500 transition">
+                  <input type="checkbox" name="lockWeekdayCheck" value="quarta" class="rounded text-purple-600 focus:ring-0">
+                  <span class="text-xs font-semibold text-slate-200">Quarta-feira</span>
+                </label>
+                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-700 bg-dark-900 cursor-pointer hover:border-purple-500 transition">
+                  <input type="checkbox" name="lockWeekdayCheck" value="quinta" class="rounded text-purple-600 focus:ring-0">
+                  <span class="text-xs font-semibold text-slate-200">Quinta-feira</span>
+                </label>
+                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-700 bg-dark-900 cursor-pointer hover:border-purple-500 transition">
+                  <input type="checkbox" name="lockWeekdayCheck" value="sexta" class="rounded text-purple-600 focus:ring-0">
+                  <span class="text-xs font-semibold text-slate-200">Sexta-feira</span>
+                </label>
+                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-700 bg-dark-900 cursor-pointer hover:border-purple-500 transition">
+                  <input type="checkbox" name="lockWeekdayCheck" value="sabado" checked class="rounded text-purple-600 focus:ring-0">
+                  <span class="text-xs font-semibold text-slate-200">Sábado</span>
+                </label>
+                <label class="flex items-center space-x-2 p-2.5 rounded-xl border border-slate-700 bg-dark-900 cursor-pointer hover:border-purple-500 transition">
+                  <input type="checkbox" name="lockWeekdayCheck" value="domingo" class="rounded text-purple-600 focus:ring-0">
+                  <span class="text-xs font-semibold text-slate-200">Domingo</span>
+                </label>
+              </div>
+              <p class="text-[11px] text-purple-400/90 mt-1.5 flex items-center space-x-1">
+                <i data-lucide="info" class="w-3.5 h-3.5 inline"></i>
+                <span>Essa regra se repetirá automaticamente todas as semanas nesses dias marcados.</span>
+              </p>
+            </div>
+          </div>
+
+          <!-- SEÇÃO 3: INTERVALO / PERÍODO / FÉRIAS (TAB 'intervalo') -->
+          <div id="lockSectionIntervalo" class="hidden space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">Data Inicial *</label>
+                <input type="date" id="lockInputDataInicio" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500 transition font-mono">
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">Data Final *</label>
+                <input type="date" id="lockInputDataFim" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500 transition font-mono">
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-400">Ideal para recesso de fim de ano, reformas ou férias coletivas da equipe.</p>
+          </div>
+
+          <!-- TIPO DE EXTENSÃO: DIA INTEIRO VS HORÁRIO ESPECÍFICO -->
+          <div>
+            <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-2">Escopo do Horário</label>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex items-center space-x-2.5 p-3 rounded-xl border border-slate-700 bg-dark-900/60 cursor-pointer hover:border-amber-500 transition">
+                <input type="radio" name="lockTypeRadio" value="dia" id="lockRadioDia" checked onchange="toggleLockType(this.value)" class="text-amber-500 focus:ring-0">
+                <div>
+                  <span class="font-semibold text-white block">Dia Inteiro</span>
+                  <span class="text-[11px] text-slate-400">Todos os horários do dia</span>
+                </div>
+              </label>
+              <label class="flex items-center space-x-2.5 p-3 rounded-xl border border-slate-700 bg-dark-900/60 cursor-pointer hover:border-amber-500 transition">
+                <input type="radio" name="lockTypeRadio" value="horario" id="lockRadioHorario" onchange="toggleLockType(this.value)" class="text-amber-500 focus:ring-0">
+                <div>
+                  <span class="font-semibold text-white block">Horário Específico</span>
+                  <span class="text-[11px] text-slate-400">Ex: 10:00 ou 12:00</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- HORÁRIO ESPECÍFICO (CONDICIONAL) -->
+          <div id="lockFieldHorario" class="hidden space-y-1.5">
+            <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider">Horário Específico *</label>
+            <div class="flex items-center space-x-2">
+              <input type="time" id="lockInputHorario" step="1800" value="08:00" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 transition font-mono">
+              <div class="flex items-center space-x-1 shrink-0">
+                <button type="button" onclick="setLockQuickTime('08:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">08:00</button>
+                <button type="button" onclick="setLockQuickTime('10:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">10:00</button>
+                <button type="button" onclick="setLockQuickTime('12:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">12:00</button>
+                <button type="button" onclick="setLockQuickTime('14:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">14:00</button>
+                <button type="button" onclick="setLockQuickTime('16:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">16:00</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- MOTIVO & ATALHOS RÁPIDOS -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider">Motivo (Opcional)</label>
+              <span class="text-[10px] text-slate-400">Clique para preencher rápido:</span>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-1.5 pb-1">
+              <button type="button" onclick="setReasonPreset('Feriado municipal / nacional')" class="px-2.5 py-0.5 rounded-lg bg-dark-900 hover:bg-slate-700 border border-slate-700 text-[11px] text-slate-300">Feriado</button>
+              <button type="button" onclick="setReasonPreset('Almoço da equipe', '12:00')" class="px-2.5 py-0.5 rounded-lg bg-dark-900 hover:bg-slate-700 border border-slate-700 text-[11px] text-slate-300">Almoço (12h)</button>
+              <button type="button" onclick="setReasonPreset('Folga semanal da equipe')" class="px-2.5 py-0.5 rounded-lg bg-dark-900 hover:bg-slate-700 border border-slate-700 text-[11px] text-slate-300">Folga da Equipe</button>
+              <button type="button" onclick="setReasonPreset('Manutenção de viaturas / equipamentos')" class="px-2.5 py-0.5 rounded-lg bg-dark-900 hover:bg-slate-700 border border-slate-700 text-[11px] text-slate-300">Manutenção</button>
+              <button type="button" onclick="setReasonPreset('Recesso de fim de ano / férias coletivas')" class="px-2.5 py-0.5 rounded-lg bg-dark-900 hover:bg-slate-700 border border-slate-700 text-[11px] text-slate-300">Férias Coletivas</button>
+              <button type="button" onclick="setReasonPreset('Treinamento interno')" class="px-2.5 py-0.5 rounded-lg bg-dark-900 hover:bg-slate-700 border border-slate-700 text-[11px] text-slate-300">Treinamento</button>
+            </div>
+
+            <input type="text" id="lockInputMotivo" placeholder="Ex: Feriado, Folga da equipe, Almoço, Manutenção, Treinamento" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 transition">
+            <p class="text-[11px] text-slate-400 mt-0.5">A assistente virtual (Nat) usará este motivo para explicar educadamente caso um cliente solicite este horário.</p>
+          </div>
+
+          <!-- FOOTER COM BOTÃO DE SALVAR -->
+          <div class="pt-3 border-t border-slate-800 flex items-center justify-end space-x-2">
+            <button type="button" onclick="closeLockScheduleModal()" class="px-4 py-2 rounded-xl border border-slate-700 hover:bg-dark-800 text-slate-300 text-xs font-semibold transition">
+              Cancelar
+            </button>
+            <button type="submit" id="btnSubmitLockSchedule" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center space-x-1.5 transition shadow-lg shadow-amber-600/20">
+              <i data-lucide="check" class="w-4 h-4"></i>
+              <span>Salvar Regra de Agenda</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- SEÇÃO 4: LISTA DE REGRAS ATIVAS (TAB 'regras') -->
+        <div id="lockSectionRegras" class="hidden space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div>
+              <h5 class="font-bold text-white text-sm">Regras e Bloqueios Ativos</h5>
+              <p class="text-xs text-slate-400">Todas as regras pontuais, intervalos e recorrências semanais ativas</p>
+            </div>
+            <button type="button" onclick="setLockModalTab('semanal')" class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Nova Recorrência</span>
+            </button>
+          </div>
+
+          <div id="modalActiveRulesList" class="space-y-2 pt-1">
+            <!-- Renderizado dinamicamente via JS -->
+          </div>
         </div>
 
-        <!-- MOTIVO -->
-        <div>
-          <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">Motivo do Bloqueio (Opcional)</label>
-          <input type="text" id="lockInputMotivo" placeholder="Ex: Feriado, Folga da equipe, Manutenção, Compromisso particular" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 transition">
-          <p class="text-[11px] text-slate-400 mt-1">A assistente virtual (Nat) usará este motivo para explicar educadamente caso um cliente solicite este horário.</p>
-        </div>
-
-        <!-- AVISO DE SINCRONIZAÇÃO COM A IA -->
-        <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-start space-x-2">
-          <i data-lucide="info" class="w-4 h-4 shrink-0 text-amber-400 mt-0.5"></i>
-          <span>Este bloqueio entra em vigor imediatamente para a IA. Se um cliente tentar agendar este dia ou horário, a automação recusará e oferecerá as próximas datas livres.</span>
-        </div>
-
-        <!-- FOOTER / BOTÕES -->
-        <div class="pt-3 border-t border-slate-800 flex items-center justify-end space-x-2">
-          <button type="button" onclick="closeLockScheduleModal()" class="px-4 py-2 rounded-xl border border-slate-700 hover:bg-dark-800 text-slate-300 text-xs font-semibold transition">
-            Cancelar
-          </button>
-          <button type="submit" id="btnSubmitLockSchedule" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center space-x-1.5 transition shadow-lg shadow-amber-600/20">
-            <i data-lucide="lock" class="w-4 h-4"></i>
-            <span>Confirmar Bloqueio</span>
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   </div>
 
@@ -3265,7 +3444,19 @@
     }
 
     function renderCalendarDayCell(dateStr, dayNum, appts, isCurrentMonth, isToday, isSelected) {
-      const dayLocksCheck = allScheduleLocksCache.filter(l => l.data === dateStr);
+      const dayDateObj = new Date(dateStr + 'T12:00:00-03:00');
+      const daySlugs = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+      const cellDaySlug = daySlugs[dayDateObj.getDay()];
+
+      const dayLocksCheck = allScheduleLocksCache.filter(l => {
+        if (l.tipo_recorrencia === 'semanal') {
+          return l.dia_semana === cellDaySlug || (Array.isArray(l.dias_semana) && l.dias_semana.includes(cellDaySlug));
+        }
+        if (l.tipo_recorrencia === 'intervalo') {
+          return dateStr >= l.data && (!l.data_fim || dateStr <= l.data_fim);
+        }
+        return l.data === dateStr;
+      });
       const isDayLocked = dayLocksCheck.some(l => !l.horario);
 
       const bgClass = isSelected 
@@ -3279,7 +3470,7 @@
         : `<span class="text-xs font-semibold ${isCurrentMonth ? 'text-slate-200' : 'text-slate-500'}">${dayNum}</span>`;
 
       // Renderiza travas e bloqueios da data
-      const dayLocks = allScheduleLocksCache.filter(l => l.data === dateStr);
+      const dayLocks = dayLocksCheck;
       const hasFullDayLock = dayLocks.some(l => !l.horario);
       const slotLocks = dayLocks.filter(l => !!l.horario);
 
@@ -3355,6 +3546,8 @@
       const title = document.getElementById('calendarSelectedDayTitle');
       const countBadge = document.getElementById('calendarSelectedDayCount');
       const list = document.getElementById('calendarSelectedDayList');
+      const quickSlotsGrid = document.getElementById('calendarQuickSlotsGrid');
+      const btnQuickDay = document.getElementById('btnQuickToggleDay');
       if (!container || !list) return;
 
       if (!selectedCalendarDateStr) {
@@ -3365,17 +3558,116 @@
       const parts = selectedCalendarDateStr.split('-');
       const dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
       const formattedDayStr = dateObj.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+      const daySlugs = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+      const daySlug = daySlugs[dateObj.getDay()];
 
       title.textContent = `Agendamentos de ${formattedDayStr}`;
+
+      // 1. Identifica regras e bloqueios que afetam esta data específica (pontual, intervalo ou semanal)
+      const dayLocks = allScheduleLocksCache.filter(l => {
+        if (l.tipo_recorrencia === 'semanal') {
+          return l.dia_semana === daySlug || (Array.isArray(l.dias_semana) && l.dias_semana.includes(daySlug));
+        }
+        if (l.tipo_recorrencia === 'intervalo') {
+          return selectedCalendarDateStr >= l.data && (!l.data_fim || selectedCalendarDateStr <= l.data_fim);
+        }
+        return l.data === selectedCalendarDateStr;
+      });
 
       const dayAppts = allAppointmentsCache.filter(a => {
         const d = a.data_iso || (a.data_agendada ? a.data_agendada.substring(0, 10) : '');
         return d === selectedCalendarDateStr;
       });
 
-      const dayLocks = allScheduleLocksCache.filter(l => l.data === selectedCalendarDateStr);
       countBadge.textContent = `${dayAppts.length} agendamento(s)${dayLocks.length > 0 ? ' • ' + dayLocks.length + ' trava(s)' : ''}`;
 
+      // 2. Atualiza botão de travar/liberar dia inteiro
+      const hasFullDayBlock = dayLocks.some(l => !l.horario && l.tipo_acao !== 'liberar');
+      if (btnQuickDay) {
+        if (hasFullDayBlock) {
+          btnQuickDay.className = 'px-3 py-1 rounded-lg text-[11px] font-bold flex items-center space-x-1.5 transition shadow bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border-emerald-500/40';
+          btnQuickDay.innerHTML = '<i data-lucide="unlock" class="w-3.5 h-3.5 text-emerald-400"></i><span>🔓 Liberar Dia Inteiro</span>';
+        } else {
+          btnQuickDay.className = 'px-3 py-1 rounded-lg text-[11px] font-bold flex items-center space-x-1.5 transition shadow bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40';
+          btnQuickDay.innerHTML = '<i data-lucide="lock" class="w-3.5 h-3.5 text-amber-400"></i><span>🔒 Travar Dia Inteiro</span>';
+        }
+      }
+
+      // 3. Renderiza Grade Rápida de Horários Interativos (1 Clique)
+      if (quickSlotsGrid) {
+        // Horários operacionais padrão
+        const standardSlots = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00'];
+
+        quickSlotsGrid.innerHTML = standardSlots.map(time => {
+          // Verifica se há agendamento confirmado nesse horário
+          const appt = dayAppts.find(a => {
+            const h = a.horario_br || (a.data_formatada_br ? a.data_formatada_br.split(' às ')[1] : '');
+            return h.startsWith(time) || time.startsWith(h);
+          });
+
+          if (appt) {
+            const clientFirstName = (appt.client_name || 'Cliente').split(' ')[0];
+            return `
+              <div onclick="openAppointmentModal('${appt.id}')" 
+                   class="p-2.5 rounded-xl border border-blue-500/40 bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 flex items-center justify-between text-xs font-semibold cursor-pointer transition shadow" 
+                   title="Agendamento confirmado: ${appt.client_name} (${appt.servico})">
+                <span class="font-mono font-bold">${time}</span>
+                <span class="text-[10px] flex items-center space-x-1 truncate max-w-[85px]">
+                  <i data-lucide="user-check" class="w-3.5 h-3.5 text-blue-400 shrink-0"></i>
+                  <span class="truncate font-sans font-medium">${clientFirstName}</span>
+                </span>
+              </div>
+            `;
+          }
+
+          // Verifica se o horário está travado por bloqueio pontual ou regra recorrente
+          const lock = dayLocks.find(l => l.horario === time && l.tipo_acao !== 'liberar');
+          const isLocked = !!lock || hasFullDayBlock;
+
+          if (isLocked) {
+            const isWeekly = lock && lock.tipo_recorrencia === 'semanal';
+            const lockMotive = lock ? lock.motivo : 'Dia travado';
+            const badgeIcon = isWeekly ? 'repeat' : 'lock';
+            const badgeText = isWeekly ? 'Recorrente' : 'Travado';
+            const colorClass = isWeekly ? 'border-purple-500/50 bg-purple-500/20 text-purple-300 hover:border-emerald-500/60 hover:bg-emerald-500/20 hover:text-emerald-300' : 'border-amber-500/50 bg-amber-500/20 text-amber-300 hover:border-emerald-500/60 hover:bg-emerald-500/20 hover:text-emerald-300';
+
+            return `
+              <button type="button" onclick="toggleSlotQuick('${selectedCalendarDateStr}', '${time}')" 
+                      class="p-2.5 rounded-xl border ${colorClass} flex items-center justify-between text-xs font-semibold transition shadow group cursor-pointer" 
+                      title="Clique para destravar e LIBERAR este horário (${lockMotive})">
+                <span class="font-mono font-bold">${time}</span>
+                <span class="text-[10px] flex items-center space-x-1 group-hover:hidden">
+                  <i data-lucide="${badgeIcon}" class="w-3.5 h-3.5 shrink-0"></i>
+                  <span>${badgeText}</span>
+                </span>
+                <span class="text-[10px] hidden group-hover:flex items-center space-x-1 text-emerald-400 font-bold">
+                  <i data-lucide="unlock" class="w-3.5 h-3.5 shrink-0"></i>
+                  <span>Liberar</span>
+                </span>
+              </button>
+            `;
+          } else {
+            // Horário LIVRE
+            return `
+              <button type="button" onclick="toggleSlotQuick('${selectedCalendarDateStr}', '${time}')" 
+                      class="p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-300 text-emerald-300 flex items-center justify-between text-xs font-semibold transition shadow group cursor-pointer" 
+                      title="Clique para TRAVAR este horário na agenda">
+                <span class="font-mono font-bold">${time}</span>
+                <span class="text-[10px] flex items-center space-x-1 text-emerald-400 group-hover:hidden">
+                  <i data-lucide="check-circle" class="w-3.5 h-3.5 shrink-0"></i>
+                  <span>Livre</span>
+                </span>
+                <span class="text-[10px] hidden group-hover:flex items-center space-x-1 text-amber-400 font-bold">
+                  <i data-lucide="lock" class="w-3.5 h-3.5 shrink-0"></i>
+                  <span>Travar</span>
+                </span>
+              </button>
+            `;
+          }
+        }).join('');
+      }
+
+      // 4. Banner detalhado de bloqueios ativos nesta data
       let locksBannerHtml = '';
       if (dayLocks.length > 0) {
         locksBannerHtml = `
@@ -3383,31 +3675,39 @@
             <div class="flex items-center justify-between text-xs font-bold text-amber-300">
               <div class="flex items-center space-x-1.5">
                 <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i>
-                <span>Travas / Bloqueios nesta Data (${dayLocks.length})</span>
+                <span>Regras e Travas Ativas Nesta Data (${dayLocks.length})</span>
               </div>
-              <span class="text-[10px] uppercase tracking-wider text-amber-400/90 font-mono">IA respeita esta restrição</span>
+              <span class="text-[10px] uppercase tracking-wider text-amber-400/90 font-mono">IA respeita estas restrições</span>
             </div>
             <div class="space-y-1.5">
-              ${dayLocks.map(l => `
-                <div class="p-2.5 bg-dark-900/90 rounded-lg border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                  <div class="flex items-center space-x-2">
-                    <i data-lucide="lock" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
-                    <div>
-                      <span class="font-bold text-amber-200 font-mono">${l.horario ? 'Horário ' + l.horario : '🔒 DIA INTEIRO TRAVADO'}</span>
-                      ${l.motivo ? `<span class="text-slate-400 ml-2">Motivo: <span class="text-slate-200">"${l.motivo}"</span></span>` : '<span class="text-slate-500 ml-2">(Sem motivo específico informado)</span>'}
+              ${dayLocks.map(l => {
+                const isWeekly = l.tipo_recorrencia === 'semanal';
+                const isInterval = l.tipo_recorrencia === 'intervalo';
+                const tag = isWeekly ? '🔁 RECORRENTE SEMANAL' : (isInterval ? '📆 PERÍODO / FÉRIAS' : '🔒 PONTUAL');
+                const tagColor = isWeekly ? 'text-purple-300' : (isInterval ? 'text-blue-300' : 'text-amber-200');
+
+                return `
+                  <div class="p-2.5 bg-dark-900/90 rounded-lg border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div class="flex items-center space-x-2">
+                      <i data-lucide="${isWeekly ? 'repeat' : 'lock'}" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
+                      <div>
+                        <span class="font-bold ${tagColor} font-mono">${tag}: ${l.horario ? 'Horário ' + l.horario : 'DIA INTEIRO'}</span>
+                        ${l.motivo ? `<span class="text-slate-400 ml-2">Motivo: <span class="text-slate-200">"${l.motivo}"</span></span>` : '<span class="text-slate-500 ml-2">(Sem motivo específico informado)</span>'}
+                      </div>
                     </div>
+                    <button onclick="removeScheduleLock('${l.id}')" class="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[11px] font-semibold flex items-center space-x-1 transition self-start sm:self-auto shrink-0" title="Remover este bloqueio e liberar para a IA agendar">
+                      <i data-lucide="unlock" class="w-3 h-3 text-rose-400"></i>
+                      <span>Destravar</span>
+                    </button>
                   </div>
-                  <button onclick="removeScheduleLock('${l.id}')" class="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[11px] font-semibold flex items-center space-x-1 transition self-start sm:self-auto shrink-0" title="Remover este bloqueio e liberar para a IA agendar">
-                    <i data-lucide="unlock" class="w-3 h-3 text-rose-400"></i>
-                    <span>Destravar</span>
-                  </button>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           </div>
         `;
       }
 
+      // 5. Lista de agendamentos confirmados
       if (dayAppts.length === 0) {
         list.innerHTML = locksBannerHtml + `
           <div class="p-6 text-center text-slate-500 text-xs">
@@ -3658,21 +3958,111 @@
     }
 
     // --------------------------------------------------------------------------
-    // 4.1 TRAVAS E BLOQUEIOS DA AGENDA (DIA / HORÁRIO)
+    // 4.1 TRAVAS E BLOQUEIOS DA AGENDA (COM RECORRÊNCIA E 1-CLIQUE)
     // --------------------------------------------------------------------------
-    function openLockScheduleModal(defaultDate, defaultTime) {
+    let currentLockModalTab = 'unica';
+
+    function setLockModalTab(tabName) {
+      currentLockModalTab = tabName;
+      const tabs = ['unica', 'semanal', 'intervalo', 'regras'];
+
+      tabs.forEach(t => {
+        const btn = document.getElementById(`lockTabBtn-${t}`);
+        if (btn) {
+          if (t === tabName) {
+            btn.className = 'px-4 py-2 rounded-t-xl font-bold flex items-center space-x-1.5 border-b-2 border-amber-500 text-amber-300 bg-dark-850 transition';
+          } else {
+            btn.className = 'px-4 py-2 rounded-t-xl font-semibold flex items-center space-x-1.5 border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition';
+          }
+        }
+      });
+
+      const secUnica = document.getElementById('lockSectionUnica');
+      const secSemanal = document.getElementById('lockSectionSemanal');
+      const secIntervalo = document.getElementById('lockSectionIntervalo');
+      const secRegras = document.getElementById('lockSectionRegras');
+      const form = document.getElementById('lockScheduleForm');
+      const tipoRecInput = document.getElementById('lockInputTipoRecorrencia');
+
+      if (tabName === 'regras') {
+        if (form) form.classList.add('hidden');
+        if (secRegras) secRegras.classList.remove('hidden');
+        renderModalActiveRulesList();
+      } else {
+        if (form) form.classList.remove('hidden');
+        if (secRegras) secRegras.classList.add('hidden');
+        if (tipoRecInput) tipoRecInput.value = tabName;
+
+        if (secUnica) secUnica.classList.toggle('hidden', tabName !== 'unica');
+        if (secSemanal) secSemanal.classList.toggle('hidden', tabName !== 'semanal');
+        if (secIntervalo) secIntervalo.classList.toggle('hidden', tabName !== 'intervalo');
+      }
+
+      lucide.createIcons();
+    }
+
+    function selectWeekdaysPreset(preset) {
+      const checks = document.querySelectorAll('input[name="lockWeekdayCheck"]');
+      checks.forEach(c => {
+        if (preset === 'weekdays') {
+          c.checked = ['segunda', 'terca', 'quarta', 'quinta', 'sexta'].includes(c.value);
+        } else if (preset === 'weekend') {
+          c.checked = ['sabado', 'domingo'].includes(c.value);
+        } else if (preset === 'clear') {
+          c.checked = false;
+        } else if (preset === 'all') {
+          c.checked = true;
+        }
+      });
+    }
+
+    function setReasonPreset(motivoText, defaultTime) {
+      const inputMotivo = document.getElementById('lockInputMotivo');
+      if (inputMotivo) inputMotivo.value = motivoText;
+
+      if (defaultTime) {
+        const radioHorario = document.getElementById('lockRadioHorario');
+        if (radioHorario) radioHorario.checked = true;
+        toggleLockType('horario');
+        setLockQuickTime(defaultTime);
+      }
+    }
+
+    function openLockScheduleModal(defaultDate, defaultTime, initialTab = 'unica') {
       const modal = document.getElementById('lockScheduleModal');
       const inputData = document.getElementById('lockInputData');
+      const inputDataInicio = document.getElementById('lockInputDataInicio');
+      const inputDataFim = document.getElementById('lockInputDataFim');
       const inputHorario = document.getElementById('lockInputHorario');
       const inputMotivo = document.getElementById('lockInputMotivo');
       const radioDia = document.getElementById('lockRadioDia');
       const radioHorario = document.getElementById('lockRadioHorario');
+      const radioBloquear = document.getElementById('lockActionBloquear');
 
       const today = new Date();
       const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const baseDate = defaultDate || selectedCalendarDateStr || todayStr;
 
-      inputData.value = defaultDate || selectedCalendarDateStr || todayStr;
+      inputData.value = baseDate;
+      if (inputDataInicio) inputDataInicio.value = baseDate;
+      if (inputDataFim) {
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 7);
+        inputDataFim.value = `${nextWeek.getFullYear()}-${String(nextWeek.getMonth() + 1).padStart(2, '0')}-${String(nextWeek.getDate()).padStart(2, '0')}`;
+      }
       inputMotivo.value = '';
+      if (radioBloquear) radioBloquear.checked = true;
+
+      // Se passou data para recorrência semanal, marca o dia da semana correspondente
+      if (defaultDate) {
+        const dObj = new Date(defaultDate + 'T12:00:00-03:00');
+        const daySlugs = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+        const currentSlug = daySlugs[dObj.getDay()];
+        const checks = document.querySelectorAll('input[name="lockWeekdayCheck"]');
+        checks.forEach(c => {
+          c.checked = (c.value === currentSlug);
+        });
+      }
 
       if (defaultTime) {
         radioHorario.checked = true;
@@ -3684,6 +4074,7 @@
         inputHorario.value = '08:00';
       }
 
+      setLockModalTab(initialTab);
       modal.classList.remove('hidden');
       lucide.createIcons();
     }
@@ -3713,15 +4104,76 @@
       openLockScheduleModal(selectedCalendarDateStr || todayStr);
     }
 
+    // Toggle rápido de horário (1 clique)
+    async function toggleSlotQuick(dateStr, timeStr) {
+      try {
+        const res = await apiFetch('/api/v2/tenant/schedule-locks/toggle', {
+          method: 'POST',
+          body: JSON.stringify({
+            date: dateStr,
+            time: timeStr
+          })
+        });
+
+        if (res.ok) {
+          await loadAppointments();
+        } else {
+          alert('Erro ao alterar status do horário: ' + (res.data?.error || 'Falha na requisição'));
+        }
+      } catch (err) {
+        alert('Erro ao conectar com o servidor.');
+      }
+    }
+
+    // Toggle rápido de dia inteiro (1 clique)
+    async function quickToggleDayLock(dateStr) {
+      try {
+        const res = await apiFetch('/api/v2/tenant/schedule-locks/toggle', {
+          method: 'POST',
+          body: JSON.stringify({
+            date: dateStr,
+            time: null
+          })
+        });
+
+        if (res.ok) {
+          await loadAppointments();
+        } else {
+          alert('Erro ao alterar status do dia: ' + (res.data?.error || 'Falha na requisição'));
+        }
+      } catch (err) {
+        alert('Erro ao conectar com o servidor.');
+      }
+    }
+
     async function submitScheduleLock(e) {
       if (e) e.preventDefault();
+      const tipoRecorrencia = document.getElementById('lockInputTipoRecorrencia').value || 'unica';
+      const isLiberar = document.getElementById('lockActionLiberar')?.checked;
+      const tipoAcao = isLiberar ? 'liberar' : 'bloquear';
+
       const data = document.getElementById('lockInputData').value;
+      const dataInicio = document.getElementById('lockInputDataInicio')?.value;
+      const dataFim = document.getElementById('lockInputDataFim')?.value;
+
       const isHorario = document.getElementById('lockRadioHorario').checked;
       const horario = isHorario ? document.getElementById('lockInputHorario').value : null;
       const motivo = document.getElementById('lockInputMotivo').value.trim();
 
-      if (!data) {
-        alert('Por favor, selecione uma data para o bloqueio.');
+      // Coleta dias da semana selecionados
+      const weekdayChecks = document.querySelectorAll('input[name="lockWeekdayCheck"]:checked');
+      const diasSemana = Array.from(weekdayChecks).map(c => c.value);
+
+      if (tipoRecorrencia === 'unica' && !data) {
+        alert('Por favor, selecione uma data para a regra.');
+        return;
+      }
+      if (tipoRecorrencia === 'semanal' && diasSemana.length === 0) {
+        alert('Por favor, selecione ao menos um dia da semana para a recorrência.');
+        return;
+      }
+      if (tipoRecorrencia === 'intervalo' && (!dataInicio || !dataFim)) {
+        alert('Por favor, informe a data inicial e final do período.');
         return;
       }
 
@@ -3731,25 +4183,32 @@
       btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Salvando...</span>';
 
       try {
+        const payload = {
+          tipo_recorrencia: tipoRecorrencia,
+          tipo_acao: tipoAcao,
+          horario,
+          motivo,
+          data: tipoRecorrencia === 'intervalo' ? dataInicio : data,
+          data_fim: tipoRecorrencia === 'intervalo' ? dataFim : null,
+          dias_semana: tipoRecorrencia === 'semanal' ? diasSemana : [],
+          dia_semana: tipoRecorrencia === 'semanal' && diasSemana.length > 0 ? diasSemana[0] : null
+        };
+
         const res = await apiFetch('/api/v2/tenant/schedule-locks', {
           method: 'POST',
-          body: JSON.stringify({
-            data,
-            horario,
-            motivo
-          })
+          body: JSON.stringify(payload)
         });
 
         if (!res.ok) {
-          alert('Erro ao salvar bloqueio: ' + (res.data?.error || 'Falha na requisição'));
+          alert('Erro ao salvar regra: ' + (res.data?.error || 'Falha na requisição'));
           return;
         }
 
         closeLockScheduleModal();
         await loadAppointments();
-        alert(res.data?.message || 'Bloqueio adicionado com sucesso! A IA já respeitará esta trava.');
+        alert(res.data?.message || 'Regra de agenda salva com sucesso! A IA já respeitará esta configuração.');
       } catch (err) {
-        alert('Erro de conexão ao salvar bloqueio de agenda.');
+        alert('Erro de conexão ao salvar regra de agenda.');
       } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -3758,7 +4217,7 @@
     }
 
     async function removeScheduleLock(lockId) {
-      if (!confirm('Tem certeza que deseja destravar este dia/horário?\n\nApós destravar, a automação (IA) e clientes poderão voltar a agendar neste período.')) {
+      if (!confirm('Tem certeza que deseja remover esta regra/bloqueio?\n\nApós remover, a automação (IA) e clientes poderão voltar a agendar normalmente neste período.')) {
         return;
       }
 
@@ -3768,14 +4227,73 @@
         });
 
         if (!res.ok) {
-          alert('Erro ao remover bloqueio: ' + (res.data?.error || 'Falha na requisição'));
+          alert('Erro ao remover regra: ' + (res.data?.error || 'Falha na requisição'));
           return;
         }
 
         await loadAppointments();
+        renderModalActiveRulesList();
       } catch (err) {
-        alert('Erro ao conectar para destravar a agenda.');
+        alert('Erro ao conectar para remover regra de agenda.');
       }
+    }
+
+    function renderModalActiveRulesList() {
+      const container = document.getElementById('modalActiveRulesList');
+      const badge = document.getElementById('modalActiveRulesCount');
+      if (badge) badge.textContent = allScheduleLocksCache.length;
+      if (!container) return;
+
+      if (allScheduleLocksCache.length === 0) {
+        container.innerHTML = `
+          <div class="p-8 text-center text-slate-500 text-xs">
+            <i data-lucide="shield-check" class="w-8 h-8 mx-auto text-emerald-500/60 mb-2"></i>
+            <p class="font-medium text-slate-300">Nenhum bloqueio ou regra recorrente ativa no momento.</p>
+            <p class="text-[11px] text-slate-500 mt-1">Todos os dias e horários padrão do tenant estão livres para agendamento.</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = allScheduleLocksCache.map(l => {
+        let typeBadge = '';
+        let scopeLabel = '';
+
+        if (l.tipo_recorrencia === 'semanal') {
+          typeBadge = '<span class="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-bold font-mono">🔁 SEMANAL</span>';
+          const diasList = Array.isArray(l.dias_semana) && l.dias_semana.length > 0 ? l.dias_semana.join(', ') : (l.dia_semana || 'Semanal');
+          scopeLabel = `Toda semana: <span class="capitalize text-white font-semibold">${diasList}</span> ${l.horario ? 'às ' + l.horario : '(Dia Inteiro)'}`;
+        } else if (l.tipo_recorrencia === 'intervalo') {
+          typeBadge = '<span class="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold font-mono">📆 PERÍODO</span>';
+          scopeLabel = `De <span class="font-mono text-white">${l.data_br || l.data}</span> até <span class="font-mono text-white">${l.data_fim_br || l.data_fim}</span> ${l.horario ? 'às ' + l.horario : '(Dia Inteiro)'}`;
+        } else {
+          typeBadge = '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono">📅 PONTUAL</span>';
+          scopeLabel = `Data: <span class="font-mono text-white">${l.data_br || l.data}</span> ${l.horario ? 'às ' + l.horario : '(Dia Inteiro)'}`;
+        }
+
+        const actionBadge = l.tipo_acao === 'liberar' 
+          ? '<span class="text-emerald-400 font-bold ml-1.5">[🔓 Exceção Liberada]</span>' 
+          : '<span class="text-amber-400 font-bold ml-1.5">[🔒 Bloqueado]</span>';
+
+        return `
+          <div class="p-3 bg-dark-900 rounded-xl border border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div class="flex items-start sm:items-center space-x-2.5">
+              <div class="shrink-0 mt-0.5 sm:mt-0">${typeBadge}</div>
+              <div>
+                <p class="text-slate-200 font-medium">${scopeLabel} ${actionBadge}</p>
+                ${l.motivo ? `<p class="text-slate-400 text-[11px] mt-0.5">Motivo: <span class="text-slate-300">"${l.motivo}"</span></p>` : ''}
+              </div>
+            </div>
+            <button onclick="removeScheduleLock('${l.id}')" class="px-3 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[11px] font-semibold flex items-center space-x-1 transition self-end sm:self-auto shrink-0" title="Excluir esta regra de bloqueio">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i>
+              <span>Excluir</span>
+            </button>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
     }
 
     // --------------------------------------------------------------------------

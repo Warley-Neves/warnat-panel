@@ -41,6 +41,16 @@ const DIAS_SEMANA_NOMES = [
   'Sábado'
 ];
 
+const DIAS_SEMANA_SLUGS = [
+  'domingo',
+  'segunda',
+  'terca',
+  'quarta',
+  'quinta',
+  'sexta',
+  'sabado'
+];
+
 // Mapeamento dos identificadores configurados no painel
 const DIA_KEY_TO_INDEX = {
   'domingo': 0,
@@ -744,27 +754,46 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       fromDate = getDayOfWeekInfo(nextMonth).isoDate;
     }
 
-    // 3. Lê bloqueios manuais cadastrados pelo painel (dias inteiros e horários específicos travados)
+    // 3. Lê bloqueios e regras de disponibilidade manuais cadastrados pelo painel (pontual, semanal e intervalo)
+    let activeLocks = [];
     try {
       const panelLocksRes = await query(
-        `SELECT TO_CHAR(data, 'YYYY-MM-DD') as data, horario, motivo 
+        `SELECT id,
+                TO_CHAR(data, 'YYYY-MM-DD') as data,
+                TO_CHAR(data_fim, 'YYYY-MM-DD') as data_fim,
+                horario,
+                COALESCE(tipo_recorrencia, 'unica') as tipo_recorrencia,
+                dia_semana,
+                dias_semana,
+                COALESCE(tipo_acao, 'bloquear') as tipo_acao,
+                motivo 
          FROM agenda_bloqueios 
-         WHERE tenant_id = $1 AND data >= CURRENT_DATE - INTERVAL '1 day'`,
+         WHERE tenant_id = $1
+           AND (
+             tipo_recorrencia = 'semanal'
+             OR (tipo_recorrencia = 'intervalo' AND (data_fim >= CURRENT_DATE - INTERVAL '1 day' OR data_fim IS NULL))
+             OR (data IS NOT NULL AND data >= CURRENT_DATE - INTERVAL '1 day')
+           )`,
         [tenantId]
       );
+      activeLocks = panelLocksRes.rows || [];
 
-      for (const lock of panelLocksRes.rows) {
-        if (!lock.horario) {
-          // Dia inteiro travado no painel
-          if (!excludeDates.includes(lock.data)) {
-            excludeDates.push(lock.data);
-          }
-        } else {
-          // Horário específico travado no painel
-          const cleanLockTime = lock.horario.substring(0, 5);
-          const lockSlotKey = `${lock.data} ${cleanLockTime}`;
-          if (!excludeSlots.includes(lockSlotKey)) {
-            excludeSlots.push(lockSlotKey);
+      for (const lock of activeLocks) {
+        if (lock.tipo_recorrencia === 'unica' && lock.data) {
+          if (lock.tipo_acao === 'bloquear') {
+            if (!lock.horario) {
+              // Dia inteiro travado no painel
+              if (!excludeDates.includes(lock.data)) {
+                excludeDates.push(lock.data);
+              }
+            } else {
+              // Horário específico travado no painel
+              const cleanLockTime = lock.horario.substring(0, 5);
+              const lockSlotKey = `${lock.data} ${cleanLockTime}`;
+              if (!excludeSlots.includes(lockSlotKey)) {
+                excludeSlots.push(lockSlotKey);
+              }
+            }
           }
         }
       }
@@ -860,15 +889,42 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
 
     while (freeSlots.length < 2 && daysChecked < 60) {
       const info = getDayOfWeekInfo(cursorDate);
+      const daySlug = DIAS_SEMANA_SLUGS[info.dayIndex];
 
-      // Trava de dias de atendimento: se o dia não for permitido, pula
-      if (allowedIndices.includes(info.dayIndex)) {
-        const isExcluded = normExcludeDates.some(ex => ex === info.isoDate || ex === info.formattedBr || info.isoDate.endsWith(ex));
+      // Regra de Liberação Explícita (exceção aberta no painel para agendar mesmo se o dia da semana não for padrão)
+      const hasExplicitDayRelease = activeLocks.some(l => 
+        l.tipo_acao === 'liberar' && (
+          (l.tipo_recorrencia === 'unica' && l.data === info.isoDate) ||
+          (l.tipo_recorrencia === 'intervalo' && info.isoDate >= l.data && (!l.data_fim || info.isoDate <= l.data_fim)) ||
+          (l.tipo_recorrencia === 'semanal' && (l.dia_semana === daySlug || (Array.isArray(l.dias_semana) && l.dias_semana.includes(daySlug))))
+        )
+      );
+
+      // Trava de dias de atendimento: se o dia não for permitido E não tiver liberação explícita, pula
+      if (allowedIndices.includes(info.dayIndex) || hasExplicitDayRelease) {
+        // Bloqueio de dia inteiro por intervalo de datas ou recorrência semanal
+        const isDayBlockedByRecurrence = activeLocks.some(l => 
+          l.tipo_acao === 'bloquear' && !l.horario && (
+            (l.tipo_recorrencia === 'intervalo' && info.isoDate >= l.data && (!l.data_fim || info.isoDate <= l.data_fim)) ||
+            (l.tipo_recorrencia === 'semanal' && (l.dia_semana === daySlug || (Array.isArray(l.dias_semana) && l.dias_semana.includes(daySlug))))
+          )
+        );
+
+        const isExcluded = isDayBlockedByRecurrence || normExcludeDates.some(ex => ex === info.isoDate || ex === info.formattedBr || info.isoDate.endsWith(ex));
         if (!isExcluded) {
           for (const slotTime of configuredSlots) {
             const cleanTime = slotTime.substring(0, 5);
             const slotKey = `${info.isoDate} ${cleanTime}`;
-            if (normExcludeSlots.includes(slotKey) || normExcludeSlots.includes(cleanTime)) {
+
+            // Bloqueio de horário específico por intervalo ou recorrência semanal
+            const isSlotBlockedByRecurrence = activeLocks.some(l => 
+              l.tipo_acao === 'bloquear' && l.horario === cleanTime && (
+                (l.tipo_recorrencia === 'intervalo' && info.isoDate >= l.data && (!l.data_fim || info.isoDate <= l.data_fim)) ||
+                (l.tipo_recorrencia === 'semanal' && (l.dia_semana === daySlug || (Array.isArray(l.dias_semana) && l.dias_semana.includes(daySlug))))
+              )
+            );
+
+            if (isSlotBlockedByRecurrence || normExcludeSlots.includes(slotKey) || normExcludeSlots.includes(cleanTime)) {
               continue;
             }
 
@@ -911,6 +967,43 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
   }
 
   /**
+   * Consulta bloqueios ou liberações aplicáveis a uma data e horário (pontual, intervalo ou recorrente semanal)
+   */
+  async getMatchingScheduleLock(tenantId, cleanDate, cleanTime) {
+    try {
+      const dayIndex = new Date(`${cleanDate}T12:00:00-03:00`).getDay();
+      const daySlug = DIAS_SEMANA_SLUGS[dayIndex] || 'sabado';
+      const dayJson = JSON.stringify([daySlug]);
+
+      const res = await query(
+        `SELECT id, motivo, horario, tipo_recorrencia, dia_semana, dias_semana, data, data_fim, tipo_acao
+         FROM agenda_bloqueios 
+         WHERE tenant_id = $1 
+           AND (
+             -- 1. Pontual (data específica)
+             ((tipo_recorrencia = 'unica' OR tipo_recorrencia IS NULL) AND data = $2 AND (horario IS NULL OR horario = $3))
+             OR
+             -- 2. Intervalo de datas (recesso / férias)
+             (tipo_recorrencia = 'intervalo' AND data <= $2 AND (data_fim >= $2 OR data_fim IS NULL) AND (horario IS NULL OR horario = $3))
+             OR
+             -- 3. Recorrente semanal (toda semana)
+             (tipo_recorrencia = 'semanal' AND (dia_semana = $4 OR dias_semana @> $5::jsonb) AND (horario IS NULL OR horario = $3))
+           )
+         ORDER BY 
+           CASE WHEN tipo_acao = 'liberar' THEN 0 ELSE 1 END,
+           CASE WHEN horario = $3 THEN 0 ELSE 1 END,
+           CASE WHEN tipo_recorrencia = 'unica' THEN 0 WHEN tipo_recorrencia = 'intervalo' THEN 1 ELSE 2 END
+         LIMIT 1`,
+        [tenantId, cleanDate, cleanTime, daySlug, dayJson]
+      );
+      return res.rows[0] || null;
+    } catch (err) {
+      console.warn('[AIEngine] Erro ao consultar bloqueio na agenda:', err.message);
+      return null;
+    }
+  }
+
+  /**
    * Executa Tool: check_specific_slot_availability
    */
   async executeCheckSlotTool({ tenantId, date, time, historyMessages = [] }) {
@@ -932,16 +1025,11 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       .filter(idx => idx !== undefined);
     const allowedDaysNames = allowedIndices.map(idx => DIAS_SEMANA_NOMES[idx]);
 
-    // 0. Trava de Bloqueio Manual pelo Painel
+    // 0. Trava de Bloqueio Manual / Regras de Recorrência pelo Painel
     try {
-      const panelLockCheck = await query(
-        `SELECT id, motivo, horario FROM agenda_bloqueios 
-         WHERE tenant_id = $1 AND data = $2 AND (horario IS NULL OR horario = $3) LIMIT 1`,
-        [tenantId, info.isoDate, cleanTime]
-      );
+      const lock = await this.getMatchingScheduleLock(tenantId, info.isoDate, cleanTime);
 
-      if (panelLockCheck.rowCount > 0) {
-        const lock = panelLockCheck.rows[0];
+      if (lock && lock.tipo_acao === 'bloquear') {
         const nextSlots = await this.executeGetSlotsTool({
           tenantId,
           historyMessages: historyMessages.length > 0 ? historyMessages : [{ role: 'user', content: 'nova instalação' }],
@@ -970,8 +1058,25 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       console.warn('[AIEngine] Aviso ao verificar bloqueio de horário no painel:', lockErr.message);
     }
 
-    // 1. Trava de dia da semana permitido
-    if (!allowedIndices.includes(info.dayIndex)) {
+    // 1. Trava de dia da semana permitido (verificando se não há liberação explícita)
+    let hasExplicitDayRelease = false;
+    try {
+      const daySlug = DIAS_SEMANA_SLUGS[info.dayIndex];
+      const relRes = await query(
+        `SELECT id FROM agenda_bloqueios 
+         WHERE tenant_id = $1 AND tipo_acao = 'liberar' AND (
+           (tipo_recorrencia = 'unica' AND data = $2) OR
+           (tipo_recorrencia = 'intervalo' AND data <= $2 AND (data_fim >= $2 OR data_fim IS NULL)) OR
+           (tipo_recorrencia = 'semanal' AND (dia_semana = $3 OR dias_semana @> $4::jsonb))
+         ) LIMIT 1`,
+        [tenantId, info.isoDate, daySlug, JSON.stringify([daySlug])]
+      );
+      hasExplicitDayRelease = relRes.rowCount > 0;
+    } catch (relErr) {
+      // Ignora erro e mantém false
+    }
+
+    if (!allowedIndices.includes(info.dayIndex) && !hasExplicitDayRelease) {
       const nextSlots = await this.executeGetSlotsTool({
         tenantId,
         historyMessages: historyMessages.length > 0 ? historyMessages : [{ role: 'user', content: 'nova instalação' }],
@@ -1043,16 +1148,11 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
     const finalClientName = (clientName && clientName !== 'Cliente') ? clientName : (pushName || 'Cliente WhatsApp');
     const finalServiceType = serviceType || (appointmentType === 'INSTALACAO_CFTV' ? 'Instalação de Câmeras de Segurança' : 'Visita Técnica Gratuita');
 
-    // 0. Trava de Bloqueio Manual pelo Painel
+    // 0. Trava de Bloqueio Manual / Regras de Recorrência pelo Painel
     try {
-      const panelLockCheck = await query(
-        `SELECT id, motivo, horario FROM agenda_bloqueios 
-         WHERE tenant_id = $1 AND data = $2 AND (horario IS NULL OR horario = $3) LIMIT 1`,
-        [tenantId, cleanDate, cleanTime]
-      );
+      const lock = await this.getMatchingScheduleLock(tenantId, cleanDate, cleanTime);
 
-      if (panelLockCheck.rowCount > 0) {
-        const lock = panelLockCheck.rows[0];
+      if (lock && lock.tipo_acao === 'bloquear') {
         console.warn(`[AIEngine] Bloqueio book_appointment: ${cleanDate} ${cleanTime} bloqueado pelo painel (${lock.motivo}).`);
         const nextSlots = await this.executeGetSlotsTool({
           tenantId,
@@ -1081,7 +1181,24 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       console.warn('[AIEngine] Aviso ao verificar bloqueio de agendamento no painel:', lockErr.message);
     }
 
-    // 1. Validação de Dias Permitidos do Tenant
+    // 1. Validação de Dias Permitidos do Tenant (verificando se não há liberação explícita)
+    let hasExplicitDayRelease = false;
+    try {
+      const daySlug = DIAS_SEMANA_SLUGS[info.dayIndex];
+      const relRes = await query(
+        `SELECT id FROM agenda_bloqueios 
+         WHERE tenant_id = $1 AND tipo_acao = 'liberar' AND (
+           (tipo_recorrencia = 'unica' AND data = $2) OR
+           (tipo_recorrencia = 'intervalo' AND data <= $2 AND (data_fim >= $2 OR data_fim IS NULL)) OR
+           (tipo_recorrencia = 'semanal' AND (dia_semana = $3 OR dias_semana @> $4::jsonb))
+         ) LIMIT 1`,
+        [tenantId, cleanDate, daySlug, JSON.stringify([daySlug])]
+      );
+      hasExplicitDayRelease = relRes.rowCount > 0;
+    } catch (relErr) {
+      // Ignora erro
+    }
+
     const cfgRes = await query(`SELECT regras_agendamento FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
     const aiCfg = cfgRes.rows[0]?.regras_agendamento || {};
 
@@ -1096,7 +1213,7 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       .filter(idx => idx !== undefined);
     const allowedDaysNames = allowedIndices.map(idx => DIAS_SEMANA_NOMES[idx]);
 
-    if (!allowedIndices.includes(info.dayIndex)) {
+    if (!allowedIndices.includes(info.dayIndex) && !hasExplicitDayRelease) {
       console.warn(`[AIEngine] Bloqueio book_appointment: ${info.dayOfWeek} (${cleanDate}) não é permitido para este tenant.`);
       const nextSlots = await this.executeGetSlotsTool({
         tenantId,

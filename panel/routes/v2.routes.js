@@ -797,10 +797,24 @@ async function handleV2Routes(req, res, pathname, method, body) {
       );
 
       const locksRes = await query(
-        `SELECT id, TO_CHAR(data, 'YYYY-MM-DD') as data, TO_CHAR(data, 'DD/MM/YYYY') as data_br, horario, motivo, created_at
+        `SELECT id,
+                TO_CHAR(data, 'YYYY-MM-DD') as data,
+                TO_CHAR(data, 'DD/MM/YYYY') as data_br,
+                TO_CHAR(data_fim, 'YYYY-MM-DD') as data_fim,
+                TO_CHAR(data_fim, 'DD/MM/YYYY') as data_fim_br,
+                horario,
+                COALESCE(tipo_recorrencia, 'unica') as tipo_recorrencia,
+                dia_semana,
+                dias_semana,
+                COALESCE(tipo_acao, 'bloquear') as tipo_acao,
+                motivo,
+                created_at
          FROM agenda_bloqueios
          WHERE tenant_id = $1
-         ORDER BY data ASC, horario ASC NULLS FIRST`,
+         ORDER BY 
+           CASE WHEN tipo_recorrencia = 'semanal' THEN 0 WHEN tipo_recorrencia = 'intervalo' THEN 1 ELSE 2 END,
+           data ASC NULLS FIRST,
+           horario ASC NULLS FIRST`,
         [tenantId]
       );
 
@@ -812,14 +826,28 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     // --------------------------------------------------------------------------
-    // 5.1. BLOQUEIOS MANUAIS DE AGENDA (TRAVAR DIAS OU HORÁRIOS)
+    // 5.1. BLOQUEIOS E REGRAS DE DISPONIBILIDADE DA AGENDA (COM RECORRÊNCIA)
     // --------------------------------------------------------------------------
     if (pathname === '/api/v2/tenant/schedule-locks' && method === 'GET') {
       const locksRes = await query(
-        `SELECT id, TO_CHAR(data, 'YYYY-MM-DD') as data, TO_CHAR(data, 'DD/MM/YYYY') as data_br, horario, motivo, created_at
+        `SELECT id,
+                TO_CHAR(data, 'YYYY-MM-DD') as data,
+                TO_CHAR(data, 'DD/MM/YYYY') as data_br,
+                TO_CHAR(data_fim, 'YYYY-MM-DD') as data_fim,
+                TO_CHAR(data_fim, 'DD/MM/YYYY') as data_fim_br,
+                horario,
+                COALESCE(tipo_recorrencia, 'unica') as tipo_recorrencia,
+                dia_semana,
+                dias_semana,
+                COALESCE(tipo_acao, 'bloquear') as tipo_acao,
+                motivo,
+                created_at
          FROM agenda_bloqueios
          WHERE tenant_id = $1
-         ORDER BY data ASC, horario ASC NULLS FIRST`,
+         ORDER BY 
+           CASE WHEN tipo_recorrencia = 'semanal' THEN 0 WHEN tipo_recorrencia = 'intervalo' THEN 1 ELSE 2 END,
+           data ASC NULLS FIRST,
+           horario ASC NULLS FIRST`,
         [tenantId]
       );
 
@@ -829,11 +857,92 @@ async function handleV2Routes(req, res, pathname, method, body) {
       });
     }
 
-    if (pathname === '/api/v2/tenant/schedule-locks' && method === 'POST') {
-      const { data, horario, motivo } = body;
-      if (!data || !String(data).match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // TOGGLE RÁPIDO DE 1 CLIQUE (Travar ou Liberar Horário / Dia Inteiro)
+    if (pathname === '/api/v2/tenant/schedule-locks/toggle' && method === 'POST') {
+      const { date, time, motivo } = body;
+      if (!date || !String(date).match(/^\d{4}-\d{2}-\d{2}$/)) {
         return sendJson(400, { error: 'Data inválida. Use o formato YYYY-MM-DD.' });
       }
+
+      const cleanTime = time && String(time).trim() ? String(time).trim().substring(0, 5) : null;
+      const cleanMotivo = motivo && String(motivo).trim() ? String(motivo).trim() : 'Alterado no clique rápido do painel';
+
+      if (cleanTime) {
+        // Toggle de horário específico na data
+        const existCheck = await query(
+          `SELECT id FROM agenda_bloqueios WHERE tenant_id = $1 AND data = $2 AND horario = $3`,
+          [tenantId, date, cleanTime]
+        );
+
+        if (existCheck.rowCount > 0) {
+          await query(`DELETE FROM agenda_bloqueios WHERE id = $1`, [existCheck.rows[0].id]);
+          return sendJson(200, {
+            success: true,
+            locked: false,
+            message: `Horário das ${cleanTime} liberado com sucesso para a data ${date}!`
+          });
+        } else {
+          const insRes = await query(
+            `INSERT INTO agenda_bloqueios (tenant_id, data, horario, tipo_recorrencia, tipo_acao, motivo)
+             VALUES ($1, $2, $3, 'unica', 'bloquear', $4)
+             RETURNING id, TO_CHAR(data, 'YYYY-MM-DD') as data, horario, motivo`,
+            [tenantId, date, cleanTime, cleanMotivo]
+          );
+          return sendJson(201, {
+            success: true,
+            locked: true,
+            message: `Horário das ${cleanTime} travado com sucesso para a data ${date}!`,
+            lock: insRes.rows[0]
+          });
+        }
+      } else {
+        // Toggle de dia inteiro
+        const existCheck = await query(
+          `SELECT id FROM agenda_bloqueios WHERE tenant_id = $1 AND data = $2 AND horario IS NULL`,
+          [tenantId, date]
+        );
+
+        if (existCheck.rowCount > 0) {
+          await query(`DELETE FROM agenda_bloqueios WHERE id = $1`, [existCheck.rows[0].id]);
+          return sendJson(200, {
+            success: true,
+            locked: false,
+            message: `Dia inteiro ${date} liberado com sucesso!`
+          });
+        } else {
+          const insRes = await query(
+            `INSERT INTO agenda_bloqueios (tenant_id, data, horario, tipo_recorrencia, tipo_acao, motivo)
+             VALUES ($1, $2, NULL, 'unica', 'bloquear', $3)
+             RETURNING id, TO_CHAR(data, 'YYYY-MM-DD') as data, horario, motivo`,
+            [tenantId, date, cleanMotivo]
+          );
+          return sendJson(201, {
+            success: true,
+            locked: true,
+            message: `Dia inteiro ${date} travado com sucesso na agenda!`,
+            lock: insRes.rows[0]
+          });
+        }
+      }
+    }
+
+    if (pathname === '/api/v2/tenant/schedule-locks' && method === 'POST') {
+      const {
+        data,
+        data_fim,
+        horario,
+        tipo_recorrencia = 'unica',
+        dia_semana,
+        dias_semana,
+        tipo_acao = 'bloquear',
+        motivo
+      } = body;
+
+      const cleanTipoRecorrencia = ['unica', 'semanal', 'intervalo'].includes(tipo_recorrencia)
+        ? tipo_recorrencia
+        : 'unica';
+
+      const cleanTipoAcao = ['bloquear', 'liberar'].includes(tipo_acao) ? tipo_acao : 'bloquear';
 
       let cleanHorario = null;
       if (horario && String(horario).trim()) {
@@ -842,20 +951,88 @@ async function handleV2Routes(req, res, pathname, method, body) {
 
       const cleanMotivo = motivo && String(motivo).trim()
         ? String(motivo).trim()
-        : 'Bloqueado manualmente no painel';
+        : (cleanTipoAcao === 'liberar' ? 'Liberado manualmente no painel' : 'Bloqueado manualmente no painel');
+
+      let cleanData = data && String(data).match(/^\d{4}-\d{2}-\d{2}$/) ? data : null;
+      let cleanDataFim = data_fim && String(data_fim).match(/^\d{4}-\d{2}-\d{2}$/) ? data_fim : null;
+      let cleanDiaSemana = dia_semana ? String(dia_semana).toLowerCase().trim() : null;
+      let cleanDiasSemana = Array.isArray(dias_semana) ? dias_semana.map(d => String(d).toLowerCase().trim()) : [];
+
+      if (cleanTipoRecorrencia === 'semanal') {
+        if (!cleanDiaSemana && cleanDiasSemana.length === 0) {
+          return sendJson(400, { error: 'Para bloqueio recorrente semanal, selecione ao menos um dia da semana.' });
+        }
+        if (!cleanDiaSemana && cleanDiasSemana.length > 0) {
+          cleanDiaSemana = cleanDiasSemana[0];
+        }
+        if (cleanDiasSemana.length === 0 && cleanDiaSemana) {
+          cleanDiasSemana = [cleanDiaSemana];
+        }
+        cleanData = null; // recorrente não se prende a uma única data
+        cleanDataFim = null;
+      } else if (cleanTipoRecorrencia === 'intervalo') {
+        if (!cleanData || !cleanDataFim) {
+          return sendJson(400, { error: 'Para intervalo de datas, informe a data inicial e final.' });
+        }
+        if (cleanData > cleanDataFim) {
+          const temp = cleanData;
+          cleanData = cleanDataFim;
+          cleanDataFim = temp;
+        }
+      } else {
+        // 'unica'
+        if (!cleanData) {
+          return sendJson(400, { error: 'Data inválida. Use o formato YYYY-MM-DD.' });
+        }
+      }
 
       const insRes = await query(
-        `INSERT INTO agenda_bloqueios (tenant_id, data, horario, motivo)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, TO_CHAR(data, 'YYYY-MM-DD') as data, TO_CHAR(data, 'DD/MM/YYYY') as data_br, horario, motivo, created_at`,
-        [tenantId, data, cleanHorario, cleanMotivo]
+        `INSERT INTO agenda_bloqueios (
+           tenant_id, data, data_fim, horario, tipo_recorrencia, dia_semana, dias_semana, tipo_acao, motivo
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+         RETURNING id,
+                   TO_CHAR(data, 'YYYY-MM-DD') as data,
+                   TO_CHAR(data, 'DD/MM/YYYY') as data_br,
+                   TO_CHAR(data_fim, 'YYYY-MM-DD') as data_fim,
+                   TO_CHAR(data_fim, 'DD/MM/YYYY') as data_fim_br,
+                   horario,
+                   tipo_recorrencia,
+                   dia_semana,
+                   dias_semana,
+                   tipo_acao,
+                   motivo,
+                   created_at`,
+        [
+          tenantId,
+          cleanData,
+          cleanDataFim,
+          cleanHorario,
+          cleanTipoRecorrencia,
+          cleanDiaSemana,
+          JSON.stringify(cleanDiasSemana),
+          cleanTipoAcao,
+          cleanMotivo
+        ]
       );
+
+      let msg = '';
+      if (cleanTipoRecorrencia === 'semanal') {
+        const diasStr = cleanDiasSemana.join(', ');
+        msg = cleanHorario
+          ? `Regra recorrente semanal criada: ${diasStr} às ${cleanHorario} (${cleanTipoAcao === 'liberar' ? 'liberado' : 'bloqueado'})!`
+          : `Regra recorrente semanal criada: ${diasStr} dia inteiro (${cleanTipoAcao === 'liberar' ? 'liberado' : 'bloqueado'})!`;
+      } else if (cleanTipoRecorrencia === 'intervalo') {
+        msg = `Intervalo de ${cleanData} até ${cleanDataFim} (${cleanTipoAcao === 'liberar' ? 'liberado' : 'bloqueado'}) registrado com sucesso!`;
+      } else {
+        msg = cleanHorario
+          ? `Horário das ${cleanHorario} do dia ${cleanData} ${cleanTipoAcao === 'liberar' ? 'liberado' : 'bloqueado'} com sucesso!`
+          : `Dia inteiro ${cleanData} ${cleanTipoAcao === 'liberar' ? 'liberado' : 'bloqueado'} com sucesso!`;
+      }
 
       return sendJson(201, {
         success: true,
-        message: cleanHorario
-          ? `Horário das ${cleanHorario} do dia ${data} bloqueado com sucesso na agenda!`
-          : `Dia inteiro ${data} bloqueado com sucesso na agenda!`,
+        message: msg,
         lock: insRes.rows[0]
       });
     }
@@ -874,7 +1051,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
 
       return sendJson(200, {
         success: true,
-        message: 'Bloqueio removido com sucesso. Data/horário destravado!'
+        message: 'Regra/Bloqueio removido com sucesso. Data/horário liberado!'
       });
     }
 
