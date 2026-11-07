@@ -32,14 +32,14 @@ const PAGARME_API_BASE = 'https://api.pagarme.com/core/v5';
 // Preços dos Planos Fixos em Centavos (BRL)
 const PLAN_PRICES = {
   BASIC: {
-    amountCents: 9700, // R$ 97,00/mês
+    amountCents: 12700, // R$ 127,00/mês
     name: 'Plano Básico',
-    description: 'Chat manual multi-atendente em tempo real sem robôs'
+    description: 'Chat manual multi-atendente em tempo real (até 3 operadores) sem robôs'
   },
   PRO: {
-    amountCents: 19700, // R$ 197,00/mês
+    amountCents: 24700, // R$ 247,00/mês
     name: 'Plano Pro',
-    description: 'Chat manual multi-atendente + Automação IA ilimitada + Métricas SLA'
+    description: 'Chat manual multi-atendente (até 5 operadores) + Automação IA Natália 24/7 ilimitada + Agendamento e SLA'
   }
 };
 

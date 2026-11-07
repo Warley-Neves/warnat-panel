@@ -1857,7 +1857,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
       let activeSubscriptionsCount = 0;
       subsRes.rows.forEach(r => {
         const p = (r.plan_id || '').toUpperCase();
-        const price = p === 'PRO' ? 19700 : 9700;
+        const price = p === 'PRO' ? 24700 : 12700;
         mrrCents += (price * r.count);
         activeSubscriptionsCount += r.count;
       });
@@ -1866,7 +1866,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
         const activeTenants = await query(`SELECT plano FROM tenants WHERE status = 'ACTIVE'`);
         activeTenants.rows.forEach(t => {
           const p = (t.plano || '').toUpperCase();
-          mrrCents += (p === 'PRO' ? 19700 : 9700);
+          mrrCents += (p === 'PRO' ? 24700 : 12700);
         });
       }
 

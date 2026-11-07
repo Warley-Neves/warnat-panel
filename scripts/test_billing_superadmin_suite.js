@@ -263,7 +263,7 @@ async function runTestSuite() {
     });
     assert(cardCheckout.status === 200, 'Checkout via cartão de crédito responde HTTP 200');
     assert(cardCheckout.data?.subscription && cardCheckout.data?.invoice, 'Assinatura e fatura criadas no banco de dados');
-    assert(cardCheckout.data?.amountCents === 19700, 'Valor da assinatura do Plano Pro correto (R$ 197,00 = 19700 centavos)');
+    assert(cardCheckout.data?.amountCents === 24700, 'Valor da assinatura do Plano Pro correto (R$ 247,00 = 24700 centavos)');
 
     // Checkout com PIX Dinâmico
     const pixCheckout = await request('/api/v2/tenant/billing/checkout/pix', {
@@ -278,7 +278,7 @@ async function runTestSuite() {
     const testInvoiceCode = `inv_test_${timestamp}`;
     await query(
       `INSERT INTO invoices (tenant_id, pagarme_invoice_id, amount_cents, status)
-       VALUES ($1, $2, 19700, 'PENDING')`,
+       VALUES ($1, $2, 24700, 'PENDING')`,
       [tProReg.tenant.id, testInvoiceCode]
     );
 
@@ -288,7 +288,7 @@ async function runTestSuite() {
       type: 'invoice.paid',
       data: {
         id: testInvoiceCode,
-        amount: 19700,
+        amount: 24700,
         status: 'paid'
       }
     };
