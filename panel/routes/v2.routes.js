@@ -796,9 +796,85 @@ async function handleV2Routes(req, res, pathname, method, body) {
         [tenantId]
       );
 
+      const locksRes = await query(
+        `SELECT id, TO_CHAR(data, 'YYYY-MM-DD') as data, TO_CHAR(data, 'DD/MM/YYYY') as data_br, horario, motivo, created_at
+         FROM agenda_bloqueios
+         WHERE tenant_id = $1
+         ORDER BY data ASC, horario ASC NULLS FIRST`,
+        [tenantId]
+      );
+
       return sendJson(200, {
         success: true,
-        appointments: apptRes.rows
+        appointments: apptRes.rows,
+        locks: locksRes.rows
+      });
+    }
+
+    // --------------------------------------------------------------------------
+    // 5.1. BLOQUEIOS MANUAIS DE AGENDA (TRAVAR DIAS OU HORÁRIOS)
+    // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/tenant/schedule-locks' && method === 'GET') {
+      const locksRes = await query(
+        `SELECT id, TO_CHAR(data, 'YYYY-MM-DD') as data, TO_CHAR(data, 'DD/MM/YYYY') as data_br, horario, motivo, created_at
+         FROM agenda_bloqueios
+         WHERE tenant_id = $1
+         ORDER BY data ASC, horario ASC NULLS FIRST`,
+        [tenantId]
+      );
+
+      return sendJson(200, {
+        success: true,
+        locks: locksRes.rows
+      });
+    }
+
+    if (pathname === '/api/v2/tenant/schedule-locks' && method === 'POST') {
+      const { data, horario, motivo } = body;
+      if (!data || !String(data).match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return sendJson(400, { error: 'Data inválida. Use o formato YYYY-MM-DD.' });
+      }
+
+      let cleanHorario = null;
+      if (horario && String(horario).trim()) {
+        cleanHorario = String(horario).trim().substring(0, 5);
+      }
+
+      const cleanMotivo = motivo && String(motivo).trim()
+        ? String(motivo).trim()
+        : 'Bloqueado manualmente no painel';
+
+      const insRes = await query(
+        `INSERT INTO agenda_bloqueios (tenant_id, data, horario, motivo)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, TO_CHAR(data, 'YYYY-MM-DD') as data, TO_CHAR(data, 'DD/MM/YYYY') as data_br, horario, motivo, created_at`,
+        [tenantId, data, cleanHorario, cleanMotivo]
+      );
+
+      return sendJson(201, {
+        success: true,
+        message: cleanHorario
+          ? `Horário das ${cleanHorario} do dia ${data} bloqueado com sucesso na agenda!`
+          : `Dia inteiro ${data} bloqueado com sucesso na agenda!`,
+        lock: insRes.rows[0]
+      });
+    }
+
+    const matchLockDel = pathname.match(/^\/api\/v2\/tenant\/schedule-locks\/([a-zA-Z0-9_-]+)$/);
+    if (matchLockDel && method === 'DELETE') {
+      const lockId = matchLockDel[1];
+      const delRes = await query(
+        `DELETE FROM agenda_bloqueios WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+        [lockId, tenantId]
+      );
+
+      if (delRes.rowCount === 0) {
+        return sendJson(404, { error: 'Bloqueio não encontrado.' });
+      }
+
+      return sendJson(200, {
+        success: true,
+        message: 'Bloqueio removido com sucesso. Data/horário destravado!'
       });
     }
 

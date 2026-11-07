@@ -744,6 +744,34 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       fromDate = getDayOfWeekInfo(nextMonth).isoDate;
     }
 
+    // 3. Lê bloqueios manuais cadastrados pelo painel (dias inteiros e horários específicos travados)
+    try {
+      const panelLocksRes = await query(
+        `SELECT TO_CHAR(data, 'YYYY-MM-DD') as data, horario, motivo 
+         FROM agenda_bloqueios 
+         WHERE tenant_id = $1 AND data >= CURRENT_DATE - INTERVAL '1 day'`,
+        [tenantId]
+      );
+
+      for (const lock of panelLocksRes.rows) {
+        if (!lock.horario) {
+          // Dia inteiro travado no painel
+          if (!excludeDates.includes(lock.data)) {
+            excludeDates.push(lock.data);
+          }
+        } else {
+          // Horário específico travado no painel
+          const cleanLockTime = lock.horario.substring(0, 5);
+          const lockSlotKey = `${lock.data} ${cleanLockTime}`;
+          if (!excludeSlots.includes(lockSlotKey)) {
+            excludeSlots.push(lockSlotKey);
+          }
+        }
+      }
+    } catch (lockErr) {
+      console.warn('[AIEngine] Aviso ao consultar agenda_bloqueios:', lockErr.message);
+    }
+
     const normExcludeDates = (excludeDates || []).map(d => String(d).trim());
     const normExcludeSlots = (excludeSlots || []).map(s => String(s).trim());
 
@@ -904,6 +932,44 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
       .filter(idx => idx !== undefined);
     const allowedDaysNames = allowedIndices.map(idx => DIAS_SEMANA_NOMES[idx]);
 
+    // 0. Trava de Bloqueio Manual pelo Painel
+    try {
+      const panelLockCheck = await query(
+        `SELECT id, motivo, horario FROM agenda_bloqueios 
+         WHERE tenant_id = $1 AND data = $2 AND (horario IS NULL OR horario = $3) LIMIT 1`,
+        [tenantId, info.isoDate, cleanTime]
+      );
+
+      if (panelLockCheck.rowCount > 0) {
+        const lock = panelLockCheck.rows[0];
+        const nextSlots = await this.executeGetSlotsTool({
+          tenantId,
+          historyMessages: historyMessages.length > 0 ? historyMessages : [{ role: 'user', content: 'nova instalação' }],
+          args: {
+            excludeDates: lock.horario ? [] : [info.isoDate],
+            excludeSlots: lock.horario ? [`${info.isoDate} ${cleanTime}`, cleanTime] : []
+          }
+        });
+
+        return {
+          available: false,
+          date: info.isoDate,
+          dayOfWeek: info.dayOfWeek,
+          formattedBr: info.formattedBr,
+          time: cleanTime,
+          reason: lock.horario ? 'horario_bloqueado_painel' : 'dia_bloqueado_painel',
+          motivo: lock.motivo,
+          message: lock.horario
+            ? `O horário das ${cleanTime} no dia ${info.dayOfWeek} (${info.formattedBr}) está temporariamente bloqueado na agenda (${lock.motivo}).`
+            : `O dia ${info.dayOfWeek} (${info.formattedBr}) está temporariamente bloqueado para atendimentos (${lock.motivo}).`,
+          suggestedSlots: nextSlots.slots || [],
+          instruction: `Atenção: A data/horário solicitada foi BLOQUEADA MANUALMENTE pelo administrador no painel (${lock.motivo})! Não confirme este agendamento. Explique cordialmente e ofereça os horários livres alternativos em suggestedSlots!`
+        };
+      }
+    } catch (lockErr) {
+      console.warn('[AIEngine] Aviso ao verificar bloqueio de horário no painel:', lockErr.message);
+    }
+
     // 1. Trava de dia da semana permitido
     if (!allowedIndices.includes(info.dayIndex)) {
       const nextSlots = await this.executeGetSlotsTool({
@@ -976,6 +1042,44 @@ _Lead salvo no banco de dados e sincronizado no CRM._`;
 
     const finalClientName = (clientName && clientName !== 'Cliente') ? clientName : (pushName || 'Cliente WhatsApp');
     const finalServiceType = serviceType || (appointmentType === 'INSTALACAO_CFTV' ? 'Instalação de Câmeras de Segurança' : 'Visita Técnica Gratuita');
+
+    // 0. Trava de Bloqueio Manual pelo Painel
+    try {
+      const panelLockCheck = await query(
+        `SELECT id, motivo, horario FROM agenda_bloqueios 
+         WHERE tenant_id = $1 AND data = $2 AND (horario IS NULL OR horario = $3) LIMIT 1`,
+        [tenantId, cleanDate, cleanTime]
+      );
+
+      if (panelLockCheck.rowCount > 0) {
+        const lock = panelLockCheck.rows[0];
+        console.warn(`[AIEngine] Bloqueio book_appointment: ${cleanDate} ${cleanTime} bloqueado pelo painel (${lock.motivo}).`);
+        const nextSlots = await this.executeGetSlotsTool({
+          tenantId,
+          historyMessages: historyMessages.length > 0 ? historyMessages : [{ role: 'user', content: 'nova instalação' }],
+          args: {
+            excludeDates: lock.horario ? [] : [cleanDate],
+            excludeSlots: lock.horario ? [`${cleanDate} ${cleanTime}`, cleanTime] : []
+          }
+        });
+
+        return {
+          success: false,
+          error: lock.horario ? 'horario_bloqueado_painel' : 'dia_bloqueado_painel',
+          motivo: lock.motivo,
+          date: cleanDate,
+          dayOfWeek: info.dayOfWeek,
+          time: cleanTime,
+          message: lock.horario
+            ? `O horário das ${cleanTime} no dia ${info.dayOfWeek} (${info.formattedBr}) está temporariamente bloqueado na agenda (${lock.motivo}).`
+            : `O dia ${info.dayOfWeek} (${info.formattedBr}) está temporariamente bloqueado para atendimentos (${lock.motivo}).`,
+          suggestedSlots: nextSlots.slots || [],
+          instruction: `Atenção: O agendamento foi recusado porque esta data/horário está BLOQUEADA no painel pelo administrador (${lock.motivo})! Explique educadamente ao cliente e ofereça os horários em suggestedSlots!`
+        };
+      }
+    } catch (lockErr) {
+      console.warn('[AIEngine] Aviso ao verificar bloqueio de agendamento no painel:', lockErr.message);
+    }
 
     // 1. Validação de Dias Permitidos do Tenant
     const cfgRes = await query(`SELECT regras_agendamento FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);

@@ -268,4 +268,15 @@ BEGIN
 
     -- Índices adicionais para tabelas adaptadas
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_etapa_funil ON chat_sessions(etapa_funil);
+
+    -- Tabela de bloqueios manuais de agenda (dias e horários)
+    CREATE TABLE IF NOT EXISTS agenda_bloqueios (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        data DATE NOT NULL,
+        horario VARCHAR(10),
+        motivo VARCHAR(255) DEFAULT 'Bloqueado manualmente no painel',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_agenda_bloqueios_tenant_data ON agenda_bloqueios(tenant_id, data);
 END $$;

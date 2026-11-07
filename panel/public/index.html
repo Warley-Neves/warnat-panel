@@ -670,6 +670,12 @@
           </div>
 
           <div class="flex items-center space-x-3">
+            <!-- BOTÃO TRAVAR DIA / HORÁRIO -->
+            <button onclick="openLockScheduleModal()" class="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center space-x-1.5 transition shadow" title="Bloquear um dia inteiro ou um horário específico para a IA não agendar">
+              <i data-lucide="lock" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span>Travar Dia / Horário</span>
+            </button>
+
             <!-- SELETOR DE MODO DE VISUALIZAÇÃO: CALENDÁRIO VS TABELA -->
             <div class="bg-dark-800 p-1 rounded-xl border border-slate-700 flex items-center space-x-1 text-xs">
               <button type="button" onclick="setAppointmentsView('calendar')" id="viewBtn-calendar" class="px-3 py-1.5 rounded-lg font-semibold flex items-center space-x-1.5 bg-brand-600 text-white shadow transition">
@@ -690,7 +696,7 @@
         </div>
 
         <!-- CARDS DE RESUMO RÁPIDO DE AGENDAMENTOS -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-slate-800/80 text-xs">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6 pt-5 border-t border-slate-800/80 text-xs">
           <div class="bg-dark-900/60 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
             <div>
               <span class="text-slate-400 text-[11px] block">Total Geral</span>
@@ -721,6 +727,14 @@
               <span id="calStatCancelados" class="text-base font-bold text-rose-400">0</span>
             </div>
             <i data-lucide="x-circle" class="w-4 h-4 text-rose-400"></i>
+          </div>
+
+          <div class="bg-dark-900/60 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+            <div>
+              <span class="text-slate-400 text-[11px] block">Travas / Bloqueios</span>
+              <span id="calStatBloqueios" class="text-base font-bold text-amber-400">0</span>
+            </div>
+            <i data-lucide="lock" class="w-4 h-4 text-amber-400"></i>
           </div>
         </div>
       </div>
@@ -761,6 +775,10 @@
               <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
               <span class="text-slate-300 font-medium">Cancelado</span>
             </div>
+            <div class="flex items-center space-x-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              <span class="text-slate-300 font-medium">Travado / Bloqueio</span>
+            </div>
           </div>
         </div>
 
@@ -787,14 +805,24 @@
 
         <!-- PAINEL DE DETALHES DO DIA SELECIONADO -->
         <div id="calendarSelectedDayContainer" class="bg-dark-900/70 border border-slate-800 rounded-xl p-5 space-y-3">
-          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
             <div class="flex items-center space-x-2">
               <i data-lucide="calendar-days" class="w-4 h-4 text-brand-400"></i>
               <h5 id="calendarSelectedDayTitle" class="text-sm font-bold text-white">
                 Agendamentos do dia selecionado
               </h5>
             </div>
-            <span id="calendarSelectedDayCount" class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">0 agendamento(s)</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <span id="calendarSelectedDayCount" class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">0 agendamento(s)</span>
+              <button type="button" onclick="lockSelectedDayQuick()" class="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[11px] font-semibold flex items-center space-x-1 transition" title="Travar este dia inteiro na agenda">
+                <i data-lucide="lock" class="w-3 h-3 text-amber-400"></i>
+                <span>Travar este dia</span>
+              </button>
+              <button type="button" onclick="openLockScheduleModal(selectedCalendarDateStr)" class="px-2.5 py-1 rounded-lg bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-semibold flex items-center space-x-1 transition" title="Travar um horário específico nesta data">
+                <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
+                <span>Travar horário</span>
+              </button>
+            </div>
           </div>
 
           <div id="calendarSelectedDayList" class="space-y-2.5 pt-1">
@@ -1633,6 +1661,99 @@
   </div>
 
   <!-- ============================================================================ -->
+  <!-- ============================================================================ -->
+  <!-- MODAL DE BLOQUEIO DE DIAS / HORÁRIOS DA AGENDA -->
+  <!-- ============================================================================ -->
+  <div id="lockScheduleModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl fade-in overflow-hidden">
+      <!-- HEADER -->
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20">
+            <i data-lucide="lock" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-white text-base">Travar Agenda</h4>
+            <p class="text-xs text-slate-400 mt-0.5">Bloquear dias ou horários para impedir novos agendamentos</p>
+          </div>
+        </div>
+        <button onclick="closeLockScheduleModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- CORPO DO FORMULÁRIO -->
+      <form id="lockScheduleForm" onsubmit="submitScheduleLock(event)" class="p-6 space-y-4 text-xs text-slate-300">
+        <!-- TIPO DE BLOQUEIO -->
+        <div>
+          <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-2">Tipo de Bloqueio</label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center space-x-2.5 p-3 rounded-xl border border-slate-700 bg-dark-900/60 cursor-pointer hover:border-amber-500 transition">
+              <input type="radio" name="lockTypeRadio" value="dia" id="lockRadioDia" checked onchange="toggleLockType(this.value)" class="text-amber-500 focus:ring-0">
+              <div>
+                <span class="font-semibold text-white block">Dia Inteiro</span>
+                <span class="text-[11px] text-slate-400">Nenhum horário permitido</span>
+              </div>
+            </label>
+            <label class="flex items-center space-x-2.5 p-3 rounded-xl border border-slate-700 bg-dark-900/60 cursor-pointer hover:border-amber-500 transition">
+              <input type="radio" name="lockTypeRadio" value="horario" id="lockRadioHorario" onchange="toggleLockType(this.value)" class="text-amber-500 focus:ring-0">
+              <div>
+                <span class="font-semibold text-white block">Horário Específico</span>
+                <span class="text-[11px] text-slate-400">Ex: 10:00 ou 14:00</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- DATA -->
+        <div>
+          <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">Data a Travar *</label>
+          <input type="date" id="lockInputData" required class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 transition font-mono">
+          <p class="text-[11px] text-slate-400 mt-1">Selecione o dia que deseja bloquear.</p>
+        </div>
+
+        <!-- HORÁRIO (CONDICIONAL) -->
+        <div id="lockFieldHorario" class="hidden space-y-1.5">
+          <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider">Horário Específico *</label>
+          <div class="flex items-center space-x-2">
+            <input type="time" id="lockInputHorario" step="1800" value="08:00" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 transition font-mono">
+            <div class="flex items-center space-x-1 shrink-0">
+              <button type="button" onclick="setLockQuickTime('08:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">08:00</button>
+              <button type="button" onclick="setLockQuickTime('10:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">10:00</button>
+              <button type="button" onclick="setLockQuickTime('14:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">14:00</button>
+              <button type="button" onclick="setLockQuickTime('16:00')" class="px-2 py-1 bg-dark-800 hover:bg-slate-700 border border-slate-700 rounded text-[11px] font-mono">16:00</button>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-400">Apenas esse horário específico ficará indisponível.</p>
+        </div>
+
+        <!-- MOTIVO -->
+        <div>
+          <label class="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">Motivo do Bloqueio (Opcional)</label>
+          <input type="text" id="lockInputMotivo" placeholder="Ex: Feriado, Folga da equipe, Manutenção, Compromisso particular" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 transition">
+          <p class="text-[11px] text-slate-400 mt-1">A assistente virtual (Nat) usará este motivo para explicar educadamente caso um cliente solicite este horário.</p>
+        </div>
+
+        <!-- AVISO DE SINCRONIZAÇÃO COM A IA -->
+        <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-start space-x-2">
+          <i data-lucide="info" class="w-4 h-4 shrink-0 text-amber-400 mt-0.5"></i>
+          <span>Este bloqueio entra em vigor imediatamente para a IA. Se um cliente tentar agendar este dia ou horário, a automação recusará e oferecerá as próximas datas livres.</span>
+        </div>
+
+        <!-- FOOTER / BOTÕES -->
+        <div class="pt-3 border-t border-slate-800 flex items-center justify-end space-x-2">
+          <button type="button" onclick="closeLockScheduleModal()" class="px-4 py-2 rounded-xl border border-slate-700 hover:bg-dark-800 text-slate-300 text-xs font-semibold transition">
+            Cancelar
+          </button>
+          <button type="submit" id="btnSubmitLockSchedule" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold flex items-center space-x-1.5 transition shadow-lg shadow-amber-600/20">
+            <i data-lucide="lock" class="w-4 h-4"></i>
+            <span>Confirmar Bloqueio</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- MODAL DE DOSSIÊ DO CLIENTE (MEMÓRIA CUMULATIVA) -->
   <!-- ============================================================================ -->
   <div id="dossierModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -3022,6 +3143,7 @@
     // 4. AGENDA & VISITAS TÉCNICAS (COM CALENDÁRIO VISUAL E TABELA)
     // --------------------------------------------------------------------------
     let allAppointmentsCache = [];
+    let allScheduleLocksCache = [];
     let currentApptModalItem = null;
     let currentCalendarDate = new Date();
     let selectedCalendarDateStr = null;
@@ -3143,16 +3265,45 @@
     }
 
     function renderCalendarDayCell(dateStr, dayNum, appts, isCurrentMonth, isToday, isSelected) {
+      const dayLocksCheck = allScheduleLocksCache.filter(l => l.data === dateStr);
+      const isDayLocked = dayLocksCheck.some(l => !l.horario);
+
       const bgClass = isSelected 
         ? 'border-brand-500 bg-brand-500/10 shadow-lg shadow-brand-500/10 ring-1 ring-brand-500/30' 
-        : (isToday ? 'border-brand-500/60 bg-dark-800/90' : (isCurrentMonth ? 'border-slate-800 bg-dark-850 hover:border-slate-700 hover:bg-dark-800/60' : 'border-slate-800/50 bg-dark-900/30 opacity-60 hover:opacity-100'));
+        : (isDayLocked 
+            ? 'border-amber-600/50 bg-amber-950/20 hover:border-amber-500/70' 
+            : (isToday ? 'border-brand-500/60 bg-dark-800/90' : (isCurrentMonth ? 'border-slate-800 bg-dark-850 hover:border-slate-700 hover:bg-dark-800/60' : 'border-slate-800/50 bg-dark-900/30 opacity-60 hover:opacity-100')));
       
       const todayBadge = isToday
         ? `<span class="w-6 h-6 rounded-full bg-brand-600 text-white font-bold flex items-center justify-center text-xs shadow-md shadow-brand-600/30">${dayNum}</span>`
         : `<span class="text-xs font-semibold ${isCurrentMonth ? 'text-slate-200' : 'text-slate-500'}">${dayNum}</span>`;
 
+      // Renderiza travas e bloqueios da data
+      const dayLocks = allScheduleLocksCache.filter(l => l.data === dateStr);
+      const hasFullDayLock = dayLocks.some(l => !l.horario);
+      const slotLocks = dayLocks.filter(l => !!l.horario);
+
       // Renderiza pills dos agendamentos
       let pillsHtml = '';
+
+      if (hasFullDayLock) {
+        const fullLock = dayLocks.find(l => !l.horario);
+        pillsHtml += `
+          <div class="p-1 px-1.5 rounded-md text-[10px] font-bold border bg-amber-500/20 text-amber-300 border-amber-500/40 truncate flex items-center space-x-1" title="Dia bloqueado na agenda: ${fullLock.motivo || 'Indisponível'}">
+            <i data-lucide="lock" class="w-3 h-3 shrink-0 text-amber-400"></i>
+            <span class="truncate">Dia Travado</span>
+          </div>
+        `;
+      }
+
+      for (const sl of slotLocks) {
+        pillsHtml += `
+          <div class="p-0.5 px-1.5 rounded text-[9px] font-semibold border bg-amber-500/10 text-amber-300 border-amber-500/30 truncate flex items-center justify-between" title="Horário ${sl.horario} bloqueado: ${sl.motivo || 'Travado'}">
+            <span class="font-mono font-bold mr-1 shrink-0">🔒 ${sl.horario}</span>
+            <span class="truncate text-[8px] text-amber-400/80">${sl.motivo || 'Travado'}</span>
+          </div>
+        `;
+      }
       const maxPills = 2;
       const visibleAppts = appts.slice(0, maxPills);
       const remaining = appts.length - maxPills;
@@ -3222,10 +3373,43 @@
         return d === selectedCalendarDateStr;
       });
 
-      countBadge.textContent = `${dayAppts.length} agendamento(s)`;
+      const dayLocks = allScheduleLocksCache.filter(l => l.data === selectedCalendarDateStr);
+      countBadge.textContent = `${dayAppts.length} agendamento(s)${dayLocks.length > 0 ? ' • ' + dayLocks.length + ' trava(s)' : ''}`;
+
+      let locksBannerHtml = '';
+      if (dayLocks.length > 0) {
+        locksBannerHtml = `
+          <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2 mb-3">
+            <div class="flex items-center justify-between text-xs font-bold text-amber-300">
+              <div class="flex items-center space-x-1.5">
+                <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i>
+                <span>Travas / Bloqueios nesta Data (${dayLocks.length})</span>
+              </div>
+              <span class="text-[10px] uppercase tracking-wider text-amber-400/90 font-mono">IA respeita esta restrição</span>
+            </div>
+            <div class="space-y-1.5">
+              ${dayLocks.map(l => `
+                <div class="p-2.5 bg-dark-900/90 rounded-lg border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div class="flex items-center space-x-2">
+                    <i data-lucide="lock" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
+                    <div>
+                      <span class="font-bold text-amber-200 font-mono">${l.horario ? 'Horário ' + l.horario : '🔒 DIA INTEIRO TRAVADO'}</span>
+                      ${l.motivo ? `<span class="text-slate-400 ml-2">Motivo: <span class="text-slate-200">"${l.motivo}"</span></span>` : '<span class="text-slate-500 ml-2">(Sem motivo específico informado)</span>'}
+                    </div>
+                  </div>
+                  <button onclick="removeScheduleLock('${l.id}')" class="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-[11px] font-semibold flex items-center space-x-1 transition self-start sm:self-auto shrink-0" title="Remover este bloqueio e liberar para a IA agendar">
+                    <i data-lucide="unlock" class="w-3 h-3 text-rose-400"></i>
+                    <span>Destravar</span>
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
 
       if (dayAppts.length === 0) {
-        list.innerHTML = `
+        list.innerHTML = locksBannerHtml + `
           <div class="p-6 text-center text-slate-500 text-xs">
             <i data-lucide="calendar-x" class="w-8 h-8 mx-auto text-slate-600 mb-2 opacity-60"></i>
             <p>Nenhum agendamento marcado para esta data.</p>
@@ -3235,7 +3419,7 @@
         return;
       }
 
-      list.innerHTML = dayAppts.map(a => {
+      list.innerHTML = locksBannerHtml + dayAppts.map(a => {
         const statusColors = {
           'agendado': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
           'concluido': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -3303,6 +3487,7 @@
         }
 
         allAppointmentsCache = res.data.appointments;
+        allScheduleLocksCache = Array.isArray(res.data.locks) ? res.data.locks : [];
 
         // Atualiza contadores dos cards estatísticos
         const totalCount = allAppointmentsCache.length;
@@ -3319,6 +3504,9 @@
         if (statAtivos) statAtivos.textContent = ativosCount;
         if (statConcluidos) statConcluidos.textContent = concluidosCount;
         if (statCancelados) statCancelados.textContent = canceladosCount;
+
+        const statBloqueios = document.getElementById('calStatBloqueios');
+        if (statBloqueios) statBloqueios.textContent = allScheduleLocksCache.length;
 
         // Renderiza o Calendário Visual Interativo
         renderAppointmentsCalendar();
@@ -3466,6 +3654,127 @@
         openChatModal(lead.id, lead.client_name, phone, lead.remote_jid, isManual);
       } else {
         openChatModal('new-temp', currentApptModalItem.client_name, phone, currentApptModalItem.remote_jid, true);
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 4.1 TRAVAS E BLOQUEIOS DA AGENDA (DIA / HORÁRIO)
+    // --------------------------------------------------------------------------
+    function openLockScheduleModal(defaultDate, defaultTime) {
+      const modal = document.getElementById('lockScheduleModal');
+      const inputData = document.getElementById('lockInputData');
+      const inputHorario = document.getElementById('lockInputHorario');
+      const inputMotivo = document.getElementById('lockInputMotivo');
+      const radioDia = document.getElementById('lockRadioDia');
+      const radioHorario = document.getElementById('lockRadioHorario');
+
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+      inputData.value = defaultDate || selectedCalendarDateStr || todayStr;
+      inputMotivo.value = '';
+
+      if (defaultTime) {
+        radioHorario.checked = true;
+        toggleLockType('horario');
+        inputHorario.value = defaultTime;
+      } else {
+        radioDia.checked = true;
+        toggleLockType('dia');
+        inputHorario.value = '08:00';
+      }
+
+      modal.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeLockScheduleModal() {
+      const modal = document.getElementById('lockScheduleModal');
+      modal.classList.add('hidden');
+    }
+
+    function toggleLockType(type) {
+      const fieldHorario = document.getElementById('lockFieldHorario');
+      if (type === 'horario') {
+        fieldHorario.classList.remove('hidden');
+      } else {
+        fieldHorario.classList.add('hidden');
+      }
+    }
+
+    function setLockQuickTime(timeStr) {
+      const inputHorario = document.getElementById('lockInputHorario');
+      if (inputHorario) inputHorario.value = timeStr;
+    }
+
+    function lockSelectedDayQuick() {
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      openLockScheduleModal(selectedCalendarDateStr || todayStr);
+    }
+
+    async function submitScheduleLock(e) {
+      if (e) e.preventDefault();
+      const data = document.getElementById('lockInputData').value;
+      const isHorario = document.getElementById('lockRadioHorario').checked;
+      const horario = isHorario ? document.getElementById('lockInputHorario').value : null;
+      const motivo = document.getElementById('lockInputMotivo').value.trim();
+
+      if (!data) {
+        alert('Por favor, selecione uma data para o bloqueio.');
+        return;
+      }
+
+      const btn = document.getElementById('btnSubmitLockSchedule');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Salvando...</span>';
+
+      try {
+        const res = await apiFetch('/api/v2/tenant/schedule-locks', {
+          method: 'POST',
+          body: JSON.stringify({
+            data,
+            horario,
+            motivo
+          })
+        });
+
+        if (!res.ok) {
+          alert('Erro ao salvar bloqueio: ' + (res.data?.error || 'Falha na requisição'));
+          return;
+        }
+
+        closeLockScheduleModal();
+        await loadAppointments();
+        alert(res.data?.message || 'Bloqueio adicionado com sucesso! A IA já respeitará esta trava.');
+      } catch (err) {
+        alert('Erro de conexão ao salvar bloqueio de agenda.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        lucide.createIcons();
+      }
+    }
+
+    async function removeScheduleLock(lockId) {
+      if (!confirm('Tem certeza que deseja destravar este dia/horário?\n\nApós destravar, a automação (IA) e clientes poderão voltar a agendar neste período.')) {
+        return;
+      }
+
+      try {
+        const res = await apiFetch(`/api/v2/tenant/schedule-locks/${lockId}`, {
+          method: 'DELETE'
+        });
+
+        if (!res.ok) {
+          alert('Erro ao remover bloqueio: ' + (res.data?.error || 'Falha na requisição'));
+          return;
+        }
+
+        await loadAppointments();
+      } catch (err) {
+        alert('Erro ao conectar para destravar a agenda.');
       }
     }
 
