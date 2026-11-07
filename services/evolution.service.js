@@ -29,6 +29,18 @@ class EvolutionApiService {
   }
 
   /**
+   * Determina a URL oficial do webhook para recepção de mensagens do WhatsApp
+   */
+  getDefaultWebhookUrl() {
+    const rawUrl = process.env.WEBHOOK_URL ||
+      envMap['WEBHOOK_URL'] ||
+      (process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/api/webhook/whatsapp` : null) ||
+      (process.env.PANEL_URL ? `${process.env.PANEL_URL}/api/webhook/whatsapp` : null) ||
+      'https://warnat-panel.onrender.com/api/webhook/whatsapp';
+    return rawUrl.trim();
+  }
+
+  /**
    * Helper genérico para requisições HTTP à Evolution API com resiliência e fallback automático
    */
   async request(endpoint, options = {}) {
@@ -129,6 +141,15 @@ class EvolutionApiService {
       throw new Error(`Falha ao criar instância: ${JSON.stringify(res.data)}`);
     }
 
+    // Auto-configura o webhook imediatamente após a criação da instância
+    const webhookUrl = options.webhookUrl || this.getDefaultWebhookUrl();
+    try {
+      await this.setWebhook(instanceName, webhookUrl);
+      console.log(`[EvolutionAPI] Webhook auto-configurado para ${instanceName}: ${webhookUrl}`);
+    } catch (whErr) {
+      console.warn(`[EvolutionAPI] Aviso ao auto-configurar webhook para ${instanceName}:`, whErr.message);
+    }
+
     return {
       success: true,
       instanceName,
@@ -190,6 +211,10 @@ class EvolutionApiService {
     const code = qrRaw?.code || qrRaw?.qrcode?.code || null;
     const pairingCode = qrRaw?.pairingCode || qrRaw?.qrcode?.pairingCode || null;
     const state = qrRaw?.instance?.state || (formattedBase64 ? 'connecting' : 'close');
+
+    // Garante que o webhook está configurado para esta instância
+    const defaultWebhook = this.getDefaultWebhookUrl();
+    this.setWebhook(instanceName, defaultWebhook).catch(() => {});
 
     return {
       success: true,

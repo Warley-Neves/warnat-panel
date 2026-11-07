@@ -50,16 +50,33 @@ export class WebhookController {
    * Identifica o tenant_id e o instance_name a partir dos metadados do webhook
    */
   public async resolveTenantAndSession(payload: EvolutionWebhookPayload): Promise<{ tenantId: string; instanceName: string }> {
-    const instanceName = payload.instance || payload.data?.instance;
+    const instanceName = payload.instance || (payload as any).instanceName || payload.data?.instance || (payload.data as any)?.instanceName;
     let tenantId: string | null = null;
 
     if (instanceName) {
       const instRes = await query<{ tenant_id: string }>(
-        `SELECT tenant_id FROM tenant_whatsapp_instances WHERE instance_name = $1 LIMIT 1;`,
+        `SELECT tenant_id FROM tenant_whatsapp_instances WHERE LOWER(instance_name) = LOWER($1) LIMIT 1;`,
         [instanceName]
       );
       if (instRes.rows.length > 0) {
         tenantId = instRes.rows[0].tenant_id;
+      } else {
+        const suffixMatch = String(instanceName).match(/-([a-f0-9]{6})$/i);
+        if (suffixMatch) {
+          const tenantBySuffix = await query<{ id: string }>(
+            `SELECT id FROM tenants WHERE CAST(id AS text) LIKE $1 LIMIT 1;`,
+            [`${suffixMatch[1]}%`]
+          );
+          if (tenantBySuffix.rows.length > 0) {
+            tenantId = tenantBySuffix.rows[0].id;
+            await query(
+              `INSERT INTO tenant_whatsapp_instances (tenant_id, instance_name, status)
+               VALUES ($1, $2, 'open')
+               ON CONFLICT (tenant_id) DO UPDATE SET instance_name = EXCLUDED.instance_name, status = 'open', updated_at = now();`,
+              [tenantId, instanceName]
+            ).catch(() => {});
+          }
+        }
       }
     }
 
@@ -102,9 +119,11 @@ export class WebhookController {
       return { handled: false, reason: 'payload_sem_evento' };
     }
 
+    const eventName = String(payload.event).toLowerCase().replace(/_/g, '.');
+
     // 1. Atualizações de estado da conexão WhatsApp
-    if (payload.event === 'connection.update') {
-      const instanceName = payload.instance;
+    if (eventName === 'connection.update') {
+      const instanceName = payload.instance || (payload as any).instanceName || payload.data?.instance;
       const state = payload.data?.state;
       if (instanceName && state) {
         const normalizedState =
@@ -112,9 +131,14 @@ export class WebhookController {
         await query(
           `UPDATE tenant_whatsapp_instances 
            SET status = $1, updated_at = NOW() 
-           WHERE instance_name = $2;`,
+           WHERE LOWER(instance_name) = LOWER($2);`,
           [normalizedState, instanceName]
         );
+
+        if (normalizedState === 'open') {
+          const defaultWebhook = evolutionService.getDefaultWebhookUrl();
+          evolutionService.setWebhook(instanceName, defaultWebhook).catch(() => {});
+        }
       }
       return { handled: true, event: 'connection.update' };
     }
@@ -122,7 +146,7 @@ export class WebhookController {
     // ============================================================================
     // 2. ATENDIMENTO E LOG DE CHAMADAS DE VOZ E VÍDEO NO WHATSAPP
     // ============================================================================
-    if (payload.event === 'call') {
+    if (eventName === 'call') {
       const callData = payload.data || {};
       const callStatus = callData.status;
       const isVideo = !!callData.isVideo;
@@ -248,7 +272,7 @@ export class WebhookController {
     }
 
     // Aceita apenas eventos de mensagens novas (messages.upsert)
-    if (payload.event !== 'messages.upsert') {
+    if (eventName !== 'messages.upsert') {
       return { handled: false, reason: 'evento_ignorado' };
     }
 
@@ -413,11 +437,27 @@ export class WebhookController {
       }
     } else if (data.message?.imageMessage) {
       // Imagem ou foto do local enviada
-      text = '[foto/imagem enviada pelo cliente]';
-      isMediaAcknowledgmentNeeded = true;
-      mediaResponseText = 'Recebi a sua foto! Imagens e fotos do local são analisadas detalhadamente pelo nosso especialista técnico.';
+      if (data.message.imageMessage.caption && data.message.imageMessage.caption.trim()) {
+        text = data.message.imageMessage.caption.trim();
+      } else {
+        text = '[foto/imagem enviada pelo cliente]';
+        isMediaAcknowledgmentNeeded = true;
+        mediaResponseText = 'Recebi a sua foto! Imagens e fotos do local são analisadas detalhadamente pelo nosso especialista técnico.';
+      }
+    } else if (data.message?.videoMessage) {
+      if (data.message.videoMessage.caption && data.message.videoMessage.caption.trim()) {
+        text = data.message.videoMessage.caption.trim();
+      } else {
+        text = '[vídeo enviado pelo cliente]';
+        isMediaAcknowledgmentNeeded = true;
+        mediaResponseText = 'Recebi o seu vídeo! Nossa equipe já está verificando os detalhes da gravação.';
+      }
     } else if (data.message?.documentMessage) {
-      text = '[documento enviado pelo cliente]';
+      if (data.message.documentMessage.caption && data.message.documentMessage.caption.trim()) {
+        text = data.message.documentMessage.caption.trim();
+      } else {
+        text = '[documento enviado pelo cliente]';
+      }
     }
 
     // Proteção contra payload vazio: não permite quebrar a LLM

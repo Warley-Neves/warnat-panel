@@ -11,6 +11,7 @@ export interface CreateInstanceOptions {
   alwaysOnline?: boolean;
   readMessages?: boolean;
   readStatus?: boolean;
+  webhookUrl?: string;
 }
 
 export interface CreateInstanceResponse {
@@ -92,10 +93,17 @@ export interface EvolutionWebhookPayload {
         caption?: string;
         base64?: string;
       };
+      videoMessage?: {
+        mimetype?: string;
+        caption?: string;
+        base64?: string;
+      };
       documentMessage?: {
         mimetype?: string;
         fileName?: string;
+        caption?: string;
       };
+      [key: string]: any;
     };
     state?: string;
     instance?: string;

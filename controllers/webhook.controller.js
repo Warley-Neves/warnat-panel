@@ -36,16 +36,35 @@ class WebhookController {
    * Resolve o tenant e a sessão a partir do payload da Evolution API
    */
   async resolveTenantAndSession(payload) {
-    const instanceName = payload.instance || payload.data?.instance;
+    const instanceName = payload.instance || payload.instanceName || payload.data?.instance || payload.data?.instanceName;
     let tenantId = null;
 
     if (instanceName) {
       const instRes = await query(
-        `SELECT tenant_id FROM tenant_whatsapp_instances WHERE instance_name = $1 LIMIT 1`,
+        `SELECT tenant_id FROM tenant_whatsapp_instances WHERE LOWER(instance_name) = LOWER($1) LIMIT 1`,
         [instanceName]
       );
       if (instRes.rowCount > 0) {
         tenantId = instRes.rows[0].tenant_id;
+      } else {
+        // Tenta resolver por sufixo de 6 caracteres do tenant ID no slug da instância (ex: wn-velas-artesanais-a4e769)
+        const suffixMatch = String(instanceName).match(/-([a-f0-9]{6})$/i);
+        if (suffixMatch) {
+          const tenantBySuffix = await query(
+            `SELECT id FROM tenants WHERE CAST(id AS text) LIKE $1 LIMIT 1`,
+            [`${suffixMatch[1]}%`]
+          );
+          if (tenantBySuffix.rowCount > 0) {
+            tenantId = tenantBySuffix.rows[0].id;
+            // Auto-vincula a instância no banco se estava pendente
+            await query(
+              `INSERT INTO tenant_whatsapp_instances (tenant_id, instance_name, status)
+               VALUES ($1, $2, 'open')
+               ON CONFLICT (tenant_id) DO UPDATE SET instance_name = EXCLUDED.instance_name, status = 'open', updated_at = now()`,
+              [tenantId, instanceName]
+            ).catch(() => {});
+          }
+        }
       }
     }
 
@@ -72,17 +91,26 @@ class WebhookController {
       return { handled: false, reason: 'payload_sem_evento' };
     }
 
+    const eventName = String(payload.event).toLowerCase().replace(/_/g, '.');
+
     // 1. Atualização de estado da conexão
-    if (payload.event === 'connection.update') {
-      const instanceName = payload.instance;
+    if (eventName === 'connection.update') {
+      const instanceName = payload.instance || payload.instanceName || payload.data?.instance;
       const state = payload.data?.state;
       if (instanceName && state) {
+        const normalizedState = state === 'open' ? 'open' : state === 'connecting' ? 'connecting' : 'disconnected';
         await query(
           `UPDATE tenant_whatsapp_instances 
            SET status = $1, updated_at = now() 
-           WHERE instance_name = $2`,
-          [state === 'open' ? 'open' : state === 'connecting' ? 'connecting' : 'disconnected', instanceName]
+           WHERE LOWER(instance_name) = LOWER($2)`,
+          [normalizedState, instanceName]
         );
+
+        // Se conectou, garante que o webhook está ativo na Evolution API
+        if (normalizedState === 'open') {
+          const defaultWebhook = evolutionService.getDefaultWebhookUrl ? evolutionService.getDefaultWebhookUrl() : 'https://warnat-panel.onrender.com/api/webhook/whatsapp';
+          evolutionService.setWebhook(instanceName, defaultWebhook).catch(() => {});
+        }
       }
       return { handled: true, event: 'connection.update' };
     }
@@ -90,7 +118,7 @@ class WebhookController {
     // ============================================================================
     // 2. ATENDIMENTO E LOG DE CHAMADAS DE VOZ E VÍDEO NO WHATSAPP
     // ============================================================================
-    if (payload.event === 'call') {
+    if (eventName === 'call') {
       const callData = payload.data || {};
       const callStatus = callData.status; // 'offer', 'ringing', 'reject', etc.
       const isVideo = !!callData.isVideo;
@@ -224,7 +252,7 @@ class WebhookController {
     }
 
     // Aceita apenas eventos de mensagens novas
-    if (payload.event !== 'messages.upsert') {
+    if (eventName !== 'messages.upsert') {
       return { handled: false, reason: 'evento_ignorado' };
     }
 
@@ -383,12 +411,29 @@ class WebhookController {
         mediaResponseText = 'Recebi seu áudio! Nossa equipe já está atenta e ouvindo a sua mensagem.';
       }
     } else if (data.message?.imageMessage) {
-      // Imagem / Foto do local
-      text = '[foto/imagem enviada pelo cliente]';
-      isMediaAcknowledgmentNeeded = true;
-      mediaResponseText = 'Recebi a sua foto! Imagens e fotos do local são analisadas detalhadamente pelo nosso especialista técnico.';
+      // Imagem / Foto do local com legenda ou avulsa
+      if (data.message.imageMessage.caption && data.message.imageMessage.caption.trim()) {
+        text = data.message.imageMessage.caption.trim();
+      } else {
+        text = '[foto/imagem enviada pelo cliente]';
+        isMediaAcknowledgmentNeeded = true;
+        mediaResponseText = 'Recebi a sua foto! Imagens e fotos do local são analisadas detalhadamente pelo nosso especialista técnico.';
+      }
+    } else if (data.message?.videoMessage) {
+      // Vídeo enviado pelo cliente
+      if (data.message.videoMessage.caption && data.message.videoMessage.caption.trim()) {
+        text = data.message.videoMessage.caption.trim();
+      } else {
+        text = '[vídeo enviado pelo cliente]';
+        isMediaAcknowledgmentNeeded = true;
+        mediaResponseText = 'Recebi o seu vídeo! Nossa equipe já está verificando os detalhes da gravação.';
+      }
     } else if (data.message?.documentMessage) {
-      text = '[documento enviado pelo cliente]';
+      if (data.message.documentMessage.caption && data.message.documentMessage.caption.trim()) {
+        text = data.message.documentMessage.caption.trim();
+      } else {
+        text = '[documento enviado pelo cliente]';
+      }
     }
 
     // Proteção contra payload vazio: não deixa quebrar a LLM

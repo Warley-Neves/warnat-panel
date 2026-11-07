@@ -282,10 +282,12 @@ class AuthService {
       [tenant.id, instanceSlug, `token-${instanceSlug}`]
     );
 
-    // 5. Auto-cria instância na Evolution API para gerar QR Code de imediato
+    // 5. Auto-cria instância na Evolution API para gerar QR Code de imediato e vincula o webhook
     try {
       await evolutionService.createInstance(instanceSlug, { qrcode: true });
-      console.log(`[AuthService] Instância WhatsApp ${instanceSlug} auto-provisionada na Evolution API para a empresa ${nome_empresa}`);
+      const webhookUrl = evolutionService.getDefaultWebhookUrl ? evolutionService.getDefaultWebhookUrl() : 'https://warnat-panel.onrender.com/api/webhook/whatsapp';
+      await evolutionService.setWebhook(instanceSlug, webhookUrl).catch(() => {});
+      console.log(`[AuthService] Instância WhatsApp ${instanceSlug} auto-provisionada e webhook configurado para a empresa ${nome_empresa}`);
     } catch (evErr) {
       console.warn(`[AuthService] Aviso ao provisionar instância ${instanceSlug} na Evolution API:`, evErr.message);
     }

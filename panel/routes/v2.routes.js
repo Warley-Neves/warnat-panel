@@ -132,6 +132,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
         const statusRes = await evolutionService.getInstanceStatus(instance.instance_name);
         liveStatus = statusRes.state === 'open' ? 'open' : statusRes.state === 'connecting' ? 'connecting' : 'disconnected';
         await query(`UPDATE tenant_whatsapp_instances SET status = $1 WHERE id = $2`, [liveStatus, instance.id]);
+        if (liveStatus === 'open') {
+          const defaultWebhook = evolutionService.getDefaultWebhookUrl ? evolutionService.getDefaultWebhookUrl() : 'https://warnat-panel.onrender.com/api/webhook/whatsapp';
+          evolutionService.setWebhook(instance.instance_name, defaultWebhook).catch(() => {});
+        }
       } catch (e) {
         // Fallback para status salvo no banco se a Evolution API não responder
       }

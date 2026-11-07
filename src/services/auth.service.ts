@@ -136,6 +136,8 @@ export class AuthService {
 
       try {
         await evolutionService.createInstance(instanceSlug, { qrcode: true });
+        const webhookUrl = evolutionService.getDefaultWebhookUrl();
+        await evolutionService.setWebhook(instanceSlug, webhookUrl).catch(() => {});
       } catch (evErr: any) {
         console.warn(`[AuthService] Aviso ao auto-provisionar instância ${instanceSlug}:`, evErr.message);
       }
