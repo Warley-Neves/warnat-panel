@@ -774,6 +774,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
            a.remote_jid, 
            a.servico, 
            a.data_agendada, 
+           TO_CHAR(a.data_agendada AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') as data_iso,
            TO_CHAR(a.data_agendada AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY às HH24:MI') as data_formatada_br,
            TO_CHAR(a.data_agendada AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY') as data_dia_br,
            TO_CHAR(a.data_agendada AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI') as horario_br,
