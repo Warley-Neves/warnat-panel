@@ -52,12 +52,12 @@ class AuthService {
    */
   generateToken(user) {
     const payload = {
-      userId: user.id,
-      tenantId: user.tenant_id,
+      userId: user.id || user.userId,
+      tenantId: user.tenant_id || user.tenantId,
       email: user.email,
       role: user.role,
       nome: user.nome,
-      isSuperAdmin: !!user.is_super_admin
+      isSuperAdmin: !!(user.is_super_admin || user.isSuperAdmin)
     };
     return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
   }

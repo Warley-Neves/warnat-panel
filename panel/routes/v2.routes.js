@@ -2081,6 +2081,52 @@ async function handleV2Routes(req, res, pathname, method, body) {
       return sendJson(200, { success: true, invoices: invRes.rows });
     }
 
+    // 15.6 EXCLUIR TENANT DEFINITIVAMENTE (PURGE / DELETE TENANT)
+    const matchDeleteTenant = pathname.match(/^\/api\/v2\/superadmin\/tenants\/([a-f0-9\-]+)$/);
+    if (matchDeleteTenant && method === 'DELETE') {
+      const targetTenantId = matchDeleteTenant[1];
+
+      // Protege contra exclusão do próprio tenant do SuperAdmin
+      const uTenCheck = await query(`SELECT tenant_id FROM users WHERE id = $1`, [decodedUser.userId]);
+      const myTenantId = uTenCheck.rows[0]?.tenant_id || decodedUser.tenantId;
+
+      if (targetTenantId === myTenantId) {
+        return sendJson(400, {
+          success: false,
+          error: 'CANNOT_DELETE_SELF_TENANT',
+          message: 'Não é permitido excluir o tenant da sua própria conta de SuperAdmin.'
+        });
+      }
+
+      const tOld = await query(`SELECT id, nome_empresa, documento FROM tenants WHERE id = $1`, [targetTenantId]);
+      if (tOld.rowCount === 0) {
+        return sendJson(404, { success: false, error: 'Tenant não encontrado.' });
+      }
+      const companyName = tOld.rows[0].nome_empresa;
+
+      // Grava no log de auditoria do SuperAdmin antes de remover para garantir integridade referencial
+      await query(
+        `INSERT INTO admin_audit_logs (admin_user_id, target_tenant_id, action, details)
+         VALUES ($1, NULL, 'DELETE_TENANT', $2)`,
+        [
+          decodedUser.userId,
+          JSON.stringify({
+            deleted_tenant_id: targetTenantId,
+            deleted_company_name: companyName,
+            reason: body?.reason || 'Exclusão definitiva solicitada pelo Dono do SaaS'
+          })
+        ]
+      );
+
+      // Deleta o tenant (CASCADE limpa instâncias, usuários, mensagens, sessões e agendamentos)
+      await query(`DELETE FROM tenants WHERE id = $1`, [targetTenantId]);
+
+      return sendJson(200, {
+        success: true,
+        message: `Empresa "${companyName}" e todos os seus dados foram excluídos com sucesso.`
+      });
+    }
+
     if (pathname === '/api/v2/superadmin/audit-logs' && method === 'GET') {
       const logsRes = await query(`
         SELECT a.id, a.action, a.details, a.created_at,

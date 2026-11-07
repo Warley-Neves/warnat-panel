@@ -78,10 +78,12 @@ async function runTestSuite() {
   function request(path, options = {}) {
     return new Promise((resolve, reject) => {
       const url = new URL(path, baseUrl);
+      const payloadStr = options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : null;
       const reqOptions = {
         method: options.method || 'GET',
         headers: {
           'Content-Type': 'application/json',
+          ...(payloadStr ? { 'Content-Length': Buffer.byteLength(payloadStr) } : {}),
           ...(options.headers || {})
         }
       };
@@ -100,8 +102,8 @@ async function runTestSuite() {
       });
 
       req.on('error', reject);
-      if (options.body) {
-        req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
+      if (payloadStr) {
+        req.write(payloadStr);
       }
       req.end();
     });
@@ -241,6 +243,50 @@ async function runTestSuite() {
     });
     assert(courtesyRes.status === 200, 'SuperAdmin concede Cortesia Pro com sucesso');
     assert(courtesyRes.data?.courtesy_plan === 'pro', 'Cortesia Pro registrada no tenant');
+
+    // SuperAdmin tenta deletar seu próprio tenant (deve falhar com 400)
+    const selfDelRes = await request(`/api/v2/superadmin/tenants/${saReg.tenant.id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${saToken}` }
+    });
+    assert(selfDelRes.status === 400, 'SuperAdmin impedido de deletar o próprio tenant (400)');
+    assert(selfDelRes.data?.error === 'CANNOT_DELETE_SELF_TENANT', 'Código CANNOT_DELETE_SELF_TENANT retornado');
+
+    // Usuário comum tenta deletar tenant (deve falhar com 403)
+    const forbiddenDel = await request(`/api/v2/superadmin/tenants/${tBasicReg.tenant.id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${basicToken}` }
+    });
+    assert(forbiddenDel.status === 403, 'Usuário comum impedido de deletar tenant (403)');
+
+    // Cria um tenant temporário para exclusão
+    const tDelReg = await authService.registerTenantAndAdmin({
+      nome_empresa: `Loja Temporária Para Exclusão ${timestamp}`,
+      documento: '99887766000155',
+      nome: 'Dono Loja Temp',
+      email: `temp_${timestamp}@loja.com`,
+      password: 'TempPassword123!',
+      plano: 'basic'
+    });
+
+    // SuperAdmin exclui o tenant com sucesso
+    const delRes = await request(`/api/v2/superadmin/tenants/${tDelReg.tenant.id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${saToken}` },
+      body: { reason: 'Teste automatizado de remoção de tenant' }
+    });
+    assert(delRes.status === 200, 'SuperAdmin exclui tenant com sucesso (200)');
+    assert(delRes.data?.success === true, 'Flag success true retornada na exclusão');
+
+    // Verifica que o tenant foi removido do banco
+    const checkDeleted = await query(`SELECT id FROM tenants WHERE id = $1`, [tDelReg.tenant.id]);
+    assert(checkDeleted.rowCount === 0, 'Tenant e dados vinculados removidos do banco de dados');
+
+    // Verifica log de auditoria da exclusão
+    const auditDel = await query(
+      `SELECT action, details FROM admin_audit_logs WHERE action = 'DELETE_TENANT' ORDER BY created_at DESC LIMIT 1`
+    );
+    assert(auditDel.rowCount > 0, 'Ação DELETE_TENANT registrada na tabela admin_audit_logs');
 
     // --------------------------------------------------------------------------
     // 4. INTEGRAÇÃO PAGAR.ME V5: CARTÃO, PIX & WEBHOOKS RESILIENTES

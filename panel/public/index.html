@@ -374,6 +374,9 @@
                 <button onclick="toggleBlockTenant('${t.id}', ${isBlocked}, '${escapeJsArg(t.nome_empresa)}')" title="${isBlocked ? 'Desbloquear Tenant' : 'Bloquear Tenant'}" class="p-1.5 bg-dark-800 hover:bg-dark-700 ${isBlocked ? 'text-emerald-400' : 'text-rose-400'} rounded-lg border border-slate-700 transition">
                   <i data-lucide="${isBlocked ? 'shield-check' : 'shield-alert'}" class="w-3.5 h-3.5"></i>
                 </button>
+                  <button onclick="deleteTenantAction('${t.id}', '${escapeJsArg(t.nome_empresa)}')" title="Excluir Empresa Definitivamente" class="p-1.5 bg-dark-800 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 rounded-lg border border-slate-700 transition">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
               </div>
             </td>
           </tr>
@@ -486,6 +489,30 @@
         } else {
           alert('Erro ao atualizar bloqueio: ' + (res.data?.error || 'Tente novamente'));
         }
+
+    async function deleteTenantAction(tenantId, companyName) {
+      const confirmWord = prompt(`⚠️ ATENÇÃO: A exclusão da empresa "${companyName}" apagará definitivamente todas as instâncias do WhatsApp, operadores, atendimentos, mensagens e faturas vinculadas.\n\nPara confirmar, digite EXCLUIR:`);
+      if (confirmWord !== 'EXCLUIR') {
+        if (confirmWord !== null) alert('Operação cancelada: você não digitou EXCLUIR.');
+        return;
+      }
+
+      try {
+        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}`, {
+          method: 'DELETE',
+          body: JSON.stringify({ reason: 'Exclusão solicitada pelo Dono via Painel SuperAdmin' })
+        });
+
+        if (res.ok && res.data?.success) {
+          alert(res.data.message || `Empresa "${companyName}" foi excluída com sucesso!`);
+          await loadSuperAdminData();
+        } else {
+          alert('Erro ao excluir empresa: ' + (res.data?.message || res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro ao comunicar com o servidor: ' + e.message);
+      }
+    }
       } catch (e) {
         alert('Erro: ' + e.message);
       }
