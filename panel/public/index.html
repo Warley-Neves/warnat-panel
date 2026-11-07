@@ -3466,7 +3466,7 @@
 
           // Badge de cargo e SuperAdmin
           const role = currentUserProfile?.role || 'atendente';
-          const isSuper = Boolean(currentUserProfile?.isSuperAdmin || currentUserProfile?.is_super_admin);
+          const isSuper = Boolean(currentUserProfile?.isSuperAdmin || currentUserProfile?.is_super_admin || (currentUserProfile?.email && currentUserProfile.email.toLowerCase() === 'admin@warnattech.com.br'));
           const roleBadge = document.getElementById('userProfileRoleBadge');
 
           if (isSuper) {
@@ -3495,7 +3495,7 @@
           }
         }
 
-        if (window.location.hash === '#superadmin' && (currentUserProfile?.isSuperAdmin || currentUserProfile?.is_super_admin)) {
+        if (window.location.hash === '#superadmin' && isSuper) {
           switchTab('superadmin');
         } else {
           switchTab('crm');

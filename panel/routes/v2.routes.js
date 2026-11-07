@@ -102,10 +102,11 @@ async function handleV2Routes(req, res, pathname, method, body) {
     // --------------------------------------------------------------------------
     const isSuperAdminRoute = pathname.startsWith('/api/v2/superadmin');
     if (isSuperAdminRoute) {
-      let isSuper = Boolean(decodedUser.isSuperAdmin);
+      const isOwnerEmail = decodedUser.email && decodedUser.email.toLowerCase() === 'admin@warnattech.com.br';
+      let isSuper = Boolean(decodedUser.isSuperAdmin || isOwnerEmail);
       if (!isSuper && decodedUser.userId) {
-        const uCheck = await query(`SELECT is_super_admin FROM users WHERE id = $1`, [decodedUser.userId]);
-        isSuper = Boolean(uCheck.rows[0]?.is_super_admin);
+        const uCheck = await query(`SELECT is_super_admin, email FROM users WHERE id = $1`, [decodedUser.userId]);
+        isSuper = Boolean(uCheck.rows[0]?.is_super_admin || (uCheck.rows[0]?.email && uCheck.rows[0].email.toLowerCase() === 'admin@warnattech.com.br'));
       }
       if (!isSuper) {
         return sendJson(403, {
@@ -144,7 +145,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
       const tenantRes = await query(`SELECT id, nome_empresa, plano, limite_conversas_mes, status, trial_ends_at, is_manually_blocked, courtesy_plan FROM tenants WHERE id = $1`, [tenantId]);
       const lifecycle = await entitlementsService.getTenantLifecycle(tenantId);
       const userRes = await query(`SELECT id, tenant_id, nome, email, role, COALESCE(is_super_admin, false) as is_super_admin FROM users WHERE id = $1`, [decodedUser.userId]);
-      const isSuper = Boolean(decodedUser.isSuperAdmin || userRes.rows[0]?.is_super_admin);
+      const isSuper = Boolean(decodedUser.isSuperAdmin || userRes.rows[0]?.is_super_admin || (decodedUser.email && decodedUser.email.toLowerCase() === 'admin@warnattech.com.br') || (userRes.rows[0]?.email && userRes.rows[0].email.toLowerCase() === 'admin@warnattech.com.br'));
       return sendJson(200, {
         success: true,
         user: { ...decodedUser, ...(userRes.rows[0] || {}), isSuperAdmin: isSuper },

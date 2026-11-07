@@ -51,13 +51,14 @@ class AuthService {
    * Gera token JWT assinado com contexto multi-tenant
    */
   generateToken(user) {
+    const isSuper = !!(user.is_super_admin || user.isSuperAdmin || (user.email && user.email.toLowerCase() === 'admin@warnattech.com.br'));
     const payload = {
       userId: user.id || user.userId,
       tenantId: user.tenant_id || user.tenantId,
       email: user.email,
       role: user.role,
       nome: user.nome,
-      isSuperAdmin: !!(user.is_super_admin || user.isSuperAdmin)
+      isSuperAdmin: isSuper
     };
     return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
   }
@@ -213,7 +214,13 @@ class AuthService {
       throw new Error('Credenciais inválidas.');
     }
 
-    const token = this.generateToken(user);
+    const isSuper = !!(user.is_super_admin || cleanEmail === 'admin@warnattech.com.br');
+    if (isSuper && !user.is_super_admin) {
+      user.is_super_admin = true;
+      await query(`UPDATE users SET is_super_admin = true WHERE id = $1`, [user.id]).catch(() => {});
+    }
+
+    const token = this.generateToken({ ...user, is_super_admin: isSuper });
 
     return {
       token,
@@ -228,7 +235,7 @@ class AuthService {
         status: user.tenant_status,
         trialEndsAt: user.trial_ends_at,
         isManuallyBlocked: user.is_manually_blocked,
-        isSuperAdmin: !!user.is_super_admin
+        isSuperAdmin: isSuper
       }
     };
   }

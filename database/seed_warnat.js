@@ -35,21 +35,25 @@ async function seedWarNatTech() {
       console.log(`ℹ️ Tenant WarNat Tech já existe (ID: ${tenantId})`);
     }
 
-    // 2. Cadastrar Usuário Administrador (Warley Santos)
+    // 2. Cadastrar / Atualizar Usuário Administrador & SuperAdmin (Warley Santos)
     const adminEmail = 'admin@warnattech.com.br';
     const existingUser = await client.query(`SELECT id FROM users WHERE email = $1`, [adminEmail]);
 
     if (existingUser.rowCount === 0) {
       const passwordHash = await authService.hashPassword('WarnatAdmin2026!');
       const newUser = await client.query(
-        `INSERT INTO users (tenant_id, email, password_hash, role, nome)
-         VALUES ($1, $2, $3, 'admin', 'Warley Santos')
-         RETURNING id, email, role, nome`,
+        `INSERT INTO users (tenant_id, email, password_hash, role, nome, is_super_admin)
+         VALUES ($1, $2, $3, 'admin', 'Warley Santos', true)
+         RETURNING id, email, role, nome, is_super_admin`,
         [tenantId, adminEmail, passwordHash]
       );
-      console.log(`✅ Usuário Admin criado: ${newUser.rows[0].nome} (${newUser.rows[0].email})`);
+      console.log(`✅ Usuário Admin criado: ${newUser.rows[0].nome} (${newUser.rows[0].email}) com is_super_admin = true`);
     } else {
-      console.log(`ℹ️ Usuário Admin (${adminEmail}) já cadastrado.`);
+      await client.query(
+        `UPDATE users SET is_super_admin = true, role = 'admin' WHERE email = $1`,
+        [adminEmail]
+      );
+      console.log(`ℹ️ Usuário Admin (${adminEmail}) sincronizado com is_super_admin = true.`);
     }
 
     // 3. Cadastrar / Vincular Instância do WhatsApp da Evolution API
