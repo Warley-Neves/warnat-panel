@@ -142,6 +142,93 @@ export function getDayOfWeekInfo(dateInput: any): {
 }
 
 /**
+ * Padrões de regex para identificar quando o cliente quer outra data / outro dia / outro sábado
+ */
+export const ANOTHER_DATE_INTENTS = [
+  /outro\s+dia/i,
+  /outra\s+data/i,
+  /outro\s+s[aá]bado/i,
+  /outros?\s+dias?/i,
+  /outras?\s+datas?/i,
+  /outra\s+semana/i,
+  /semana\s+que\s+vem/i,
+  /pr[oó]xim[ao]\s+semana/i,
+  /pr[oó]xim[ao]\s+s[aá]bado/i,
+  /pr[oó]xim[ao]\s+fim\s+de\s+semana/i,
+  /pr[oó]xim[ao]\s+final\s+de\s+semana/i,
+  /mais\s+pra\s+frente/i,
+  /mais\s+para\s+frente/i,
+  /mais\s+adiante/i,
+  /mais\s+al[eé]m/i,
+  /mudar\s+(de\s+)?data/i,
+  /trocar\s+(de\s+)?data/i,
+  /data\s+diferente/i,
+  /dia\s+diferente/i,
+  /tem\s+outro\s+dia/i,
+  /tem\s+outra\s+data/i,
+  /tem\s+outro\s+s[aá]bado/i,
+  /algum\s+outro\s+dia/i,
+  /alguma\s+outra\s+data/i,
+  /n[aã]o\s+posso\s+(no|nesse|naquele|neste|nessa|nesta)\s+(dia|data|s[aá]bado|semana)/i,
+  /n[aã]o\s+d[aá]\s+(no|nesse|naquele|neste|nessa|nesta)\s+(dia|data|s[aá]bado|semana)/i,
+  /n[aã]o\s+consigo\s+(no|nesse|naquele|neste|nessa|nesta)\s+(dia|data|s[aá]bado|semana)/i,
+  /n[aã]o\s+posso\s+dia/i,
+  /n[aã]o\s+posso\s+no\s+dia/i,
+  /n[aã]o\s+d[aá]\s+dia/i,
+  /n[aã]o\s+d[aá]\s+no\s+dia/i,
+  /n[aã]o\s+consigo\s+dia/i,
+  /n[aã]o\s+consigo\s+no\s+dia/i,
+  /ocupad[ao]\s+(no|nesse|naquele|neste)\s+(dia|s[aá]bado)/i,
+  /indispon[ií]vel\s+(no|nesse|naquele|neste)\s+(dia|s[aá]bado)/i,
+  /sem\s+disponibilidade\s+(no|nesse|naquele|neste)\s+(dia|s[aá]bado)/i,
+  /n[aã]o\s+tenho\s+como\s+(no|nesse|naquele|neste|nessa|nesta)\s+(dia|data|s[aá]bado|semana)/i,
+  /n[aã]o\s+tenho\s+disponibilidade\s+(no|nesse|naquele|neste|nessa|nesta)\s+(dia|data|s[aá]bado|semana)/i,
+  /nesse\s+s[aá]bado\s+n[aã]o\s+(posso|d[aá]|consigo)/i,
+  /nessa\s+data\s+n[aã]o\s+(posso|d[aá]|consigo)/i,
+  /nesse\s+dia\s+n[aã]o\s+(posso|d[aá]|consigo)/i,
+  /(dia|data|s[aá]bado)[\s\S]{0,15}n[aã]o\s+(d[aá]|posso|consigo)/i,
+  /n[aã]o\s+(d[aá]|posso|consigo)[\s\S]{0,15}(dia|data|s[aá]bado)/i,
+  /s[aá]bado\s+seguinte/i,
+  /dia\s+seguinte/i,
+  /semana\s+seguinte/i,
+  /tem\s+outr[ao]\??$/i,
+  /algum\s+outr[ao]\??$/i,
+  /n[aã]o\s+posso\s+em\s+nenhum/i,
+  /n[aã]o\s+posso\s+ness[ae]s/i,
+  /n[aã]o\s+posso\s*,?\s*tem/i
+];
+
+/**
+ * Extrai datas no formato YYYY-MM-DD e DD/MM de mensagens de texto
+ */
+export function extractDatesFromText(text: string): string[] {
+  const dates: string[] = [];
+  if (!text || typeof text !== 'string') return dates;
+  const now = new Date();
+
+  // YYYY-MM-DD
+  const isoMatches = text.matchAll(/\b(\d{4})-(\d{2})-(\d{2})\b/g);
+  for (const m of isoMatches) {
+    if (!dates.includes(m[0])) dates.push(m[0]);
+  }
+
+  // DD/MM/YYYY ou DD/MM
+  const brMatches = text.matchAll(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g);
+  for (const m of brMatches) {
+    const d = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10);
+    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) {
+      let y = m[3] ? parseInt(m[3], 10) : now.getFullYear();
+      if (y < 100) y += 2000;
+      const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if (!dates.includes(iso)) dates.push(iso);
+    }
+  }
+
+  return dates;
+}
+
+/**
  * Definições das 6 Ferramentas Oficiais (Function Calling)
  */
 export const AI_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -394,14 +481,30 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
    */
   public detectCancelRequest(text: string): boolean {
     if (!text) return false;
-    const lower = text.toLowerCase();
+    const lower = text.toLowerCase().trim();
+
+    // Se o cliente estiver pedindo outro dia/outra data, NÃO é cancelamento puro e sim reagendamento/troca de data
+    if (
+      lower.includes('outro dia') ||
+      lower.includes('outra data') ||
+      lower.includes('outro sábado') ||
+      lower.includes('outro sabado') ||
+      lower.includes('tem outro') ||
+      lower.includes('tem outra') ||
+      lower.includes('algum outro') ||
+      lower.includes('alguma outra')
+    ) {
+      return false;
+    }
+
     return (
       lower.includes('desmarqu') ||
       lower.includes('desmarca') ||
       lower.includes('cancel') ||
-      lower.includes('não vou poder') ||
-      lower.includes('nao vou poder') ||
-      lower.includes('aguardar outro dia') ||
+      lower.includes('não posso mais comparecer') ||
+      lower.includes('nao posso mais comparecer') ||
+      lower.includes('não vou poder comparecer') ||
+      lower.includes('nao vou poder comparecer') ||
       lower.includes('não posso mais') ||
       lower.includes('nao posso mais')
     );
@@ -443,6 +546,23 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
     if (this.detectCancelRequest(lower) || this.detectConsultarHistoricoRequest(lower)) {
       return null;
     }
+
+    // Se o cliente estiver expressando recusa ou pedindo outro dia, NÃO é confirmação de agendamento
+    const isRejectionOrAnotherDate = (
+      lower.includes('não posso') ||
+      lower.includes('nao posso') ||
+      lower.includes('não dá') ||
+      lower.includes('nao da') ||
+      lower.includes('não consigo') ||
+      lower.includes('nao consigo') ||
+      lower.includes('outro dia') ||
+      lower.includes('outra data') ||
+      lower.includes('outro sábado') ||
+      lower.includes('outro sabado') ||
+      lower.includes('outros horários') ||
+      lower.includes('outros horarios')
+    );
+    if (isRejectionOrAnotherDate) return null;
 
     const hasAffirmation = (
       lower.includes('pode ser') ||
@@ -536,15 +656,27 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
     args?: any;
   }): Promise<any> {
     const { tenantId, historyMessages, args = {} } = params;
-    const { fromDate = null, excludeSlots = [], excludeDates = [] } = args;
+    let { fromDate = null, excludeSlots = [], excludeDates = [] } = args;
+
+    if (!Array.isArray(excludeDates)) {
+      excludeDates = excludeDates ? [excludeDates] : [];
+    }
+    if (!Array.isArray(excludeSlots)) {
+      excludeSlots = excludeSlots ? [excludeSlots] : [];
+    }
 
     const allUserText = historyMessages
       .filter(m => m.role === 'user')
       .map(m => (typeof m.content === 'string' ? m.content : '').toLowerCase())
       .join(' ');
 
-    const isClearlyNew = allUserText.includes('nova instala') || allUserText.includes('instalar do zero') || allUserText.includes('câmeras novas') || allUserText.includes('não tenho câmera') || allUserText.includes('nao tenho camera') || allUserText.includes('instalação nova') || allUserText.includes('projeto novo') || allUserText.includes('quero instalar');
-    const isClearlyMaintenance = allUserText.includes('manuten') || allUserText.includes('consert') || allUserText.includes('repar') || allUserText.includes('parou de') || allUserText.includes('câmera queim') || allUserText.includes('arrumar') || allUserText.includes('já tenho câmera') || allUserText.includes('ja tenho');
+    const allAssistantText = historyMessages
+      .filter(m => m.role === 'assistant')
+      .map(m => (typeof m.content === 'string' ? m.content : '').toLowerCase())
+      .join(' ');
+
+    const isClearlyNew = allUserText.includes('nova instala') || allUserText.includes('instalar do zero') || allUserText.includes('câmeras novas') || allUserText.includes('não tenho câmera') || allUserText.includes('nao tenho camera') || allUserText.includes('instalação nova') || allUserText.includes('projeto novo') || allUserText.includes('quero instalar') || allAssistantText.includes('nova instalação') || allAssistantText.includes('nova instalacao');
+    const isClearlyMaintenance = allUserText.includes('manuten') || allUserText.includes('consert') || allUserText.includes('repar') || allUserText.includes('parou de') || allUserText.includes('câmera queim') || allUserText.includes('arrumar') || allUserText.includes('já tenho câmera') || allUserText.includes('ja tenho') || allAssistantText.includes('manutenção') || allAssistantText.includes('manutencao');
 
     if (!isClearlyNew && !isClearlyMaintenance) {
       return {
@@ -554,9 +686,65 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
       };
     }
 
-    const instructionMsg = isClearlyMaintenance
-      ? 'Atenção obrigatória para MANUTENÇÃO: informe com clareza a taxa de visita técnica de R$ 140,00 e que esse valor é 100% aproveitado e abatido no conserto, além de oferecer os 2 horários livres abaixo!'
-      : 'Para NOVA INSTALAÇÃO: informe que a visita técnica de avaliação de pontos cegos e cabeamento é 100% gratuita e sem compromisso, além de oferecer os 2 horários livres abaixo!';
+    // 1. Extrai todas as datas previamente sugeridas pelo assistente no histórico
+    const previouslyOfferedDates: string[] = [];
+    for (const msg of historyMessages) {
+      if (msg.role === 'assistant' && typeof msg.content === 'string') {
+        const found = extractDatesFromText(msg.content);
+        for (const f of found) {
+          if (!previouslyOfferedDates.includes(f)) previouslyOfferedDates.push(f);
+        }
+      }
+    }
+
+    // 2. Analisa as mensagens recentes do cliente para detectar se pediu outro dia / outro sábado / recusou a data anterior
+    const recentUserMsgs = historyMessages
+      .filter(m => m.role === 'user')
+      .slice(-2)
+      .map(m => (typeof m.content === 'string' ? m.content : ''))
+      .join(' ');
+
+    const isAskingAnotherDate = ANOTHER_DATE_INTENTS.some(regex => regex.test(recentUserMsgs));
+    const userMentionedDates = extractDatesFromText(recentUserMsgs);
+
+    if (isAskingAnotherDate || excludeDates.length > 0) {
+      for (const d of previouslyOfferedDates) {
+        if (!excludeDates.includes(d)) excludeDates.push(d);
+      }
+      for (const d of userMentionedDates) {
+        if (!excludeDates.includes(d)) excludeDates.push(d);
+      }
+
+      if (!fromDate && excludeDates.length > 0) {
+        const sortedDates = [...excludeDates].sort();
+        const latestDateStr = sortedDates[sortedDates.length - 1];
+        const latestDate = parseLocalDate(latestDateStr);
+        latestDate.setDate(latestDate.getDate() + 1);
+        fromDate = getDayOfWeekInfo(latestDate).isoDate;
+      }
+    }
+
+    if (!isAskingAnotherDate && userMentionedDates.length > 0 && !fromDate) {
+      fromDate = userMentionedDates[0];
+    }
+
+    if ((recentUserMsgs.toLowerCase().includes('mês que vem') || recentUserMsgs.toLowerCase().includes('mes que vem') || recentUserMsgs.toLowerCase().includes('próximo mês') || recentUserMsgs.toLowerCase().includes('proximo mes')) && !fromDate) {
+      const now = new Date();
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1, 12, 0, 0);
+      fromDate = getDayOfWeekInfo(nextMonth).isoDate;
+    }
+
+    const normExcludeDates = (excludeDates || []).map((d: any) => String(d).trim());
+    const normExcludeSlots = (excludeSlots || []).map((s: any) => String(s).trim());
+
+    let instructionMsg: string;
+    if (isAskingAnotherDate) {
+      instructionMsg = 'O cliente pediu outra data ou não pode na data anterior. NUNCA insista nem repita a data já recusada! Apresente com simpatia e acolhimento os NOVOS horários livres encontrados para o PRÓXIMO dia disponível na agenda. Pergunte se algum desses novos horários fica bom para ele.';
+    } else if (isClearlyMaintenance) {
+      instructionMsg = 'Atenção obrigatória para MANUTENÇÃO: informe com clareza a taxa de visita técnica de R$ 140,00 e que esse valor é 100% aproveitado e abatido no conserto, além de oferecer os 2 horários livres abaixo!';
+    } else {
+      instructionMsg = 'Para NOVA INSTALAÇÃO: informe que a visita técnica de avaliação de pontos cegos e cabeamento é 100% gratuita e sem compromisso, além de oferecer os 2 horários livres abaixo!';
+    }
 
     const cfgRes = await query<{ regras_agendamento: any }>(
       `SELECT regras_agendamento FROM tenant_ai_configs WHERE tenant_id = $1;`,
@@ -580,9 +768,6 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
       .map((k: string) => DIA_KEY_TO_INDEX[String(k).toLowerCase().trim()])
       .filter((idx: number | undefined) => idx !== undefined);
 
-    const normExcludeDates = (excludeDates || []).map((d: any) => String(d).trim());
-    const normExcludeSlots = (excludeSlots || []).map((s: any) => String(s).trim());
-
     let cursorDate: Date;
     if (fromDate) {
       cursorDate = parseLocalDate(fromDate);
@@ -594,7 +779,7 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
     const freeSlots: any[] = [];
     let daysChecked = 0;
 
-    while (freeSlots.length < 2 && daysChecked < 35) {
+    while (freeSlots.length < 2 && daysChecked < 60) {
       const info = getDayOfWeekInfo(cursorDate);
 
       if (allowedIndices.includes(info.dayIndex)) {
@@ -635,8 +820,14 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
       success: true,
       totalFound: freeSlots.length,
       instruction: instructionMsg,
-      slots: freeSlots
+      slots: freeSlots,
+      resolvedArgs: {
+        fromDate,
+        excludeDates: Array.from(new Set(normExcludeDates)),
+        excludeSlots: normExcludeSlots
+      }
     };
+  }
   }
 
   /**
@@ -1262,7 +1453,7 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
     const isClearlyNew = allUserText.includes('nova instala') || allUserText.includes('instalar do zero') || allUserText.includes('câmeras novas') || allUserText.includes('não tenho câmera') || allUserText.includes('nao tenho camera') || allUserText.includes('instalação nova') || allUserText.includes('projeto novo') || allUserText.includes('quero instalar');
     const isClearlyMaintenance = allUserText.includes('manuten') || allUserText.includes('consert') || allUserText.includes('repar') || allUserText.includes('parou de') || allUserText.includes('câmera queim') || allUserText.includes('arrumar') || allUserText.includes('já tenho câmera') || allUserText.includes('ja tenho');
 
-    const isAppointmentReq = allUserText.includes('agendar visita') || allUserText.includes('marcar visita') || allUserText.includes('horário livre') || allUserText.includes('horario livre') || allUserText.includes('vaga na agenda');
+    const isAppointmentReq = allUserText.includes('agendar visita') || allUserText.includes('marcar visita') || allUserText.includes('horário livre') || allUserText.includes('horario livre') || allUserText.includes('vaga na agenda') || allUserText.includes('outro dia') || allUserText.includes('outra data') || allUserText.includes('outro sábado') || allUserText.includes('outro sabado') || allUserText.includes('mais pra frente') || allUserText.includes('mais para frente');
     const isSchedulingTenant = (aiConfig as any).objetivo_funil === 'agendamento' || (!(aiConfig as any).objetivo_funil && !String(tenant.nome_empresa).toLowerCase().includes('velas') && (aiConfig as any).tipo_negocio !== 'produtos');
     const needsSlots = isSchedulingTenant && (isClearlyNew || isClearlyMaintenance || isAppointmentReq) && !isCancel && !bookingReq && !isConsultar;
 
@@ -1283,7 +1474,7 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
             type: 'function',
             function: {
               name: 'get_available_calendar_slots',
-              arguments: JSON.stringify({})
+              arguments: JSON.stringify(slotsResult.resolvedArgs || {})
             }
           }]
         });
@@ -1345,17 +1536,22 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
               } else if (fnName === 'get_available_calendar_slots') {
                 toolResult = await this.executeGetSlotsTool({
                   tenantId,
-                  historyMessages,
+                  historyMessages: [...historyMessages, { role: 'user', content: userMessage }],
                   args: fnArgs
                 });
               } else if (fnName === 'check_specific_slot_availability') {
-                toolResult = await this.executeCheckSlotTool({ ...fnArgs, tenantId });
+                toolResult = await this.executeCheckSlotTool({
+                  ...fnArgs,
+                  tenantId,
+                  historyMessages: [...historyMessages, { role: 'user', content: userMessage }]
+                });
               } else if (fnName === 'book_appointment') {
                 toolResult = await this.executeBookAppointmentTool({
                   tenantId,
                   sessionId,
                   remoteJid,
                   pushName,
+                  historyMessages: [...historyMessages, { role: 'user', content: userMessage }],
                   args: fnArgs
                 });
               } else if (fnName === 'save_client_details') {
