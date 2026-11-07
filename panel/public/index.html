@@ -3437,11 +3437,24 @@
           document.getElementById('tenantPlanBadge').textContent = (meRes.data.tenant?.plano || 'PRO').toUpperCase();
           document.getElementById('userProfileName').textContent = currentUserProfile?.nome || 'Usuário';
 
-          // Badge de cargo
+          // Badge de cargo e SuperAdmin
           const role = currentUserProfile?.role || 'atendente';
+          const isSuper = Boolean(currentUserProfile?.isSuperAdmin || currentUserProfile?.is_super_admin);
           const roleBadge = document.getElementById('userProfileRoleBadge');
-          roleBadge.textContent = role === 'admin' ? 'Administrador' : role === 'supervisor' ? 'Supervisor' : 'Atendente';
-          roleBadge.className = role === 'admin' ? 'text-xs font-semibold px-2.5 py-0.5 rounded-md inline-block bg-purple-500/10 text-purple-400 border border-purple-500/20' : role === 'supervisor' ? 'text-xs font-semibold px-2.5 py-0.5 rounded-md inline-block bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-xs font-semibold px-2.5 py-0.5 rounded-md inline-block bg-slate-800 text-slate-300 border border-slate-700';
+
+          if (isSuper) {
+            roleBadge.textContent = 'SuperAdmin (Dono)';
+            roleBadge.className = 'text-xs font-semibold px-2.5 py-0.5 rounded-md inline-block bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-sm shadow-purple-500/10 cursor-pointer';
+            roleBadge.title = 'Clique para abrir o Painel do Dono';
+            roleBadge.onclick = () => switchTab('superadmin');
+            document.getElementById('tabBtn-superadmin')?.classList.remove('hidden');
+          } else {
+            roleBadge.textContent = role === 'admin' ? 'Administrador' : role === 'supervisor' ? 'Supervisor' : 'Atendente';
+            roleBadge.className = role === 'admin' ? 'text-xs font-semibold px-2.5 py-0.5 rounded-md inline-block bg-purple-500/10 text-purple-400 border border-purple-500/20' : role === 'supervisor' ? 'text-xs font-semibold px-2.5 py-0.5 rounded-md inline-block bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-xs font-semibold px-2.5 py-0.5 rounded-md inline-block bg-slate-800 text-slate-300 border border-slate-700';
+            roleBadge.onclick = null;
+            roleBadge.title = '';
+            document.getElementById('tabBtn-superadmin')?.classList.add('hidden');
+          }
 
           // CONTROLE RBAC: Se for atendente, oculta abas restritas
           if (role === 'atendente') {
@@ -3455,9 +3468,13 @@
           }
         }
 
-        switchTab('crm');
-        await loadLeads();
-        loadAtendimentos().catch(() => {});
+        if (window.location.hash === '#superadmin' && (currentUserProfile?.isSuperAdmin || currentUserProfile?.is_super_admin)) {
+          switchTab('superadmin');
+        } else {
+          switchTab('crm');
+          await loadLeads();
+          loadAtendimentos().catch(() => {});
+        }
 
         if (currentUserProfile?.role !== 'atendente') {
           await checkWhatsAppStatus();
@@ -3473,15 +3490,24 @@
     // Navegação entre Abas
     function switchTab(tab) {
       document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('border-brand-500', 'text-brand-400');
-        btn.classList.add('border-transparent', 'text-slate-400');
+        btn.classList.remove('border-brand-500', 'text-brand-400', 'border-purple-500', 'text-purple-300');
+        if (btn.id === 'tabBtn-superadmin') {
+          btn.classList.add('border-transparent', 'text-purple-400');
+        } else {
+          btn.classList.add('border-transparent', 'text-slate-400');
+        }
       });
       document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
 
       const activeBtn = document.getElementById(`tabBtn-${tab}`);
       if (activeBtn) {
-        activeBtn.classList.add('border-brand-500', 'text-brand-400');
-        activeBtn.classList.remove('border-transparent', 'text-slate-400');
+        if (tab === 'superadmin') {
+          activeBtn.classList.remove('border-transparent', 'text-purple-400');
+          activeBtn.classList.add('border-purple-500', 'text-purple-300');
+        } else {
+          activeBtn.classList.remove('border-transparent', 'text-slate-400');
+          activeBtn.classList.add('border-brand-500', 'text-brand-400');
+        }
       }
       document.getElementById(`tab-${tab}`)?.classList.remove('hidden');
 
@@ -3491,6 +3517,8 @@
       if (tab === 'team') loadTeamUsers();
       if (tab === 'ai') loadAiConfig();
       if (tab === 'whatsapp') checkWhatsAppStatus();
+      if (tab === 'billing') loadBillingInfo();
+      if (tab === 'superadmin') loadSuperAdminData();
     }
 
     // Alternar Visualização CRM: Kanban vs Tabela
