@@ -111,20 +111,22 @@ export class AuthService {
       const initialNicho = isVelas ? 'Velas Artesanais & Aromatizadores' : (isCftv ? 'Segurança Eletrônica & CFTV' : 'Comércio e Atendimento');
       const initialTipo = isVelas ? 'produtos' : 'servicos';
       const initialObjetivo = isVelas ? 'venda_produtos' : 'agendamento';
+      const initialTaxa = isCftv ? 140.00 : null;
 
       await client.query(
         `INSERT INTO tenant_ai_configs (
-           tenant_id, tom_de_voz, sobre_empresa, servicos_oferecidos, servicos_recusados, regras_agendamento, pausa_automatica_minutos,
-           nicho_atuacao, tipo_negocio, objetivo_funil
-         ) VALUES ($1, $2, $3, $4::jsonb, $5, $6::jsonb, 45, $7, $8, $9)
+           tenant_id, nome_assistente, responsavel_tecnico, regiao_atendimento, taxa_manutencao_reais,
+           tom_de_voz, sobre_empresa, servicos_oferecidos, servicos_recusados, regras_agendamento, pausa_automatica_minutos,
+           nicho_atuacao, tipo_negocio, objetivo_funil, tempo_resposta_segundos
+         ) VALUES ($1, 'Nat', $2, 'Atendimento em toda a região', $3, 'profissional_humanizado', $4, $5::jsonb, null, $6::jsonb, 45, $7, $8, $9, 3)
          ON CONFLICT (tenant_id) DO NOTHING;`,
         [
           tenant.id,
-          'profissional_humanizado',
+          nome.trim(),
+          initialTaxa,
           sobre_empresa,
           JSON.stringify([]),
-          null,
-          JSON.stringify({ dias: ['segunda', 'terca', 'quarta', 'quinta', 'sexta'], horario_inicio: '08:00', horario_fim: '18:00' }),
+          JSON.stringify({ dias: ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'], horario_inicio: '08:00', horario_fim: '18:00', slots_agendamento: ['08:00', '10:00', '14:00', '16:00'] }),
           initialNicho,
           initialTipo,
           initialObjetivo

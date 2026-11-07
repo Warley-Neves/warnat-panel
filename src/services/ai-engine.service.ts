@@ -1408,26 +1408,30 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
       (modoRespostaAudio === 'quando_receber_audio' && hasAudioInput)
     );
 
+    const tempoRespostaSeg = Math.max(0, parseInt((aiConfig as any)?.tempo_resposta_segundos !== undefined ? (aiConfig as any).tempo_resposta_segundos : 3, 10));
+    const delayMs = tempoRespostaSeg * 1000;
+
     let sendRes: any;
     let sentMediaType = 'text';
 
     if (shouldSendAudio) {
-      console.log(`🎙️ [AIEngine] Gerando áudio humanizado (Voz: ${(aiConfig as any).voz_ia || 'nova'}) para ${remoteJid}...`);
+      console.log(`🎙️ [AIEngine] Gerando áudio humanizado (Voz: ${(aiConfig as any).voz_ia || 'nova'}) para ${remoteJid} (delay: ${tempoRespostaSeg}s)...`);
       try {
         await evolutionService.sendPresence(instanceName, remoteJid, 'recording');
         const speech = await ttsService.generateSpeech(finalAssistantText, {
           voice: (aiConfig as any).voz_ia || 'nova'
         });
-        sendRes = await evolutionService.sendWhatsAppAudio(instanceName, remoteJid, speech.base64);
+        sendRes = await evolutionService.sendWhatsAppAudio(instanceName, remoteJid, speech.base64, { delay: delayMs });
         sentMediaType = 'audio';
       } catch (audioErr: any) {
         console.warn(`⚠️ [AIEngine] Falha ao sintetizar áudio TTS (${audioErr.message}). Fallback para texto.`);
-        sendRes = await evolutionService.sendTextMessage(instanceName, remoteJid, finalAssistantText);
+        sendRes = await evolutionService.sendTextMessage(instanceName, remoteJid, finalAssistantText, { delay: delayMs });
         sentMediaType = 'text';
       }
     } else {
-      console.log(`📤 [AIEngine] Enviando resposta humanizada em texto para ${remoteJid}...`);
-      sendRes = await evolutionService.sendTextMessage(instanceName, remoteJid, finalAssistantText);
+      console.log(`📤 [AIEngine] Enviando resposta humanizada em texto para ${remoteJid} (delay: ${tempoRespostaSeg}s)...`);
+      await evolutionService.sendPresence(instanceName, remoteJid, 'composing');
+      sendRes = await evolutionService.sendTextMessage(instanceName, remoteJid, finalAssistantText, { delay: delayMs });
       sentMediaType = 'text';
     }
 

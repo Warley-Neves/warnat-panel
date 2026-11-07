@@ -235,8 +235,32 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     if (pathname === '/api/v2/tenant/ai-config' && method === 'GET') {
-      const configRes = await query(`SELECT * FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
+      let configRes = await query(`SELECT * FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
       const tenantRes = await query(`SELECT nome_empresa, plano FROM tenants WHERE id = $1`, [tenantId]);
+
+      if (configRes.rowCount === 0) {
+        const empNome = tenantRes.rows[0]?.nome_empresa || 'Nossa Empresa';
+        const empLower = empNome.toLowerCase();
+        const isVelas = empLower.includes('vela') || empLower.includes('aroma');
+        const isCftv = empLower.includes('cftv') || empLower.includes('camera') || empLower.includes('câmera');
+
+        await query(`
+          INSERT INTO tenant_ai_configs (
+            tenant_id, nome_assistente, responsavel_tecnico, sobre_empresa,
+            nicho_atuacao, tipo_negocio, objetivo_funil, tempo_resposta_segundos,
+            tom_de_voz, servicos_oferecidos, regras_agendamento
+          ) VALUES ($1, 'Nat', 'Responsável', $2, $3, $4, $5, 3, 'profissional_humanizado', '[]'::jsonb,
+            '{"dias":["segunda","terca","quarta","quinta","sexta","sabado"],"horario_inicio":"08:00","horario_fim":"18:00","slots_agendamento":["08:00","10:00","14:00","16:00"]}'::jsonb
+          ) ON CONFLICT (tenant_id) DO NOTHING;
+        `, [
+          tenantId,
+          `${empNome}: Atendimento e vendas pelo WhatsApp.`,
+          isVelas ? 'Velas Artesanais & Aromatizadores' : (isCftv ? 'Segurança Eletrônica & CFTV' : 'Comércio e Atendimento'),
+          isVelas ? 'produtos' : 'servicos',
+          isVelas ? 'venda_produtos' : 'agendamento'
+        ]);
+        configRes = await query(`SELECT * FROM tenant_ai_configs WHERE tenant_id = $1`, [tenantId]);
+      }
 
       return sendJson(200, {
         success: true,
@@ -273,8 +297,17 @@ async function handleV2Routes(req, res, pathname, method, body) {
         objetivo_funil,
         pergunta_inicial_qualificacao,
         diretrizes_funil,
-        politicas_comerciais
+        politicas_comerciais,
+        tempo_resposta_segundos
       } = body;
+
+      const taxaManutencaoVal = (taxa_manutencao_reais !== undefined && taxa_manutencao_reais !== null && taxa_manutencao_reais !== '')
+        ? Number(taxa_manutencao_reais)
+        : null;
+
+      const tempoRespostaVal = (tempo_resposta_segundos !== undefined && tempo_resposta_segundos !== null)
+        ? Math.max(0, parseInt(tempo_resposta_segundos, 10) || 0)
+        : 3;
 
       await query(
         `INSERT INTO tenant_ai_configs (
@@ -302,15 +335,16 @@ async function handleV2Routes(req, res, pathname, method, body) {
            pergunta_inicial_qualificacao,
            diretrizes_funil,
            politicas_comerciais,
+           tempo_resposta_segundos,
            updated_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, now())
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, now())
          ON CONFLICT (tenant_id)
          DO UPDATE SET
            modo_atendimento = COALESCE(EXCLUDED.modo_atendimento, tenant_ai_configs.modo_atendimento),
            nome_assistente = COALESCE(EXCLUDED.nome_assistente, tenant_ai_configs.nome_assistente),
            responsavel_tecnico = COALESCE(EXCLUDED.responsavel_tecnico, tenant_ai_configs.responsavel_tecnico),
            regiao_atendimento = COALESCE(EXCLUDED.regiao_atendimento, tenant_ai_configs.regiao_atendimento),
-           taxa_manutencao_reais = COALESCE(EXCLUDED.taxa_manutencao_reais, tenant_ai_configs.taxa_manutencao_reais),
+           taxa_manutencao_reais = EXCLUDED.taxa_manutencao_reais,
            tom_de_voz = EXCLUDED.tom_de_voz,
            sobre_empresa = EXCLUDED.sobre_empresa,
            servicos_oferecidos = EXCLUDED.servicos_oferecidos,
@@ -329,14 +363,15 @@ async function handleV2Routes(req, res, pathname, method, body) {
            pergunta_inicial_qualificacao = COALESCE(EXCLUDED.pergunta_inicial_qualificacao, tenant_ai_configs.pergunta_inicial_qualificacao),
            diretrizes_funil = COALESCE(EXCLUDED.diretrizes_funil, tenant_ai_configs.diretrizes_funil),
            politicas_comerciais = COALESCE(EXCLUDED.politicas_comerciais, tenant_ai_configs.politicas_comerciais),
+           tempo_resposta_segundos = COALESCE(EXCLUDED.tempo_resposta_segundos, tenant_ai_configs.tempo_resposta_segundos),
            updated_at = now()`,
         [
           tenantId,
           modo_atendimento || 'automacao',
-          nome_assistente || 'Natália',
+          nome_assistente || 'Nat',
           responsavel_tecnico || 'Warley Santos',
           regiao_atendimento || 'Belo Horizonte, Barreiro e Grande BH',
-          Number(taxa_manutencao_reais) || 140.00,
+          taxaManutencaoVal,
           tom_de_voz || 'profissional_humanizado',
           sobre_empresa || '',
           JSON.stringify(Array.isArray(servicos_oferecidos) ? servicos_oferecidos : []),
@@ -354,7 +389,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
           objetivo_funil || 'agendamento',
           pergunta_inicial_qualificacao || null,
           diretrizes_funil || null,
-          politicas_comerciais || null
+          politicas_comerciais || null,
+          tempoRespostaVal
         ]
       );
 

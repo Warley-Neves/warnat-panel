@@ -851,6 +851,13 @@
               <input type="number" id="aiPausaMinutos" min="5" max="1440" required class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="45">
             </div>
 
+            <!-- TEMPO DE RESPOSTA DA AUTOMAÇÃO (SEGUNDOS) -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Tempo de Resposta da Automação (Segundos)</label>
+              <input type="number" id="aiTempoResposta" min="0" max="120" value="3" required class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="Ex: 3">
+              <p class="text-xs text-slate-500 mt-1">Tempo que a IA aguarda antes de enviar a resposta (simula digitação humana natural no WhatsApp).</p>
+            </div>
+
             <!-- WHATSAPP NOTIFICAÇÃO HUMANA -->
             <div class="md:col-span-2">
               <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">WhatsApp para Alerta de Novo Lead (com DDI + DDD)</label>
@@ -971,6 +978,13 @@
             <div>
               <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Serviços Fora de Escopo / Recusados</label>
               <textarea id="aiServicosRecusados" rows="4" placeholder="Pintura, alarmes automotivos, cerca elétrica..." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+            </div>
+
+            <!-- INSTRUÇÕES ADICIONAIS & REGRAS ESPECÍFICAS DA EMPRESA -->
+            <div class="md:col-span-2">
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Instruções Adicionais & Regras Específicas da Empresa (Opcional)</label>
+              <textarea id="aiInstrucoesPersonalizadas" rows="3" placeholder="Ex: Sempre pergunte o nome do cliente antes de enviar a lista de valores. Se perguntarem por pronta entrega, informar que despachamos em até 24h úteis." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+              <p class="text-xs text-slate-500 mt-1">Regras livres exclusivas do seu negócio que a assistente Nat seguirá em todas as conversas.</p>
             </div>
           </div>
 
@@ -3282,8 +3296,10 @@
 
           document.getElementById('aiTomDeVoz').value = c.tom_de_voz || 'profissional_humanizado';
           document.getElementById('aiPausaMinutos').value = c.pausa_automatica_minutos || 45;
+          document.getElementById('aiTempoResposta').value = c.tempo_resposta_segundos !== undefined ? c.tempo_resposta_segundos : 3;
           document.getElementById('aiWhatsappNotificacao').value = c.whatsapp_notificacao_humana || '';
           document.getElementById('aiSobreEmpresa').value = c.sobre_empresa || '';
+          if (c.instrucoes_personalizadas !== undefined) document.getElementById('aiInstrucoesPersonalizadas').value = c.instrucoes_personalizadas || '';
           
           if (c.responder_com_audio) document.getElementById('aiResponderComAudio').value = c.responder_com_audio;
           if (c.voz_ia) document.getElementById('aiVozIa').value = c.voz_ia;
@@ -3349,8 +3365,10 @@
         taxa_manutencao_reais: document.getElementById('aiTaxaManutencao').value !== '' ? (parseFloat(document.getElementById('aiTaxaManutencao').value) || 0) : null,
         tom_de_voz: document.getElementById('aiTomDeVoz').value,
         pausa_automatica_minutos: parseInt(document.getElementById('aiPausaMinutos').value, 10) || 45,
+        tempo_resposta_segundos: Math.max(0, parseInt(document.getElementById('aiTempoResposta').value, 10) || 0),
         whatsapp_notificacao_humana: document.getElementById('aiWhatsappNotificacao').value.trim(),
         sobre_empresa: document.getElementById('aiSobreEmpresa').value.trim(),
+        instrucoes_personalizadas: document.getElementById('aiInstrucoesPersonalizadas').value.trim(),
         responder_com_audio: document.getElementById('aiResponderComAudio').value,
         voz_ia: document.getElementById('aiVozIa').value,
         atender_chamadas: document.getElementById('aiAtenderChamadas').checked,

@@ -101,6 +101,7 @@ ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS objetivo_funil VARCHAR(10
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS pergunta_inicial_qualificacao TEXT;
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS diretrizes_funil TEXT;
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS politicas_comerciais TEXT;
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS tempo_resposta_segundos INT DEFAULT 3;
 
 -- ------------------------------------------------------------------------------
 -- 5. Dossiê Permanente do Cliente Final (Memória de Longo Prazo)
