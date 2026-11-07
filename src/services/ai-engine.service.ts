@@ -1264,8 +1264,8 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
         await query(
           `UPDATE appointments 
            SET data_agendada = $1, tipo_agendamento = $2, endereco = COALESCE($3, endereco), observacoes = $4
-           WHERE id = $5;`,
-          [apptDate, appointmentType, address, notes, existing.id]
+           WHERE id = $5 AND tenant_id = $6;`,
+          [apptDate, appointmentType, address, notes, existing.id, tenantId]
         );
         apptId = existing.id;
         isReschedule = true;
@@ -1284,8 +1284,8 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
     await query(
       `UPDATE chat_sessions 
        SET etapa_funil = 'agendado', client_name = COALESCE($1, client_name), last_interaction = now()
-       WHERE id = $2;`,
-      [finalClientName, sessionId]
+       WHERE id = $2 AND tenant_id = $3;`,
+      [finalClientName, sessionId, tenantId]
     );
 
     return {
@@ -1342,8 +1342,8 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
 
     if (clientName) {
       await query(
-        `UPDATE chat_sessions SET client_name = $1, last_interaction = now() WHERE id = $2;`,
-        [clientName.trim(), sessionId]
+        `UPDATE chat_sessions SET client_name = $1, last_interaction = now() WHERE id = $2 AND tenant_id = $3;`,
+        [clientName.trim(), sessionId, tenantId]
       );
     }
 
@@ -1375,8 +1375,8 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
     );
 
     await query(
-      `UPDATE chat_sessions SET etapa_funil = 'qualificacao', last_interaction = now() WHERE id = $1;`,
-      [sessionId]
+      `UPDATE chat_sessions SET etapa_funil = 'qualificacao', last_interaction = now() WHERE id = $1 AND tenant_id = $2;`,
+      [sessionId, tenantId]
     );
 
     const nextSlotsResult = await this.executeGetSlotsTool({
@@ -1516,8 +1516,8 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
     };
 
     const sessionRes = await query<ChatSession>(
-      `SELECT * FROM chat_sessions WHERE id = $1;`,
-      [sessionId]
+      `SELECT * FROM chat_sessions WHERE id = $1 AND tenant_id = $2;`,
+      [sessionId, tenantId]
     );
     const session = sessionRes.rows[0] || {
       id: sessionId,
@@ -1872,7 +1872,7 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
         [sessionId, tenantId, finalAssistantText.trim(), sentMediaType, sendRes.messageId]
       );
 
-      await query(`UPDATE chat_sessions SET last_interaction = NOW() WHERE id = $1;`, [sessionId]);
+      await query(`UPDATE chat_sessions SET last_interaction = NOW() WHERE id = $1 AND tenant_id = $2;`, [sessionId, tenantId]);
     }
 
     return {

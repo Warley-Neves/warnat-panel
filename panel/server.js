@@ -154,10 +154,14 @@ const server = http.createServer(async (req, res) => {
   const pathname = parsedUrl.pathname;
   const method = req.method;
 
-  // CORS
+  // CORS & Security Headers (OWASP)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-token, apikey');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
 
   if (method === 'OPTIONS') {
     res.writeHead(200);
@@ -925,20 +929,25 @@ const server = http.createServer(async (req, res) => {
 
       const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
-      // 1. Criar Conta isolada no Chatwoot
+      // 1. Criar Conta isolada no Chatwoot (com escape seguro de parâmetros)
+      const rubySafeName = JSON.stringify(String(name).replace(/["\\]/g, ''));
+      const rubySafeAgentName = JSON.stringify(String(agentName || name).replace(/["\\]/g, ''));
+      const rubySafeEmail = JSON.stringify(String(agentEmail || '').trim().replace(/["\\]/g, ''));
+      const rubySafePass = JSON.stringify(String(agentPassword || '').replace(/["\\]/g, ''));
+
       const rubyCreateAccount = `
-        account = Account.create!(name: "${name.replace(/"/g, '')}")
+        account = Account.create!(name: ${rubySafeName})
         admin = User.first
         AccountUser.find_or_create_by!(account: account, user: admin, role: :administrator)
         
         agent_data = nil
-        if "${agentEmail || ''}".present? && "${agentPassword || ''}".present?
-          agent = User.find_by(email: "${agentEmail}")
+        if (${rubySafeEmail}).present? && (${rubySafePass}).present?
+          agent = User.find_by(email: ${rubySafeEmail})
           if agent.nil?
             agent = User.create!(
-              email: "${agentEmail}",
-              name: "${(agentName || name).replace(/"/g, '')}",
-              password: "${agentPassword}",
+              email: ${rubySafeEmail},
+              name: ${rubySafeAgentName},
+              password: ${rubySafePass},
               confirmed_at: Time.current
             )
           end
@@ -1131,21 +1140,27 @@ const server = http.createServer(async (req, res) => {
     }
 
     // --------------------------------------------------------------------------
-    // Servir Arquivos Estáticos (Front-End do Painel)
+    // Servir Arquivos Estáticos (Front-End do Painel com Proteção Path Traversal)
     // --------------------------------------------------------------------------
-    let filePath = path.join(__dirname, 'public', pathname === '/' ? 'index.html' : pathname);
-    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      const ext = path.extname(filePath).toLowerCase();
-      const mimeTypes = {
-        '.html': 'text/html; charset=utf-8',
-        '.css': 'text/css',
-        '.js': 'application/javascript',
-        '.png': 'image/png',
-        '.svg': 'image/svg+xml',
-        '.json': 'application/json'
-      };
-      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain' });
-      return fs.createReadStream(filePath).pipe(res);
+    const publicDir = path.resolve(__dirname, 'public');
+    const safePath = path.normalize(pathname === '/' ? '/index.html' : pathname).replace(/^(\.\.[\/\\])+/, '');
+    const filePath = path.resolve(publicDir, '.' + safePath);
+
+    if (filePath.startsWith(publicDir + path.sep) || filePath === path.join(publicDir, 'index.html')) {
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeTypes = {
+          '.html': 'text/html; charset=utf-8',
+          '.css': 'text/css; charset=utf-8',
+          '.js': 'application/javascript; charset=utf-8',
+          '.png': 'image/png',
+          '.svg': 'image/svg+xml',
+          '.json': 'application/json; charset=utf-8',
+          '.ico': 'image/x-icon'
+        };
+        res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'text/plain; charset=utf-8' });
+        return fs.createReadStream(filePath).pipe(res);
+      }
     }
 
     // 404

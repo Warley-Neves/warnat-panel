@@ -1976,6 +1976,29 @@
   <!-- ============================================================================ -->
   <script>
     let currentToken = localStorage.getItem('warnat_saas_token');
+
+    // --------------------------------------------------------------------------
+    // UTILITÁRIOS DE SEGURANÇA CONTRA XSS (DEFENSIVE SANITIZATION)
+    // --------------------------------------------------------------------------
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeJsArg(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '');
+    }
     let qrPollingInterval = null;
     let currentUserProfile = null;
     let allLeadsCache = [];
@@ -2378,7 +2401,7 @@
             <div class="bg-dark-800 border border-slate-700/80 rounded-xl p-3.5 space-y-2.5 shadow-md hover:border-slate-600 transition">
               <div class="flex items-start justify-between">
                 <div>
-                  <h5 class="font-bold text-white text-xs leading-tight">${lead.client_name}</h5>
+                  <h5 class="font-bold text-white text-xs leading-tight">${escapeHtml(lead.client_name)}</h5>
                   <p class="text-[11px] text-slate-400 font-mono mt-0.5">+${phone}</p>
                 </div>
                 <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${urgClass}">
@@ -2387,8 +2410,8 @@
               </div>
 
               <div class="text-xs text-slate-300">
-                <p class="truncate"><span class="text-slate-500">Serviço:</span> ${dados.servico || '<span class="text-slate-500 italic">Em sondagem</span>'}</p>
-                ${dados.bairro_cidade ? `<p class="text-[11px] text-slate-400 truncate mt-0.5"><span class="text-slate-500">Local:</span> ${dados.bairro_cidade}</p>` : ''}
+                <p class="truncate"><span class="text-slate-500">Serviço:</span> ${dados.servico ? escapeHtml(dados.servico) : '<span class="text-slate-500 italic">Em sondagem</span>'}</p>
+                ${dados.bairro_cidade ? `<p class="text-[11px] text-slate-400 truncate mt-0.5"><span class="text-slate-500">Local:</span> ${escapeHtml(dados.bairro_cidade)}</p>` : ''}
               </div>
 
               <!-- STATUS IA / MANUAL -->
@@ -2409,7 +2432,7 @@
 
               <!-- BOTÕES DE AÇÃO DO CARD -->
               <div class="flex items-center space-x-1.5 pt-1">
-                <button onclick="openChatModal('${lead.id}', '${lead.client_name}', '${phone}', '${lead.remote_jid}', ${isManual})" class="flex-1 bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border border-brand-500/30 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition">
+                <button onclick="openChatModal('${escapeJsArg(lead.id)}', '${escapeJsArg(lead.client_name)}', '${escapeJsArg(phone)}', '${escapeJsArg(lead.remote_jid)}', ${isManual})" class="flex-1 bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border border-brand-500/30 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1 transition">
                   <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
                   <span>Abrir Chat</span>
                 </button>
@@ -2417,7 +2440,7 @@
                   <i data-lucide="${isManual ? 'bot' : 'user-check'}" class="w-3.5 h-3.5"></i>
                   <span>${isManual ? 'Ativar IA' : 'Manual'}</span>
                 </button>
-                <button onclick="openDossierModal('${lead.remote_jid}', '${lead.client_name}', '${phone}')" title="Dossiê do Cliente" class="p-1.5 rounded-lg border border-slate-700 hover:bg-dark-700 text-slate-400 hover:text-brand-400">
+                <button onclick="openDossierModal('${escapeJsArg(lead.remote_jid)}', '${escapeJsArg(lead.client_name)}', '${escapeJsArg(phone)}')" title="Dossiê do Cliente" class="p-1.5 rounded-lg border border-slate-700 hover:bg-dark-700 text-slate-400 hover:text-brand-400">
                   <i data-lucide="brain" class="w-3.5 h-3.5"></i>
                 </button>
               </div>
@@ -2439,14 +2462,14 @@
           return `
             <tr class="hover:bg-dark-800/50 transition">
               <td class="px-6 py-4">
-                <div class="font-medium text-white">${lead.client_name}</div>
+                <div class="font-medium text-white">${escapeHtml(lead.client_name)}</div>
                 <div class="text-xs text-slate-400 font-mono">+${phone}</div>
               </td>
               <td class="px-6 py-4">
-                <span class="text-slate-200">${dados.servico || '<span class="text-slate-500 italic">Em sondagem</span>'}</span>
+                <span class="text-slate-200">${dados.servico ? escapeHtml(dados.servico) : '<span class="text-slate-500 italic">Em sondagem</span>'}</span>
               </td>
               <td class="px-6 py-4">
-                <span class="text-slate-300">${dados.bairro_cidade || '<span class="text-slate-500 italic">Não informado</span>'}</span>
+                <span class="text-slate-300">${dados.bairro_cidade ? escapeHtml(dados.bairro_cidade) : '<span class="text-slate-500 italic">Não informado</span>'}</span>
               </td>
               <td class="px-6 py-4">
                 <button onclick="toggleAi('${lead.id}', '${isManual ? 'automacao' : 'manual'}')" class="inline-flex items-center space-x-1.5 text-xs ${isManual ? 'text-amber-400 bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20'} border px-2.5 py-1 rounded-full transition cursor-pointer">
@@ -2464,7 +2487,7 @@
                 </select>
               </td>
               <td class="px-6 py-4 text-right space-x-2">
-                <button onclick="openChatModal('${lead.id}', '${lead.client_name}', '${phone}', '${lead.remote_jid}', ${isManual})" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white transition inline-flex items-center space-x-1">
+                <button onclick="openChatModal('${escapeJsArg(lead.id)}', '${escapeJsArg(lead.client_name)}', '${escapeJsArg(phone)}', '${escapeJsArg(lead.remote_jid)}', ${isManual})" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white transition inline-flex items-center space-x-1">
                   <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
                   <span>Chat</span>
                 </button>
@@ -2472,7 +2495,7 @@
                   <i data-lucide="${isManual ? 'bot' : 'user-check'}" class="w-3.5 h-3.5"></i>
                   <span>${isManual ? 'Passar p/ IA' : 'Atender Manual'}</span>
                 </button>
-                <button onclick="openDossierModal('${lead.remote_jid}', '${lead.client_name}', '${phone}')" class="p-1.5 text-slate-400 hover:text-brand-400 rounded-lg hover:bg-dark-700 transition" title="Dossiê">
+                <button onclick="openDossierModal('${escapeJsArg(lead.remote_jid)}', '${escapeJsArg(lead.client_name)}', '${escapeJsArg(phone)}')" class="p-1.5 text-slate-400 hover:text-brand-400 rounded-lg hover:bg-dark-700 transition" title="Dossiê">
                   <i data-lucide="brain" class="w-4 h-4"></i>
                 </button>
               </td>
@@ -2621,7 +2644,7 @@
                   <span>${isUser ? 'Cliente' : 'Atendente / IA (Nat)'}</span>
                 </div>
                 ${mediaBadge}
-                <div class="whitespace-pre-wrap leading-relaxed">${m.content}</div>
+                <div class="whitespace-pre-wrap leading-relaxed">${escapeHtml(m.content)}</div>
                 ${audioPlayer}
                 <div class="text-[9px] text-right mt-1.5 opacity-60">${new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
@@ -2917,7 +2940,7 @@
                   ${(lead.client_name || 'C').charAt(0).toUpperCase()}
                 </div>
                 <div class="min-w-0">
-                  <h5 class="text-xs font-bold text-white truncate">${lead.client_name}</h5>
+                  <h5 class="text-xs font-bold text-white truncate">${escapeHtml(lead.client_name)}</h5>
                   <p class="text-[11px] text-slate-400 font-mono">+${phone}</p>
                 </div>
               </div>
@@ -2961,7 +2984,7 @@
               </div>
 
               <div class="flex items-center space-x-1" onclick="event.stopPropagation()">
-                <button onclick="handleQuickCallCustomer('${lead.id}', '${lead.remote_jid}', '${phone}', '${lead.client_name}', event)" class="px-2 py-1 rounded-lg text-[10px] font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1 transition" title="Ligar / Atender chamada">
+                <button onclick="handleQuickCallCustomer('${escapeJsArg(lead.id)}', '${escapeJsArg(lead.remote_jid)}', '${escapeJsArg(phone)}', '${escapeJsArg(lead.client_name)}', event)" class="px-2 py-1 rounded-lg text-[10px] font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1 transition" title="Ligar / Atender chamada">
                   <i data-lucide="phone" class="w-3 h-3"></i>
                   <span>Ligar</span>
                 </button>
@@ -3074,7 +3097,7 @@
                   <span>${isUser ? 'Cliente' : 'Atendente / IA (Nat)'}</span>
                 </div>
                 ${mediaBadge}
-                <div class="whitespace-pre-wrap leading-relaxed">${m.content}</div>
+                <div class="whitespace-pre-wrap leading-relaxed">${escapeHtml(m.content)}</div>
                 ${audioPlayer}
                 <div class="text-[9px] text-right mt-1.5 opacity-60">${new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
@@ -3739,15 +3762,15 @@
 
               <div>
                 <div class="flex items-center space-x-2">
-                  <h6 class="text-sm font-bold text-white">${a.client_name}</h6>
+                  <h6 class="text-sm font-bold text-white">${escapeHtml(a.client_name)}</h6>
                   <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${badgeClass}">
                     ${a.status}
                   </span>
                 </div>
-                <p class="text-xs text-slate-300 mt-0.5">${a.servico} <span class="text-slate-500">(${a.tipo_agendamento || 'Visita Técnica'})</span></p>
+                <p class="text-xs text-slate-300 mt-0.5">${escapeHtml(a.servico)} <span class="text-slate-500">(${escapeHtml(a.tipo_agendamento || 'Visita Técnica')})</span></p>
                 <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 mt-1 font-mono">
                   <span><i data-lucide="phone" class="w-3 h-3 inline mr-1 text-slate-500"></i>+${a.telefone || a.remote_jid.replace(/@.*$/, '')}</span>
-                  ${a.endereco_completo && a.endereco_completo !== 'A confirmar' ? `<span><i data-lucide="map-pin" class="w-3 h-3 inline mr-1 text-slate-500"></i>${a.endereco_completo}</span>` : ''}
+                  ${a.endereco_completo && a.endereco_completo !== 'A confirmar' ? `<span><i data-lucide="map-pin" class="w-3 h-3 inline mr-1 text-slate-500"></i>${escapeHtml(a.endereco_completo)}</span>` : ''}
                   ${parseFloat(a.valor_estimado) > 0 ? `<span class="text-emerald-400 font-bold">R$ ${parseFloat(a.valor_estimado).toFixed(2).replace('.', ',')}</span>` : '<span class="text-slate-400">Gratuito</span>'}
                 </div>
               </div>
@@ -3833,7 +3856,7 @@
             <tr class="hover:bg-dark-800/50 transition cursor-pointer" onclick="openAppointmentModal('${a.id}')">
               <td class="px-6 py-4 font-mono font-bold text-brand-400 text-xs whitespace-nowrap">${dateStr}</td>
               <td class="px-6 py-4">
-                <div class="font-medium text-white">${a.client_name}</div>
+                <div class="font-medium text-white">${escapeHtml(a.client_name)}</div>
                 <div class="text-xs text-slate-400 font-mono">+${a.telefone || a.remote_jid.replace(/@.*$/, '')}</div>
               </td>
               <td class="px-6 py-4 text-slate-200">

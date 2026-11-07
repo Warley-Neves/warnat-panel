@@ -681,8 +681,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
       await query(
         `UPDATE chat_sessions 
          SET status_atendimento = 'manual', paused_until = $1, etapa_funil = 'manual', atendente_id = $2, last_interaction = now()
-         WHERE id = $3`,
-        [farFuture, decodedUser.userId, sessionId]
+         WHERE id = $3 AND tenant_id = $4`,
+        [farFuture, decodedUser.userId, sessionId, tenantId]
       );
 
       return sendJson(200, {
@@ -1089,7 +1089,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
     if (pathname === '/api/v2/tenant/customers' && method === 'GET') {
       const custRes = await query(
         `SELECT c.id, c.tenant_id, c.remote_jid, c.nome, c.telefone, c.endereco_completo, c.perfil_resumo, c.metadados, c.created_at, c.updated_at,
-           (SELECT json_agg(a.* ORDER BY a.data_agendada DESC) FROM appointments a WHERE a.customer_id = c.id) as agendamentos
+           (SELECT json_agg(a.* ORDER BY a.data_agendada DESC) FROM appointments a WHERE a.customer_id = c.id AND a.tenant_id = c.tenant_id) as agendamentos
          FROM customer_profiles c
          WHERE c.tenant_id = $1
          ORDER BY c.updated_at DESC`,

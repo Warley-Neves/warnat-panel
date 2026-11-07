@@ -167,8 +167,8 @@ class WebhookController {
       } else {
         session = sessionRes.rows[0];
         await query(
-          `UPDATE chat_sessions SET last_interaction = now() WHERE id = $1`,
-          [session.id]
+          `UPDATE chat_sessions SET last_interaction = now() WHERE id = $1 AND tenant_id = $2`,
+          [session.id, tenantId]
         );
       }
 
@@ -359,8 +359,8 @@ class WebhookController {
       await query(
         `UPDATE chat_sessions 
          SET last_interaction = now(), client_name = COALESCE($1, client_name)
-         WHERE id = $2`,
-        [pushName || null, session.id]
+         WHERE id = $2 AND tenant_id = $3`,
+        [pushName || null, session.id, tenantId]
       );
     }
 
