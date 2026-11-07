@@ -258,13 +258,22 @@ class AuthService {
     );
     const user = userRes.rows[0];
 
-    // 3. Cria configuração de IA inicial padrão para o Tenant
+    // 3. Cria configuração de IA inicial padrão para o Tenant com nicho personalizado
+    const nomeLower = nome_empresa.toLowerCase();
+    const isVelas = nomeLower.includes('vela') || nomeLower.includes('aroma');
+    const isCftv = nomeLower.includes('cftv') || nomeLower.includes('camera') || nomeLower.includes('câmera') || nomeLower.includes('segurança');
+    
+    const initialNicho = isVelas ? 'Velas Artesanais & Aromatizadores' : (isCftv ? 'Segurança Eletrônica & CFTV' : 'Comércio e Atendimento');
+    const initialTipo = isVelas ? 'produtos' : 'servicos';
+    const initialObjetivo = isVelas ? 'venda_produtos' : 'agendamento';
+
     await query(
       `INSERT INTO tenant_ai_configs (
-         tenant_id, tom_de_voz, sobre_empresa, servicos_oferecidos, servicos_recusados, regras_agendamento, pausa_automatica_minutos
-       ) VALUES ($1, 'profissional_amigavel', $2, '[]'::jsonb, null, '{"dias":["segunda","terca","quarta","quinta","sexta"],"horario_inicio":"08:00","horario_fim":"18:00"}'::jsonb, 45)
+         tenant_id, tom_de_voz, sobre_empresa, servicos_oferecidos, servicos_recusados, regras_agendamento, pausa_automatica_minutos,
+         nicho_atuacao, tipo_negocio, objetivo_funil
+       ) VALUES ($1, 'profissional_humanizado', $2, '[]'::jsonb, null, '{"dias":["segunda","terca","quarta","quinta","sexta"],"horario_inicio":"08:00","horario_fim":"18:00"}'::jsonb, 45, $3, $4, $5)
        ON CONFLICT (tenant_id) DO NOTHING;`,
-      [tenant.id, sobre_empresa]
+      [tenant.id, sobre_empresa, initialNicho, initialTipo, initialObjetivo]
     );
 
     // 4. Cria Instância do WhatsApp no banco de dados para a nova Empresa

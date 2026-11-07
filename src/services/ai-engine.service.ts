@@ -1262,7 +1262,9 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
     const isClearlyNew = allUserText.includes('nova instala') || allUserText.includes('instalar do zero') || allUserText.includes('câmeras novas') || allUserText.includes('não tenho câmera') || allUserText.includes('nao tenho camera') || allUserText.includes('instalação nova') || allUserText.includes('projeto novo') || allUserText.includes('quero instalar');
     const isClearlyMaintenance = allUserText.includes('manuten') || allUserText.includes('consert') || allUserText.includes('repar') || allUserText.includes('parou de') || allUserText.includes('câmera queim') || allUserText.includes('arrumar') || allUserText.includes('já tenho câmera') || allUserText.includes('ja tenho');
 
-    const needsSlots = (isClearlyNew || isClearlyMaintenance) && !isCancel && !bookingReq && !isConsultar;
+    const isAppointmentReq = allUserText.includes('agendar visita') || allUserText.includes('marcar visita') || allUserText.includes('horário livre') || allUserText.includes('horario livre') || allUserText.includes('vaga na agenda');
+    const isSchedulingTenant = (aiConfig as any).objetivo_funil === 'agendamento' || (!(aiConfig as any).objetivo_funil && !String(tenant.nome_empresa).toLowerCase().includes('velas') && (aiConfig as any).tipo_negocio !== 'produtos');
+    const needsSlots = isSchedulingTenant && (isClearlyNew || isClearlyMaintenance || isAppointmentReq) && !isCancel && !bookingReq && !isConsultar;
 
     if (needsSlots) {
       console.log(`[AIEngine] Gatilho proativo: Cliente qualificado para horários. Consultando agenda em tempo real...`);

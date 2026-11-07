@@ -267,7 +267,13 @@ async function handleV2Routes(req, res, pathname, method, body) {
         atender_chamadas,
         mensagem_chamada,
         responder_com_audio,
-        voz_ia
+        voz_ia,
+        nicho_atuacao,
+        tipo_negocio,
+        objetivo_funil,
+        pergunta_inicial_qualificacao,
+        diretrizes_funil,
+        politicas_comerciais
       } = body;
 
       await query(
@@ -290,8 +296,14 @@ async function handleV2Routes(req, res, pathname, method, body) {
            mensagem_chamada,
            responder_com_audio,
            voz_ia,
+           nicho_atuacao,
+           tipo_negocio,
+           objetivo_funil,
+           pergunta_inicial_qualificacao,
+           diretrizes_funil,
+           politicas_comerciais,
            updated_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, now())
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, now())
          ON CONFLICT (tenant_id)
          DO UPDATE SET
            modo_atendimento = COALESCE(EXCLUDED.modo_atendimento, tenant_ai_configs.modo_atendimento),
@@ -311,6 +323,12 @@ async function handleV2Routes(req, res, pathname, method, body) {
            mensagem_chamada = COALESCE(EXCLUDED.mensagem_chamada, tenant_ai_configs.mensagem_chamada),
            responder_com_audio = COALESCE(EXCLUDED.responder_com_audio, tenant_ai_configs.responder_com_audio),
            voz_ia = COALESCE(EXCLUDED.voz_ia, tenant_ai_configs.voz_ia),
+           nicho_atuacao = COALESCE(EXCLUDED.nicho_atuacao, tenant_ai_configs.nicho_atuacao),
+           tipo_negocio = COALESCE(EXCLUDED.tipo_negocio, tenant_ai_configs.tipo_negocio),
+           objetivo_funil = COALESCE(EXCLUDED.objetivo_funil, tenant_ai_configs.objetivo_funil),
+           pergunta_inicial_qualificacao = COALESCE(EXCLUDED.pergunta_inicial_qualificacao, tenant_ai_configs.pergunta_inicial_qualificacao),
+           diretrizes_funil = COALESCE(EXCLUDED.diretrizes_funil, tenant_ai_configs.diretrizes_funil),
+           politicas_comerciais = COALESCE(EXCLUDED.politicas_comerciais, tenant_ai_configs.politicas_comerciais),
            updated_at = now()`,
         [
           tenantId,
@@ -330,7 +348,13 @@ async function handleV2Routes(req, res, pathname, method, body) {
           atender_chamadas !== undefined ? !!atender_chamadas : true,
           mensagem_chamada || null,
           responder_com_audio || 'quando_receber_audio',
-          voz_ia || 'nova'
+          voz_ia || 'nova',
+          nicho_atuacao || null,
+          tipo_negocio || 'servicos',
+          objetivo_funil || 'agendamento',
+          pergunta_inicial_qualificacao || null,
+          diretrizes_funil || null,
+          politicas_comerciais || null
         ]
       );
 

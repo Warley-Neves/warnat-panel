@@ -95,6 +95,12 @@ ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS mensagem_chamada TEXT DEF
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS responder_com_audio VARCHAR(30) DEFAULT 'texto';
 ALTER TABLE tenant_ai_configs ALTER COLUMN responder_com_audio SET DEFAULT 'texto';
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS voz_ia VARCHAR(20) DEFAULT 'nova';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS nicho_atuacao VARCHAR(150);
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS tipo_negocio VARCHAR(50) DEFAULT 'servicos';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS objetivo_funil VARCHAR(100) DEFAULT 'agendamento';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS pergunta_inicial_qualificacao TEXT;
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS diretrizes_funil TEXT;
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS politicas_comerciais TEXT;
 
 -- ------------------------------------------------------------------------------
 -- 5. Dossiê Permanente do Cliente Final (Memória de Longo Prazo)

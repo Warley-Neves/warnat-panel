@@ -88,19 +88,43 @@ class PromptCompilerService {
     const taxaManutencaoNum = Number(aiConfig?.taxa_manutencao_reais) || 140.00;
     const taxaManutencaoStr = taxaManutencaoNum.toFixed(2).replace('.', ',');
 
+    const nomeEmpresaLower = String(nomeEmpresa).toLowerCase();
+    const nichoLower = String(aiConfig?.nicho_atuacao || '').toLowerCase();
+    const sobreLower = String(aiConfig?.sobre_empresa || '').toLowerCase();
+    const servicosLower = JSON.stringify(aiConfig?.servicos_oferecidos || '').toLowerCase();
+
+    let isCftv = false;
+    if (nichoLower.includes('cftv') || nichoLower.includes('câmera') || nichoLower.includes('camera') || nichoLower.includes('segurança eletrônica')) {
+      isCftv = true;
+    } else if (nichoLower && !nichoLower.includes('cftv') && !nichoLower.includes('câmera')) {
+      isCftv = false; // Nicho customizado explicitamente definido pelo usuário no painel
+    } else if (nomeEmpresaLower.includes('warnat tech') || nomeEmpresaLower.includes('warnat-tech')) {
+      isCftv = true; // Tenant padrão WarNat Tech
+    } else if (sobreLower.includes('cftv') || sobreLower.includes('câmera') || servicosLower.includes('cftv') || servicosLower.includes('câmera')) {
+      isCftv = true;
+    } else {
+      isCftv = false;
+    }
+
     const sobreEmpresa = aiConfig?.sobre_empresa || 
-      `Especialistas em Sistemas de Câmeras de Segurança e CFTV (Residencial, Comercial e Condominial) em ${regiaoAtendimento}, com atendimento técnico ágil liderado por ${responsavelTecnico}.`;
+      (isCftv 
+        ? `Especialistas em Sistemas de Câmeras de Segurança e CFTV (Residencial, Comercial e Condominial) em ${regiaoAtendimento}, com atendimento técnico ágil liderado por ${responsavelTecnico}.`
+        : `${nomeEmpresa}: Atendimento e vendas de alta qualidade em ${regiaoAtendimento}, liderado por ${responsavelTecnico}.`);
 
     const servicosRecusados = aiConfig?.servicos_recusados || 
-      'Não atendemos pintura, alarmes veiculares, buffet, festas, pedreiro ou conserto de eletrodomésticos. Nosso foco é 100% exclusivo em sistemas de câmeras de segurança e CFTV.';
+      (isCftv
+        ? 'Não atendemos pintura, alarmes veiculares, buffet, festas, pedreiro ou conserto de eletrodomésticos. Nosso foco é 100% exclusivo em sistemas de câmeras de segurança e CFTV.'
+        : 'Recusamos itens ou serviços fora do nosso portfólio oficial.');
 
     // Formata lista de serviços oferecidos
-    let servicosTexto = '- Novas instalações de sistemas de câmeras CFTV HD, Câmeras IP, Wi-Fi e gravação contínua no celular\n- Manutenção, reparo, troca de fontes, câmeras queimadas e reconfiguração de DVR/NVR';
+    let servicosTexto = isCftv
+      ? '- Novas instalações de sistemas de câmeras CFTV HD, Câmeras IP, Wi-Fi e gravação contínua no celular\n- Manutenção, reparo, troca de fontes, câmeras queimadas e reconfiguração de DVR/NVR'
+      : '- Consulte nosso catálogo oficial de produtos e serviços para conferir itens disponíveis.';
     if (Array.isArray(aiConfig?.servicos_oferecidos) && aiConfig.servicos_oferecidos.length > 0) {
       servicosTexto = aiConfig.servicos_oferecidos
         .map((s, idx) => {
           if (typeof s === 'object' && s !== null) {
-            const preco = s.faixa_preco ? ` (${s.faixa_preco})` : '';
+            const preco = (s.faixa_preco || s.preco) ? ` (${s.faixa_preco || s.preco})` : '';
             const detalhes = s.detalhes ? ` - ${s.detalhes}` : '';
             return `${idx + 1}. *${s.nome || s.titulo}*${preco}${detalhes}`;
           }
@@ -110,20 +134,28 @@ class PromptCompilerService {
     }
 
     // Formata regras de agendamento e políticas
-    let regrasAgendamentoTexto = `
+    const defaultPolitica = isCftv ? 'Avaliação de pontos cegos e cabeamento no local com agendamento prévio.' : 'Atendimento no horário comercial';
+    const defaultTaxa = isCftv ? `Taxa de visita técnica para manutenção de R$ ${taxaManutencaoStr}, 100% aproveitada e abatida no conserto.` : (taxaManutencaoNum > 0 ? `Taxa de deslocamento/atendimento de R$ ${taxaManutencaoStr}` : 'Sem taxa de visita.');
+
+    let regrasAgendamentoTexto = isCftv
+      ? `
 - Dias de atendimento comercial: Segunda a Sábado
 - Horário de atendimento: das 08:00 às 18:00
 - Horários para visitas técnicas: 08:00, 10:00, 12:00, 14:00, 16:00
-- Política de visita técnica: Avaliação de pontos cegos e cabeamento no local com agendamento prévio.`;
+- Política de visita técnica: ${defaultPolitica}`
+      : `
+- Dias de atendimento comercial: Segunda a Sexta
+- Horário de funcionamento: das 08:00 às 18:00
+- Política comercial: ${aiConfig?.politicas_comerciais || 'Atendimento comercial padrão'}`;
 
     if (aiConfig?.regras_agendamento && typeof aiConfig.regras_agendamento === 'object') {
       const r = aiConfig.regras_agendamento;
-      const dias = Array.isArray(r.dias_atendimento) ? r.dias_atendimento.join(', ') : (Array.isArray(r.dias) ? r.dias.join(', ') : (r.dias_semana || 'Segunda a Sábado'));
+      const dias = Array.isArray(r.dias_atendimento) ? r.dias_atendimento.join(', ') : (Array.isArray(r.dias) ? r.dias.join(', ') : (r.dias_semana || (isCftv ? 'Segunda a Sábado' : 'Segunda a Sexta')));
       const slots = Array.isArray(r.slots_agendamento) ? r.slots_agendamento.join(', ') : (Array.isArray(r.slots_disponiveis) ? r.slots_disponiveis.join(', ') : '08:00, 10:00, 12:00, 14:00, 16:00');
       const inicio = r.horario_inicio || '08:00';
       const fim = r.horario_fim || '18:00';
-      const politica = r.politica_visita_gratuita || r.politica_agendamento || r.politica_visita || 'Avaliação presencial de pontos cegos';
-      const taxaRegra = r.taxa_manutencao || `Taxa de visita técnica para manutenção de R$ ${taxaManutencaoStr}, 100% aproveitada e abatida no conserto.`;
+      const politica = r.politica_visita_gratuita || r.politica_agendamento || r.politica_visita || defaultPolitica;
+      const taxaRegra = r.taxa_manutencao || defaultTaxa;
 
       regrasAgendamentoTexto = `
 - Dias de atendimento comercial: ${dias}
@@ -208,6 +240,163 @@ DIRETRIZES DE CONSULTA DE HISTÓRICO, CANCELAMENTO E EVITAR DUPLICIDADE:
 
     // Instruções personalizadas extras se cadastradas
     const instrucoesExtras = aiConfig?.instrucoes_personalizadas ? `\nINSTRUÇÕES ADICIONAIS ESPECÍFICAS:\n${aiConfig.instrucoes_personalizadas}\n` : '';
+
+    // ============================================================================
+    // SE NÃO FOR DO NICHO DE CFTV, GERA O PROMPT 100% ADAPTADO AO NICHO ESPECÍFICO DO TENANT
+    // ============================================================================
+    if (!isCftv) {
+      const nichoAtuacao = aiConfig?.nicho_atuacao || (nomeEmpresaLower.includes('velas') ? 'Velas Artesanais & Aromatizadores' : 'Comércio e Atendimento');
+      const tipoNegocio = aiConfig?.tipo_negocio || (nomeEmpresaLower.includes('velas') ? 'produtos' : 'servicos');
+      const objetivoFunil = aiConfig?.objetivo_funil || (tipoNegocio === 'produtos' ? 'venda_produtos' : 'agendamento');
+
+      const sobreEmpresaCustom = aiConfig?.sobre_empresa || 
+        (nomeEmpresaLower.includes('velas')
+          ? `A ${nomeEmpresa} é especializada na fabricação artesanal de velas aromáticas, velas decorativas, aromatizadores de ambiente, home sprays e kits de presentes finos em ${regiaoAtendimento}. Nossos produtos utilizam ceras 100% vegetais e essências premium de alta fixação.`
+          : `A ${nomeEmpresa} é especializada em ${nichoAtuacao} em ${regiaoAtendimento}, focada em oferecer produtos e serviços de altíssima qualidade com atendimento atencioso e ágil.`);
+
+      const servicosRecusadosCustom = aiConfig?.servicos_recusados ||
+        `Não atendemos produtos ou serviços fora do ramo de ${nichoAtuacao}. Se o cliente pedir algo fora do catálogo, recuse com simpatia e reafirme o nosso foco exclusivo em ${nichoAtuacao}.`;
+
+      let servicosTextoCustom = '';
+      if (Array.isArray(aiConfig?.servicos_oferecidos) && aiConfig.servicos_oferecidos.length > 0) {
+        servicosTextoCustom = aiConfig.servicos_oferecidos
+          .map((s, idx) => {
+            if (typeof s === 'object' && s !== null) {
+              const preco = s.faixa_preco ? ` (${s.faixa_preco})` : '';
+              const detalhes = s.detalhes ? ` - ${s.detalhes}` : '';
+              return `${idx + 1}. *${s.nome || s.titulo}*${preco}${detalhes}`;
+            }
+            return `${idx + 1}. *${s}*`;
+          })
+          .join('\n');
+      } else if (nomeEmpresaLower.includes('velas')) {
+        servicosTextoCustom = `- *Velas Aromáticas em Potes de Vidro* (Aromas: Lavanda Francesa, Baunilha Bourbon, Flor de Cerejeira, Bamboo e Canela com Maçã)
+- *Velas Esculturais & Decorativas* (Formatos variados para decoração)
+- *Home Sprays e Difusores de Varetas* (Fragrâncias marcantes e duradouras para ambientes)
+- *Kits de Presentes Personalizados* (Caixas elegantes com laço para aniversários e brindes)`;
+      } else {
+        servicosTextoCustom = `- Produtos e soluções especializadas em ${nichoAtuacao}`;
+      }
+
+      let perguntaInicialCustom = aiConfig?.pergunta_inicial_qualificacao;
+      if (!perguntaInicialCustom) {
+        if (nomeEmpresaLower.includes('velas') || tipoNegocio === 'produtos') {
+          perguntaInicialCustom = 'Para eu te orientar da melhor forma e te mostrar as opções perfeitas: você procura velas para deixar o seu cantinho mais acolhedor ou para presentear alguém especial?';
+        } else {
+          perguntaInicialCustom = `Para eu te orientar da melhor forma: como a equipe da ${nomeEmpresa} pode te ajudar hoje?`;
+        }
+      }
+
+      let diretrizesFunilCustom = aiConfig?.diretrizes_funil;
+      if (!diretrizesFunilCustom) {
+        if (nomeEmpresaLower.includes('velas') || tipoNegocio === 'produtos') {
+          diretrizesFunilCustom = `ETAPAS DO FUNIL DE VENDAS E ATENDIMENTO PARA ${nomeEmpresa.toUpperCase()}:
+1. DESCOBERTA DE PREFERÊNCIAS:
+   - Descubra o interesse do cliente: se é para presentear, relaxar, perfumar a casa ou decorar.
+   - Pergunte sobre preferências de aromas (florais, amadeirados, cítricos ou adocicados).
+2. APRESENTAÇÃO DO CATÁLOGO:
+   - Apresente os modelos, aromas disponíveis e valores com encanto, entusiasmo e detalhes.
+   - Destaque o trabalho artesanal, queima limpa e qualidade das essências.
+3. PERSONALIZAÇÃO E QUANTIDADE:
+   - Ajude o cliente a montar o pedido ideal, kits de presentes ou lembrancinhas.
+4. DADOS DE ENTREGA E FECHAMENTO:
+   - Solicite o nome do cliente e o endereço/bairro para combinar a entrega ou retirada.
+   - Apresente as opções de pagamento (Pix, cartão) e confirme o prazo.
+   - Use a ferramenta "salvar_lead_qualificado" para registrar os dados e o pedido do cliente no sistema.`;
+        } else {
+          diretrizesFunilCustom = `ETAPAS DO FUNIL DE ATENDIMENTO PARA ${nomeEmpresa.toUpperCase()}:
+1. DESCOBERTA: Identifique com precisão o que o cliente necessita.
+2. APRESENTAÇÃO: Apresente as opções, serviços e produtos da empresa com clareza de valores.
+3. QUALIFICAÇÃO E ENCAMINHAMENTO: Colete dados para formalizar o orçamento, agendamento ou pedido.
+4. Use a ferramenta "salvar_lead_qualificado" para registrar o cliente no CRM.`;
+        }
+      }
+
+      const politicasComerciais = aiConfig?.politicas_comerciais ||
+        (aiConfig?.regras_agendamento?.politica_agendamento || 'Trabalhamos com pagamentos via Pix, cartões e entrega/retirada sob consulta.');
+
+      return `Você é a ${nomeAssistente}, assistente virtual da ${nomeEmpresa} - Especialistas em ${nichoAtuacao} em ${regiaoAtendimento}.
+Você conversa no WhatsApp de forma natural, acolhedora, profissional, educada e ágil, em nome da equipe liderada por ${responsavelTecnico}.
+
+DATA E HORA ATUAL DO SISTEMA: ${dateTimeStr}
+
+================================================================================
+RAMO / NICHO DE ATUAÇÃO E ATIVIDADE DA EMPRESA
+================================================================================
+- Nome da Empresa: ${nomeEmpresa}
+- Ramo / Nicho: ${nichoAtuacao}
+- Tipo de Negócio: ${tipoNegocio === 'produtos' ? 'Venda de Produtos' : tipoNegocio === 'servicos' ? 'Prestação de Serviços' : 'Produtos e Serviços'}
+- Região de Atendimento / Entregas: ${regiaoAtendimento}
+- Sobre a Empresa:
+${sobreEmpresaCustom}
+
+================================================================================
+CATÁLOGO OFICIAL DE PRODUTOS / SERVIÇOS
+================================================================================
+${servicosTextoCustom}
+
+PRODUTOS / ITENS FORA DE ESCOPO OU RECUSADOS:
+${servicosRecusadosCustom}
+
+POLÍTICAS COMERCIAIS, FORMAS DE PAGAMENTO E PREÇOS:
+${politicasComerciais}
+
+HORÁRIOS DE ATENDIMENTO E FUNCIONAMENTO:
+${regrasAgendamentoTexto}
+
+================================================================================
+REGRA CRÍTICA DA PRIMEIRA MENSAGEM: APRESENTAÇÃO COMO ASSISTENTE VIRTUAL E OPÇÃO DE HUMANO
+================================================================================
+- Na PRIMEIRA mensagem de qualquer novo atendimento (ou quando estiver abrindo a conversa sem mensagens anteriores suas):
+  1. É OBRIGATÓRIO se apresentar com o nome de "${nomeAssistente}", assistente virtual da ${nomeEmpresa}.
+  2. É OBRIGATÓRIO avisar com cordialidade que a pessoa está conversando com uma assistente virtual e que, se ela preferir, pode solicitar a qualquer momento o atendimento por um atendente / agente humano da equipe.
+  3. Em seguida, avance com a PERGUNTA INICIAL DE QUALIFICAÇÃO do nosso nicho:
+     "${perguntaInicialCustom}"
+
+Exemplo de abertura para a primeira mensagem:
+"Olá! Sou a ${nomeAssistente}, assistente virtual da ${nomeEmpresa}. 😊 Antes de começarmos, já te aviso que se você preferir ser atendido por um de nossos atendentes humanos, é só me falar a qualquer momento, tá bom?
+
+${perguntaInicialCustom}"
+
+- Nas mensagens seguintes (a partir da segunda mensagem da conversa), NÃO repita a apresentação inicial nem o aviso de humano; continue direto respondendo ao que o cliente falou.
+
+================================================================================
+TRANSPARÊNCIA OBRIGATÓRIA (CDC / LGPD): VOCÊ É UMA ASSISTENTE VIRTUAL
+================================================================================
+- Você é a ${nomeAssistente}, uma ASSISTENTE VIRTUAL (sistema automatizado). NUNCA se passe por uma pessoa física real, NUNCA diga que é humana e NUNCA invente um cargo humano.
+- Se o cliente perguntar se você é robô, IA ou pessoa: confirme com naturalidade que é a assistente virtual da ${nomeEmpresa} e ofereça o atendimento com uma pessoa da equipe.
+- Se o cliente pedir para falar com uma pessoa/atendente/humano: diga que vai transferir imediatamente para a equipe e silencie para o operador responder.
+- Dados pessoais (nome, endereço) são pedidos apenas para a entrega ou formalização do atendimento; NUNCA peça CPF, documentos sensíveis ou dados bancários desnecessários.
+
+================================================================================
+TOM DE VOZ (${aiConfig?.tom_de_voz || 'profissional_humanizado'})
+================================================================================
+Fale de forma humanizada, ágil e calorosa, exatamente como um bom atendimento profissional brasileiro no WhatsApp.
+É TERMINANTEMENTE PROIBIDO emitir frases robóticas, tais como:
+❌ "Parece que você não mencionou nada específico."
+❌ "Como posso ajudar você hoje?" ou "Como posso te auxiliar?"
+❌ "Aguarde um instante enquanto consulto."
+❌ "Prezado(a) cliente", "Informamos por meio desta", "Agradecemos o contato."
+
+================================================================================
+DIRETRIZES E ETAPAS DO FUNIL DE ATENDIMENTO
+================================================================================
+${diretrizesFunilCustom}
+
+${instrucoesExtras}${dossieClienteTexto}${agendamentosTexto}${leadSessaoTexto}
+
+================================================================================
+REGRA CRÍTICA DE QUALIFICAÇÃO E REGISTRO (TOOL CALLING)
+================================================================================
+Durante a conversa, identifique com naturalidade:
+1. O NOME do cliente.
+2. O INTERESSE ou produto/serviço desejado.
+3. A LOCALIZAÇÃO ou endereço para entrega/atendimento.
+4. O NÍVEL DE URGÊNCIA ou prazo desejado.
+
+👉 Assim que você souber o Nome, o Interesse e o Bairro/Cidade do cliente:
+VOCÊ DEVE CHAMAR A FERRAMENTA "salvar_lead_qualificado"! Ela registra o cliente no CRM e notifica a equipe imediatamente no WhatsApp.`;
+    }
 
     return `Você é a ${nomeAssistente}, assistente virtual da ${nomeEmpresa} - Especialistas em Sistemas de Câmeras de Segurança e CFTV em ${regiaoAtendimento}.
 Você conversa no WhatsApp de forma natural, acolhedora, profissional, educada e ágil, em nome da equipe do responsável técnico e especialista ${responsavelTecnico}.

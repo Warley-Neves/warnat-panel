@@ -744,6 +744,70 @@
             </div>
           </div>
 
+          <!-- BLOCO: NICHO DE MERCADO, MODELO DE NEGÓCIO & FUNIL PERSONALIZADO -->
+          <div class="p-6 bg-dark-800/60 rounded-2xl border border-slate-700/80 space-y-5">
+            <div class="flex items-center space-x-2 text-white font-bold text-sm">
+              <i data-lucide="target" class="w-4 h-4 text-brand-400"></i>
+              <span>Nicho de Atuação, Modelo de Negócio & Funil da IA</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <!-- NICHO / RAMO DE ATUAÇÃO -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Ramo / Nicho de Atuação</label>
+                <input type="text" id="aiNichoAtuacao" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="Ex: Velas Artesanais, CFTV, Clínica Estética">
+                <p class="text-xs text-slate-500 mt-1">Define o contexto e o tom de atuação usado pela IA.</p>
+              </div>
+
+              <!-- TIPO DE NEGÓCIO -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Tipo de Negócio</label>
+                <select id="aiTipoNegocio" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+                  <option value="produtos">Venda de Produtos (Catálogo, E-commerce, Pronta Entrega)</option>
+                  <option value="servicos">Prestação de Serviços Técnicos / Orçamentos</option>
+                  <option value="agendamento">Agendamento de Consultas / Sessões / Visitas</option>
+                  <option value="hibrido">Híbrido (Produtos & Serviços)</option>
+                </select>
+                <p class="text-xs text-slate-500 mt-1">Determina o fluxo primário da IA nas conversas.</p>
+              </div>
+
+              <!-- OBJETIVO DO FUNIL -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Objetivo Principal do Funil</label>
+                <select id="aiObjetivoFunil" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+                  <option value="venda_produtos">Venda de Produtos / Apresentar Catálogo & Fechar Pedido</option>
+                  <option value="agendamento">Agendamento de Horário / Visita / Sessão</option>
+                  <option value="orcamento">Qualificação Técnica & Envio de Orçamento</option>
+                  <option value="qualificacao">Qualificação de Lead e Encaminhamento ao Especialista</option>
+                </select>
+                <p class="text-xs text-slate-500 mt-1">Meta principal que a IA busca converter na conversa.</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <!-- PERGUNTA INICIAL DE QUALIFICAÇÃO -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Pergunta Inicial de Sondagem / Qualificação</label>
+                <textarea id="aiPerguntaInicial" rows="3" placeholder="Ex: Gostaria de conhecer nossos aromas e kits para pronta-entrega ou busca lembrancinhas personalizadas?" class="w-full bg-dark-850 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+                <p class="text-xs text-slate-500 mt-1">Pergunta chave feita logo após a saudação para direcionar o cliente.</p>
+              </div>
+
+              <!-- POLÍTICAS COMERCIAIS & FORMAS DE PAGAMENTO -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Políticas Comerciais, Pagamentos & Entrega</label>
+                <textarea id="aiPoliticasComerciais" rows="3" placeholder="Ex: Pagamento via Pix (5% desc.) ou Cartão em até 3x sem juros. Enviamos por Sedex/Motoboy em até 24h úteis." class="w-full bg-dark-850 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+                <p class="text-xs text-slate-500 mt-1">Políticas de frete, prazos, formas de pagamento e garantias informadas pela IA.</p>
+              </div>
+            </div>
+
+            <!-- DIRETRIZES E ETAPAS DO FUNIL -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Etapas e Diretrizes Personalizadas do Funil de Atendimento</label>
+              <textarea id="aiDiretrizesFunil" rows="3" placeholder="Ex: 1. Descobrir se é para presente ou casa; 2. Apresentar os aromas mais vendidos; 3. Coletar CEP para frete; 4. Confirmar pedido e enviar Pix." class="w-full bg-dark-850 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+              <p class="text-xs text-slate-500 mt-1">Instruções passo a passo de como a IA deve guiar o cliente até a conversão.</p>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <!-- NOME DA ASSISTENTE -->
             <div>
@@ -753,20 +817,21 @@
 
             <!-- RESPONSÁVEL TÉCNICO -->
             <div>
-              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Responsável Técnico / Especialista</label>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Responsável / Proprietário / Especialista</label>
               <input type="text" id="aiResponsavelTecnico" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="Ex: Warley Santos">
             </div>
 
             <!-- REGIÃO DE ATENDIMENTO -->
             <div>
-              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Região de Atendimento</label>
-              <input type="text" id="aiRegiaoAtendimento" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="Ex: Belo Horizonte, Barreiro e Grande BH">
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Região de Atendimento / Envio</label>
+              <input type="text" id="aiRegiaoAtendimento" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="Ex: Belo Horizonte e Grande BH / Todo o Brasil">
             </div>
 
             <!-- TAXA DE MANUTENÇÃO (R$) -->
             <div>
-              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Taxa de Manutenção em Reais (100% abatível)</label>
-              <input type="number" id="aiTaxaManutencao" step="0.01" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="140.00">
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Taxa de Manutenção / Visita Técnica (Opcional)</label>
+              <input type="number" id="aiTaxaManutencao" step="0.01" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500" placeholder="Ex: 140.00 (deixe em branco se não aplicável)">
+              <p class="text-xs text-slate-500 mt-1">Para prestadores de serviços com taxa de deslocamento ou manutenção.</p>
             </div>
 
             <!-- TOM DE VOZ -->
@@ -3207,6 +3272,14 @@
           if (c.regiao_atendimento !== undefined) document.getElementById('aiRegiaoAtendimento').value = c.regiao_atendimento || '';
           if (c.taxa_manutencao_reais !== undefined && c.taxa_manutencao_reais !== null) document.getElementById('aiTaxaManutencao').value = c.taxa_manutencao_reais;
 
+          // Campos de Nicho & Funil Personalizado
+          if (c.nicho_atuacao !== undefined) document.getElementById('aiNichoAtuacao').value = c.nicho_atuacao || '';
+          if (c.tipo_negocio !== undefined) document.getElementById('aiTipoNegocio').value = c.tipo_negocio || 'servicos';
+          if (c.objetivo_funil !== undefined) document.getElementById('aiObjetivoFunil').value = c.objetivo_funil || 'agendamento';
+          if (c.pergunta_inicial_qualificacao !== undefined) document.getElementById('aiPerguntaInicial').value = c.pergunta_inicial_qualificacao || '';
+          if (c.diretrizes_funil !== undefined) document.getElementById('aiDiretrizesFunil').value = c.diretrizes_funil || '';
+          if (c.politicas_comerciais !== undefined) document.getElementById('aiPoliticasComerciais').value = c.politicas_comerciais || '';
+
           document.getElementById('aiTomDeVoz').value = c.tom_de_voz || 'profissional_humanizado';
           document.getElementById('aiPausaMinutos').value = c.pausa_automatica_minutos || 45;
           document.getElementById('aiWhatsappNotificacao').value = c.whatsapp_notificacao_humana || '';
@@ -3264,10 +3337,16 @@
 
       const payload = {
         modo_atendimento: selectedModo,
+        nicho_atuacao: document.getElementById('aiNichoAtuacao').value.trim(),
+        tipo_negocio: document.getElementById('aiTipoNegocio').value,
+        objetivo_funil: document.getElementById('aiObjetivoFunil').value,
+        pergunta_inicial_qualificacao: document.getElementById('aiPerguntaInicial').value.trim(),
+        diretrizes_funil: document.getElementById('aiDiretrizesFunil').value.trim(),
+        politicas_comerciais: document.getElementById('aiPoliticasComerciais').value.trim(),
         nome_assistente: document.getElementById('aiNomeAssistente').value.trim(),
         responsavel_tecnico: document.getElementById('aiResponsavelTecnico').value.trim(),
         regiao_atendimento: document.getElementById('aiRegiaoAtendimento').value.trim(),
-        taxa_manutencao_reais: parseFloat(document.getElementById('aiTaxaManutencao').value) || 140.0,
+        taxa_manutencao_reais: document.getElementById('aiTaxaManutencao').value !== '' ? (parseFloat(document.getElementById('aiTaxaManutencao').value) || 0) : null,
         tom_de_voz: document.getElementById('aiTomDeVoz').value,
         pausa_automatica_minutos: parseInt(document.getElementById('aiPausaMinutos').value, 10) || 45,
         whatsapp_notificacao_humana: document.getElementById('aiWhatsappNotificacao').value.trim(),
