@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
-const { query } = require('./db');
+const { query, getClient } = require('./db');
 const evolutionService = require('../services/evolution.service');
 
 // Carregar variáveis de ambiente
@@ -196,6 +196,7 @@ class AuthService {
     const res = await query(
       `SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role, u.nome, COALESCE(u.ativo, true) as user_ativo,
               COALESCE(u.is_super_admin, false) as is_super_admin,
+              u.privacy_policy_accepted_at, u.privacy_policy_version,
               t.nome_empresa, t.plano, COALESCE(t.status, 'TRIALING') as tenant_status,
               t.trial_ends_at, COALESCE(t.is_manually_blocked, false) as is_manually_blocked,
               t.ativo as tenant_ativo
@@ -245,15 +246,66 @@ class AuthService {
         status: user.tenant_status,
         trialEndsAt: user.trial_ends_at,
         isManuallyBlocked: user.is_manually_blocked,
-        isSuperAdmin: isSuper
+        isSuperAdmin: isSuper,
+        privacyPolicyAcceptedAt: user.privacy_policy_accepted_at,
+        privacyPolicyVersion: user.privacy_policy_version,
+        privacyPolicyAccepted: Boolean(user.privacy_policy_accepted_at && user.privacy_policy_version === 'v1.0')
       }
     };
   }
 
   /**
+   * Registra consentimento do usuário à Política de Privacidade (LGPD)
+   */
+  async recordConsent(userId, tenantId, policyVersion = 'v1.0', ipAddress = null, userAgent = null) {
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      const updatedUser = await client.query(
+        `UPDATE users
+         SET privacy_policy_accepted_at = NOW(),
+             privacy_policy_version = $2,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, nome, email, privacy_policy_accepted_at, privacy_policy_version`,
+        [userId, policyVersion]
+      );
+
+      await client.query(
+        `INSERT INTO user_consents (user_id, tenant_id, policy_version, accepted_at, ip_address, user_agent)
+         VALUES ($1, $2, $3, NOW(), $4, $5)`,
+        [userId, tenantId, policyVersion, ipAddress, userAgent]
+      );
+
+      await client.query('COMMIT');
+      return {
+        success: true,
+        accepted_at: updatedUser.rows[0]?.privacy_policy_accepted_at,
+        version: policyVersion
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * Auto-cadastro de nova Empresa Assinante (Tenant) + Usuário Administrador
    */
-  async registerTenantAndAdmin({ nome_empresa, documento, plano = 'start', nome, email, password, sobre_empresa = 'Empresa inovadora atendendo via WhatsApp.' }) {
+  async registerTenantAndAdmin({
+    nome_empresa,
+    documento,
+    plano = 'start',
+    nome,
+    email,
+    password,
+    sobre_empresa = 'Empresa inovadora atendendo via WhatsApp.',
+    privacy_policy_accepted = true,
+    ipAddress = null,
+    userAgent = null
+  }) {
     if (!nome_empresa || !nome || !email || !password) {
       throw new Error('Campos obrigatórios: nome_empresa, nome, email e password.');
     }
@@ -276,13 +328,24 @@ class AuthService {
     // 2. Hash da senha e insere Usuário Administrador
     const isSuper = cleanEmail.includes('admin@warnattech') || cleanEmail.includes('superadmin');
     const passwordHash = await this.hashPassword(password);
+    const policyAcceptedAt = privacy_policy_accepted ? new Date() : null;
+    const policyVersion = privacy_policy_accepted ? 'v1.0' : null;
+
     const userRes = await query(
-      `INSERT INTO users (tenant_id, nome, email, password_hash, role, is_super_admin)
-       VALUES ($1, $2, $3, $4, 'admin', $5)
-       RETURNING id, tenant_id, nome, email, role, is_super_admin, created_at;`,
-      [tenant.id, nome.trim(), cleanEmail, passwordHash, isSuper]
+      `INSERT INTO users (tenant_id, nome, email, password_hash, role, is_super_admin, privacy_policy_accepted_at, privacy_policy_version)
+       VALUES ($1, $2, $3, $4, 'admin', $5, $6, $7)
+       RETURNING id, tenant_id, nome, email, role, is_super_admin, privacy_policy_accepted_at, privacy_policy_version, created_at;`,
+      [tenant.id, nome.trim(), cleanEmail, passwordHash, isSuper, policyAcceptedAt, policyVersion]
     );
     const user = userRes.rows[0];
+
+    if (privacy_policy_accepted) {
+      await query(
+        `INSERT INTO user_consents (user_id, tenant_id, policy_version, accepted_at, ip_address, user_agent)
+         VALUES ($1, $2, 'v1.0', NOW(), $3, $4);`,
+        [user.id, tenant.id, ipAddress || null, userAgent || null]
+      ).catch(e => console.warn('[AuthService] Erro ao gravar user_consents no cadastro:', e.message));
+    }
 
     // 3. Cria configuração de IA inicial padrão para o Tenant com nicho personalizado
     const nomeLower = nome_empresa.toLowerCase();
@@ -345,7 +408,10 @@ class AuthService {
         plano: tenant.plano,
         status: tenant.status,
         trialEndsAt: tenant.trial_ends_at,
-        isSuperAdmin: !!user.is_super_admin
+        isSuperAdmin: !!user.is_super_admin,
+        privacyPolicyAcceptedAt: user.privacy_policy_accepted_at,
+        privacyPolicyVersion: user.privacy_policy_version,
+        privacyPolicyAccepted: Boolean(user.privacy_policy_accepted_at && user.privacy_policy_version === 'v1.0')
       },
       tenant
     };

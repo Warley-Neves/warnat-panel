@@ -91,6 +91,9 @@
           <span>Acessar Painel</span>
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </button>
+        <p class="text-center text-[11px] text-slate-400 mt-2">
+          Ao acessar, você declara ciência da <a href="javascript:void(0)" onclick="openPrivacyPolicyViewModal()" class="text-brand-400 underline hover:text-brand-300">Política de Privacidade & LGPD</a>.
+        </p>
       </form>
 
       <!-- FORMULÁRIO DE AUTO-CADASTRO (ONBOARDING) -->
@@ -125,6 +128,13 @@
         <div>
           <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Breve Descrição do Negócio</label>
           <textarea id="regSobre" rows="2" placeholder="Ex: Prestação de serviços e suporte técnico especializado." class="w-full bg-dark-800 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+        </div>
+
+        <div class="flex items-start space-x-2.5 pt-1">
+          <input type="checkbox" id="regTermsConsent" required class="mt-1 rounded border-slate-700 bg-dark-800 text-brand-600 focus:ring-0 cursor-pointer">
+          <label for="regTermsConsent" class="text-xs text-slate-300 leading-snug cursor-pointer">
+            Declaro que li e concordo com a <a href="javascript:void(0)" onclick="openPrivacyPolicyViewModal()" class="text-brand-400 font-semibold underline hover:text-brand-300">Política de Privacidade & Termos da LGPD</a>.
+          </label>
         </div>
 
         <button type="submit" id="regBtn" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-semibold py-3 rounded-xl shadow-lg shadow-brand-600/30 transition flex items-center justify-center space-x-2">
@@ -203,6 +213,11 @@
         </div>
 
         <div class="h-6 w-px bg-slate-800"></div>
+
+        <button onclick="openPrivacyPolicyViewModal()" title="Política de Privacidade & LGPD" class="p-2 rounded-xl text-slate-400 hover:text-brand-400 hover:bg-brand-500/10 border border-slate-800 transition flex items-center space-x-1.5 text-xs">
+          <i data-lucide="shield" class="w-4 h-4 text-brand-400"></i>
+          <span class="hidden md:inline">Privacidade & LGPD</span>
+        </button>
 
         <div class="flex items-center space-x-3">
           <div class="text-right hidden sm:block">
@@ -2185,6 +2200,109 @@
   </div>
 
   <!-- ============================================================================ -->
+  <!-- MODAL 1: GATE OBRIGATÓRIO DE CONSENTIMENTO LGPD (BLOQUEIA ACESSO AO SAAS) -->
+  <!-- ============================================================================ -->
+  <div id="privacyConsentGateModal" class="hidden fixed inset-0 z-[100] bg-dark-950/95 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-dark-850 border border-slate-700/80 rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden fade-in">
+      
+      <!-- HEADER DO GATE (SEM BOTÃO DE FECHAR - ACESSO BLOQUEADO ATÉ CONSENTIR) -->
+      <div class="p-5 border-b border-slate-800 bg-dark-900/60 flex items-center justify-between">
+        <div class="flex items-center space-x-3.5">
+          <div class="w-11 h-11 rounded-xl bg-brand-500/10 text-brand-400 border border-brand-500/30 flex items-center justify-center shadow-lg shadow-brand-500/10">
+            <i data-lucide="shield-check" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h3 class="font-bold text-white text-base">Termos de Uso & Política de Privacidade</h3>
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">LGPD • v1.0</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">Conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018)</p>
+          </div>
+        </div>
+        <span class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20">Ação Obrigatória</span>
+      </div>
+
+      <!-- INFORMAÇÃO EXPLICATIVA -->
+      <div class="px-6 pt-4 pb-2 bg-dark-800/40 border-b border-slate-800/60 text-xs text-slate-300 flex items-center space-x-2.5">
+        <i data-lucide="info" class="w-4 h-4 text-brand-400 shrink-0"></i>
+        <span>Para utilizar as ferramentas de atendimento WhatsApp, IA e gestão da plataforma WarNat SaaS, leia os termos e confirme seu consentimento formal.</span>
+      </div>
+
+      <!-- CONTAINER DO TEXTO COMPLETO DA POLÍTICA (ROLÁVEL COM SCROLLBAR PERSONALIZADA) -->
+      <div id="gatePolicyContentContainer" class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 text-xs text-slate-300 custom-scrollbar max-h-[50vh] bg-dark-900/50">
+        <!-- O conteúdo será injetado dinamicamente via getPrivacyPolicyHtml() -->
+      </div>
+
+      <!-- SELEÇÃO DE CONSENTIMENTO E AÇÕES -->
+      <div class="p-5 border-t border-slate-800 bg-dark-850 space-y-3.5">
+        <div id="gateConsentError" class="hidden p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-medium"></div>
+
+        <div class="p-3.5 rounded-xl bg-dark-900 border border-slate-700/60 flex items-start space-x-3">
+          <input type="checkbox" id="gateConsentCheckbox" onchange="toggleGateAcceptButton()" class="mt-0.5 rounded border-slate-700 bg-dark-800 text-brand-600 focus:ring-0 w-4 h-4 cursor-pointer">
+          <label for="gateConsentCheckbox" class="text-xs text-slate-200 leading-relaxed cursor-pointer select-none">
+            Declaro que li, compreendi integralmente e <strong>concordo de forma livre, expressa e informada</strong> com os <a href="javascript:void(0)" onclick="openPrivacyPolicyViewModal()" class="text-brand-400 font-semibold underline hover:text-brand-300">Termos de Uso e Política de Privacidade & Proteção de Dados (LGPD)</a> da plataforma WarNat SaaS.
+          </label>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <button type="button" onclick="handleLogout()" class="px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-400 hover:text-rose-300 text-xs font-semibold transition border border-slate-700 flex items-center space-x-2">
+            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+            <span>Sair da Conta</span>
+          </button>
+
+          <button type="button" id="btnSubmitGateConsent" onclick="submitPrivacyConsent()" disabled class="px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-lg shadow-brand-600/30 transition flex items-center space-x-2">
+            <span>Confirmar Consentimento & Continuar</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
+  <!-- MODAL 2: CONSULTA DA POLÍTICA DE PRIVACIDADE & LGPD (ACESSO A QUALQUER MOMENTO) -->
+  <!-- ============================================================================ -->
+  <div id="privacyPolicyViewModal" class="hidden fixed inset-0 z-[110] bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-dark-850 border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden fade-in">
+      
+      <!-- HEADER COM FECHAMENTO -->
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-dark-900/50">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-400 border border-brand-500/20 flex items-center justify-center">
+            <i data-lucide="shield" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h4 class="font-bold text-white text-base">Política de Privacidade & Termos LGPD</h4>
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">Versão 1.0</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">WarNat SaaS • Lei nº 13.709/2018 (Lei Geral de Proteção de Dados)</p>
+          </div>
+        </div>
+        <button onclick="closePrivacyPolicyViewModal()" class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-dark-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- TEXTO ROLÁVEL -->
+      <div id="viewPolicyContentContainer" class="flex-1 overflow-y-auto p-6 space-y-4 text-xs text-slate-300 custom-scrollbar">
+        <!-- O conteúdo será injetado dinamicamente via getPrivacyPolicyHtml() -->
+      </div>
+
+      <!-- FOOTER DE FECHAMENTO E CONTATO DPO -->
+      <div class="p-4 border-t border-slate-800 bg-dark-850 flex items-center justify-between text-xs">
+        <div class="text-slate-400 flex items-center space-x-1.5">
+          <i data-lucide="mail" class="w-3.5 h-3.5 text-brand-400"></i>
+          <span>Encarregado (DPO): <strong class="text-slate-200">privacidade@warnattech.com.br</strong></span>
+        </div>
+        <button onclick="closePrivacyPolicyViewModal()" class="px-5 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-white font-semibold border border-slate-700 transition">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
   <!-- MODAL DE DETALHES DO AGENDAMENTO (FICHA COMPLETA) -->
   <!-- ============================================================================ -->
   <div id="appointmentDetailsModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -3663,6 +3781,13 @@
       const errBox = document.getElementById('registerError');
       errBox.classList.add('hidden');
 
+      const termsConsent = document.getElementById('regTermsConsent');
+      if (termsConsent && !termsConsent.checked) {
+        errBox.textContent = 'Você deve concordar com a Política de Privacidade e Termos da LGPD para continuar.';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
       const regBtn = document.getElementById('regBtn');
       regBtn.disabled = true;
       regBtn.innerHTML = '<span>Criando Empresa...</span>';
@@ -3671,7 +3796,7 @@
         const res = await fetch('/api/v2/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nome_empresa, documento, nome, email, password, sobre_empresa })
+          body: JSON.stringify({ nome_empresa, documento, nome, email, password, sobre_empresa, privacy_policy_accepted: true })
         });
         const data = await res.json();
 
@@ -3725,11 +3850,192 @@
       }
     }
 
+    // ============================================================================
+    // GESTÃO DE PRIVACIDADE & LGPD (TERMOS DE USO E POLÍTICA DE PROTEÇÃO DE DADOS)
+    // ============================================================================
+    function getPrivacyPolicyHtml() {
+      return `
+        <div class="space-y-5 text-slate-300 leading-relaxed text-xs">
+          <div class="p-3.5 rounded-xl bg-brand-500/10 border border-brand-500/25 text-brand-300 leading-normal">
+            <strong class="font-bold text-brand-200">Resumo de Conformidade LGPD:</strong> A plataforma WarNat SaaS opera em conformidade estrita com a Lei Geral de Proteção de Dados Pessoais (Lei nº 13.709/2018). Este documento estabelece as regras de tratamento de dados pessoais, segurança da informação, privacidade de conversas no WhatsApp e governança para todas as Empresas Assinantes e seus operadores.
+          </div>
+
+          <div>
+            <h4 class="text-sm font-bold text-white mb-1.5 flex items-center space-x-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-400 inline-block"></span>
+              <span>1. Identificação do Controlador e do Encarregado de Dados (DPO)</span>
+            </h4>
+            <p>A plataforma é desenvolvida e operada por <strong>WarNat Tech (WarNat SaaS)</strong>. Para quaisquer dúvidas, requisições de titulares ou esclarecimentos sobre privacidade, nosso Encarregado de Proteção de Dados (DPO) pode ser contatado diretamente através do e-mail oficial: <a href="mailto:privacidade@warnattech.com.br" class="text-brand-400 font-medium underline">privacidade@warnattech.com.br</a>.</p>
+          </div>
+
+          <div>
+            <h4 class="text-sm font-bold text-white mb-1.5 flex items-center space-x-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-400 inline-block"></span>
+              <span>2. Papéis e Responsabilidades sob a LGPD (Controlador vs. Operador)</span>
+            </h4>
+            <p class="mb-2">A estrutura de tratamento de dados na plataforma WarNat SaaS é categorizada de acordo com os artigos 5º e 39 da LGPD:</p>
+            <ul class="list-disc pl-5 space-y-1.5 text-slate-300">
+              <li><strong>Empresa Assinante (Tenant):</strong> Atua como <strong class="text-white">Controladora</strong> em relação aos dados pessoais de seus clientes finais (contatos do WhatsApp, leads de vendas, solicitantes de serviços e agendamentos). Cabe à Assinante garantir base legal legítima (consentimento, execução de contrato ou legítimo interesse) perante seus clientes.</li>
+              <li><strong>WarNat SaaS:</strong> Atua como <strong class="text-white">Operadora</strong> quanto ao processamento automatizado das mensagens, armazenamento e automação de fluxos no WhatsApp, e como <strong class="text-white">Controladora</strong> exclusivamente em relação aos dados cadastrais e de faturamento dos usuários das Empresas Assinantes.</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 class="text-sm font-bold text-white mb-1.5 flex items-center space-x-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-400 inline-block"></span>
+              <span>3. Dados Pessoais Coletados e Finalidades de Uso</span>
+            </h4>
+            <p class="mb-2">Tratamos apenas os dados estritamente necessários para a execução dos serviços contratados:</p>
+            <ul class="list-disc pl-5 space-y-1.5 text-slate-300">
+              <li><strong>Dados de Acesso & Identificação:</strong> Nome completo, e-mail corporativo, telefone e credenciais com hash seguro. <em>Finalidade:</em> Autenticação e gestão de permissões (Art. 7º, V - Execução de Contrato).</li>
+              <li><strong>Dados Operacionais de Mensageria (WhatsApp):</strong> Número de telefone dos contatos, mensagens recebidas/enviadas, histórico de interações e metadados de atendimento. <em>Finalidade:</em> Viabilizar atendimento omnichannel e automação assistida por IA.</li>
+              <li><strong>Dados de Faturamento & Cobrança:</strong> CNPJ/CPF, razão social, histórico de transações e assinaturas. Os dados de cartão de crédito são processados em conformidade com o padrão internacional de segurança PCI-DSS.</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 class="text-sm font-bold text-white mb-1.5 flex items-center space-x-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-400 inline-block"></span>
+              <span>4. Subprocessadores Autorizados & Proteção em IA</span>
+            </h4>
+            <p class="mb-2">Para fornecer alta disponibilidade e tecnologia de ponta, utilizamos parceiros certificados:</p>
+            <ul class="list-disc pl-5 space-y-1.5 text-slate-300">
+              <li><strong>Infraestrutura Cloud & PostgreSQL:</strong> Hospedagem em servidores com criptografia em trânsito (TLS 1.3) e em repouso.</li>
+              <li><strong>Protocolo WhatsApp:</strong> Conexão segura através da Evolution API dedicada a instâncias isoladas por tenant.</li>
+              <li><strong>Provedores de IA (OpenAI / Google Gemini):</strong> Os dados submetidos à inteligência artificial são utilizados <strong>estritamente para gerar respostas operacionais aos clientes em tempo real</strong>. Declaramos categoricamente que <em>os dados de conversas do SaaS NÃO são utilizados para treinar modelos públicos de inteligência artificial de terceiros</em>.</li>
+              <li><strong>Processamento de Pagamentos:</strong> Pagar.me v5 / Stone Pagamentos (PCI-DSS Nível 1).</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 class="text-sm font-bold text-white mb-1.5 flex items-center space-x-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-400 inline-block"></span>
+              <span>5. Isolamento Multi-Tenant & Segurança da Informação</span>
+            </h4>
+            <p>Cada Empresa Assinante possui isolamento lógico rigoroso por <code class="text-brand-300 bg-dark-900 px-1 py-0.5 rounded">tenant_id</code> em todas as consultas ao banco de dados PostgreSQL. Nenhuma empresa tem acesso aos dados, clientes, mensagens ou métricas de outra empresa. O sistema emprega criptografia bcrypt para senhas e tokens JWT assinados para autenticação de sessão.</p>
+          </div>
+
+          <div>
+            <h4 class="text-sm font-bold text-white mb-1.5 flex items-center space-x-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-400 inline-block"></span>
+              <span>6. Direitos do Titular de Dados (Artigo 18 da LGPD)</span>
+            </h4>
+            <p class="mb-1">Os titulares de dados pessoais têm direito a solicitar a qualquer momento:</p>
+            <p class="text-slate-400">I - Confirmação da existência de tratamento; II - Acesso aos dados; III - Correção de dados incompletos ou desatualizados; IV - Anonimização, bloqueio ou eliminação de dados desnecessários; V - Portabilidade dos dados; VI - Revogação do consentimento.</p>
+          </div>
+
+          <div>
+            <h4 class="text-sm font-bold text-white mb-1.5 flex items-center space-x-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-400 inline-block"></span>
+              <span>7. Retenção, Descarte e Registro Imutável de Consentimento</span>
+            </h4>
+            <p>O consentimento prestado nesta tela é registrado de forma perene no banco de dados com registro temporal (timestamp UTC), versão da política, endereço IP e identificador do dispositivo (User-Agent) para fins de auditoria legal (Art. 8º da LGPD). Os dados operacionais são mantidos durante a vigência do contrato de assinatura e pelos prazos legais previstos no Marco Civil da Internet (Lei nº 12.965/2014) e Código de Defesa do Consumidor.</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function openPrivacyConsentGate() {
+      const modal = document.getElementById('privacyConsentGateModal');
+      const container = document.getElementById('gatePolicyContentContainer');
+      if (container && !container.innerHTML.trim()) {
+        container.innerHTML = getPrivacyPolicyHtml();
+      }
+      const chk = document.getElementById('gateConsentCheckbox');
+      if (chk) chk.checked = false;
+      const btn = document.getElementById('btnSubmitGateConsent');
+      if (btn) btn.disabled = true;
+      const err = document.getElementById('gateConsentError');
+      if (err) err.classList.add('hidden');
+      if (modal) modal.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closePrivacyConsentGate() {
+      const modal = document.getElementById('privacyConsentGateModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function toggleGateAcceptButton() {
+      const chk = document.getElementById('gateConsentCheckbox');
+      const btn = document.getElementById('btnSubmitGateConsent');
+      if (btn && chk) {
+        btn.disabled = !chk.checked;
+      }
+    }
+
+    async function submitPrivacyConsent() {
+      const chk = document.getElementById('gateConsentCheckbox');
+      const btn = document.getElementById('btnSubmitGateConsent');
+      const errBox = document.getElementById('gateConsentError');
+      if (errBox) errBox.classList.add('hidden');
+
+      if (!chk || !chk.checked) {
+        if (errBox) {
+          errBox.textContent = 'Você deve marcar a caixa de seleção para confirmar seu consentimento.';
+          errBox.classList.remove('hidden');
+        }
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span>Registrando Consentimento...</span>';
+
+      try {
+        const res = await apiFetch('/api/v2/auth/consent', {
+          method: 'POST',
+          body: JSON.stringify({ version: 'v1.0' })
+        });
+
+        if (res.ok && res.data?.success) {
+          if (currentUserProfile) {
+            currentUserProfile.privacyPolicyAccepted = true;
+            currentUserProfile.privacy_policy_accepted_at = res.data.accepted_at || new Date().toISOString();
+            currentUserProfile.privacy_policy_version = 'v1.0';
+          }
+          closePrivacyConsentGate();
+          // Prossegue com a inicialização completa do painel
+          await initDashboard();
+        } else {
+          if (errBox) {
+            errBox.textContent = res.data?.error || 'Falha ao registrar consentimento no servidor.';
+            errBox.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (errBox) {
+          errBox.textContent = 'Erro de comunicação ao registrar consentimento.';
+          errBox.classList.remove('hidden');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Confirmar Consentimento & Continuar</span><i data-lucide="arrow-right" class="w-4 h-4"></i>';
+        lucide.createIcons();
+      }
+    }
+
+    function openPrivacyPolicyViewModal() {
+      const modal = document.getElementById('privacyPolicyViewModal');
+      const container = document.getElementById('viewPolicyContentContainer');
+      if (container && !container.innerHTML.trim()) {
+        container.innerHTML = getPrivacyPolicyHtml();
+      }
+      if (modal) modal.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closePrivacyPolicyViewModal() {
+      const modal = document.getElementById('privacyPolicyViewModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
     function handleLogout() {
       localStorage.removeItem('warnat_saas_token');
       currentToken = null;
       currentUserProfile = null;
       if (qrPollingInterval) clearInterval(qrPollingInterval);
+      closePrivacyConsentGate();
+      closePrivacyPolicyViewModal();
       document.getElementById('loginOverlay').classList.remove('hidden');
     }
 
@@ -3739,6 +4045,23 @@
         const meRes = await apiFetch('/api/v2/auth/me');
         if (meRes.ok && meRes.data) {
           currentUserProfile = meRes.data.user;
+
+          // ============================================================================
+          // GATE DE CONSENTIMENTO OBRIGATÓRIO (LGPD - LEI 13.709/2018)
+          // Bloqueia qualquer acesso aos dados do SaaS caso o usuário ainda não tenha aceito
+          // ============================================================================
+          const isPolicyAccepted = Boolean(
+            currentUserProfile?.privacyPolicyAccepted ||
+            (currentUserProfile?.privacy_policy_accepted_at && currentUserProfile?.privacy_policy_version === 'v1.0')
+          );
+
+          if (!isPolicyAccepted) {
+            openPrivacyConsentGate();
+            return; // Bloqueio total: dados do CRM, chat, WhatsApp e IA não são carregados até haver consentimento
+          } else {
+            closePrivacyConsentGate();
+          }
+
           document.getElementById('tenantCompanyName').textContent = meRes.data.tenant?.nome_empresa || 'Empresa';
           document.getElementById('tenantPlanBadge').textContent = (meRes.data.tenant?.plano || 'PRO').toUpperCase();
           document.getElementById('userProfileName').textContent = currentUserProfile?.nome || 'Usuário';

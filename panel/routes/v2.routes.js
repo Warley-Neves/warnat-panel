@@ -24,10 +24,16 @@ async function handleV2Routes(req, res, pathname, method, body) {
     // 1. AUTENTICAÇÃO PÚBLICA (LOGIN & AUTO-CADASTRO)
     // --------------------------------------------------------------------------
     if (pathname === '/api/v2/auth/register' && method === 'POST') {
-      const { nome_empresa, documento, plano, nome, email, password, sobre_empresa } = body;
+      const { nome_empresa, documento, plano, nome, email, password, sobre_empresa, privacy_policy_accepted } = body;
       if (!nome_empresa || !nome || !email || !password) {
         return sendJson(400, { success: false, error: 'Campos obrigatórios: nome_empresa, nome, email e password.' });
       }
+      if (!privacy_policy_accepted) {
+        return sendJson(400, { success: false, error: 'É obrigatório declarar ciência e consentimento com a Política de Privacidade e Termos da LGPD.' });
+      }
+
+      const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null;
+      const userAgent = req.headers['user-agent'] || null;
 
       try {
         const result = await authService.registerTenantAndAdmin({
@@ -37,7 +43,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
           nome,
           email,
           password,
-          sobre_empresa
+          sobre_empresa,
+          privacy_policy_accepted: true,
+          ipAddress: clientIp ? String(clientIp).split(',')[0].trim() : null,
+          userAgent
         });
         return sendJson(201, {
           success: true,
@@ -88,6 +97,21 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     // --------------------------------------------------------------------------
+    // 1.2 CONSULTA PÚBLICA DE POLÍTICA DE PRIVACIDADE & LGPD
+    // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/privacy-policy' && method === 'GET') {
+      return sendJson(200, {
+        success: true,
+        version: 'v1.0',
+        last_updated: '2026-11-08',
+        effective_date: '2026-11-08',
+        title: 'Política de Privacidade e Termos de Tratamento de Dados (LGPD)',
+        dpo_email: 'privacidade@warnattech.com.br',
+        company: 'WarNat SaaS - Tecnologia & Inteligência Omnichannel'
+      });
+    }
+
+    // --------------------------------------------------------------------------
     // MIDDLEWARE DE PROTEÇÃO JWT: Todas as demais rotas /api/v2/* exigem token
     // --------------------------------------------------------------------------
     const decodedUser = authService.authenticateRequest(req);
@@ -123,8 +147,9 @@ async function handleV2Routes(req, res, pathname, method, body) {
     // --------------------------------------------------------------------------
     const isBillingRoute = pathname.startsWith('/api/v2/tenant/billing');
     const isMeRoute = pathname === '/api/v2/auth/me';
+    const isConsentRoute = pathname === '/api/v2/auth/consent';
 
-    if (!isSuperAdminRoute && !isBillingRoute && !isMeRoute) {
+    if (!isSuperAdminRoute && !isBillingRoute && !isMeRoute && !isConsentRoute) {
       const isWrite = method === 'POST' || method === 'PUT' || method === 'DELETE';
       const accessResult = await entitlementsService.evaluateAccess(decodedUser, { isWrite });
       if (!accessResult.allowed) {
@@ -144,14 +169,55 @@ async function handleV2Routes(req, res, pathname, method, body) {
     if (pathname === '/api/v2/auth/me' && method === 'GET') {
       const tenantRes = await query(`SELECT id, nome_empresa, plano, limite_conversas_mes, status, trial_ends_at, is_manually_blocked, courtesy_plan FROM tenants WHERE id = $1`, [tenantId]);
       const lifecycle = await entitlementsService.getTenantLifecycle(tenantId);
-      const userRes = await query(`SELECT id, tenant_id, nome, email, role, COALESCE(is_super_admin, false) as is_super_admin FROM users WHERE id = $1`, [decodedUser.userId]);
+      const userRes = await query(
+        `SELECT id, tenant_id, nome, email, role, COALESCE(is_super_admin, false) as is_super_admin,
+                privacy_policy_accepted_at, privacy_policy_version
+         FROM users WHERE id = $1`,
+        [decodedUser.userId]
+      );
       const isSuper = Boolean(decodedUser.isSuperAdmin || userRes.rows[0]?.is_super_admin || (decodedUser.email && decodedUser.email.toLowerCase() === 'admin@warnattech.com.br') || (userRes.rows[0]?.email && userRes.rows[0].email.toLowerCase() === 'admin@warnattech.com.br'));
+      const uRow = userRes.rows[0] || {};
+      const policyAccepted = Boolean(uRow.privacy_policy_accepted_at && uRow.privacy_policy_version === 'v1.0');
+
       return sendJson(200, {
         success: true,
-        user: { ...decodedUser, ...(userRes.rows[0] || {}), isSuperAdmin: isSuper },
+        user: {
+          ...decodedUser,
+          ...uRow,
+          isSuperAdmin: isSuper,
+          privacyPolicyAccepted: policyAccepted,
+          privacy_policy_accepted_at: uRow.privacy_policy_accepted_at,
+          privacy_policy_version: uRow.privacy_policy_version
+        },
         tenant: tenantRes.rows[0] || null,
         lifecycle
       });
+    }
+
+    // --------------------------------------------------------------------------
+    // 2.1 REGISTRAR CONSENTIMENTO LGPD (POLÍTICA DE PRIVACIDADE)
+    // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/auth/consent' && method === 'POST') {
+      const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null;
+      const userAgent = req.headers['user-agent'] || null;
+      const policyVersion = body.version || 'v1.0';
+
+      try {
+        const consentRes = await authService.recordConsent(
+          decodedUser.userId,
+          decodedUser.tenantId,
+          policyVersion,
+          clientIp ? String(clientIp).split(',')[0].trim() : null,
+          userAgent
+        );
+        return sendJson(200, {
+          success: true,
+          message: 'Consentimento à Política de Privacidade registrado com sucesso!',
+          ...consentRes
+        });
+      } catch (cErr) {
+        return sendJson(500, { success: false, error: 'Falha ao registrar consentimento: ' + cErr.message });
+      }
     }
 
     // --------------------------------------------------------------------------

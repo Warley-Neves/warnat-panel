@@ -313,6 +313,24 @@ BEGIN
     CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id);
 
     -- --------------------------------------------------------------------------
+    -- 9.1 GESTÃO DE CONSENTIMENTO & POLÍTICA DE PRIVACIDADE (LGPD LEI 13.709/18)
+    -- --------------------------------------------------------------------------
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_policy_accepted_at TIMESTAMPTZ DEFAULT NULL;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_policy_version VARCHAR(20) DEFAULT NULL;
+
+    CREATE TABLE IF NOT EXISTS user_consents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        policy_version VARCHAR(20) NOT NULL,
+        accepted_at TIMESTAMPTZ DEFAULT NOW(),
+        ip_address VARCHAR(50),
+        user_agent TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_consents_user ON user_consents(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_consents_tenant ON user_consents(tenant_id);
+
+    -- --------------------------------------------------------------------------
     -- 10. RESPOSTAS RÁPIDAS (CANNED RESPONSES)
     -- --------------------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS canned_responses (
