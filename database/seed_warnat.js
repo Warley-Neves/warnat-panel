@@ -16,7 +16,46 @@ async function seedWarNatTech() {
   try {
     await client.query('BEGIN');
 
-    // 1. Cadastrar / Obter Tenant WarNat Tech
+    // 1. Cadastrar / Obter Tenant Master do Dono do SaaS
+    let masterTenantRes = await client.query(
+      `SELECT id, nome_empresa FROM tenants WHERE nome_empresa = 'WarNat SaaS (Gestão Master)' LIMIT 1`
+    );
+
+    let masterTenantId;
+    if (masterTenantRes.rowCount === 0) {
+      const newMaster = await client.query(
+        `INSERT INTO tenants (nome_empresa, documento, plano, limite_conversas_mes, ativo, status)
+         VALUES ('WarNat SaaS (Gestão Master)', '00.000.000/0001-00', 'enterprise', 999999, true, 'ACTIVE')
+         RETURNING id, nome_empresa`
+      );
+      masterTenantId = newMaster.rows[0].id;
+      console.log(`✅ Tenant Master do SaaS criado (ID: ${masterTenantId})`);
+    } else {
+      masterTenantId = masterTenantRes.rows[0].id;
+      console.log(`ℹ️ Tenant Master do SaaS já existe (ID: ${masterTenantId})`);
+    }
+
+    // 2. Usuário Dono do SaaS (admin@warnattech.com.br) - Exclusivo para Gestão do SaaS
+    const saEmail = 'admin@warnattech.com.br';
+    const saCheck = await client.query(`SELECT id FROM users WHERE email = $1`, [saEmail]);
+    const saHash = await authService.hashPassword('WarnatAdmin2026!');
+
+    if (saCheck.rowCount === 0) {
+      await client.query(
+        `INSERT INTO users (tenant_id, email, password_hash, role, nome, is_super_admin)
+         VALUES ($1, $2, $3, 'admin', 'Warley Santos (Dono)', true)`,
+        [masterTenantId, saEmail, saHash]
+      );
+      console.log(`✅ Usuário Dono do SaaS criado: ${saEmail}`);
+    } else {
+      await client.query(
+        `UPDATE users SET tenant_id = $1, is_super_admin = true, role = 'admin', nome = 'Warley Santos (Dono)' WHERE email = $2`,
+        [masterTenantId, saEmail]
+      );
+      console.log(`ℹ️ Usuário Dono do SaaS (${saEmail}) vinculado exclusivamente ao Tenant Master.`);
+    }
+
+    // 3. Cadastrar / Obter Tenant Cliente WarNat Tech
     let tenantRes = await client.query(
       `SELECT id, nome_empresa FROM tenants WHERE nome_empresa = 'WarNat Tech' LIMIT 1`
     );
@@ -24,36 +63,35 @@ async function seedWarNatTech() {
     let tenantId;
     if (tenantRes.rowCount === 0) {
       const newTenant = await client.query(
-        `INSERT INTO tenants (nome_empresa, documento, plano, limite_conversas_mes, ativo)
-         VALUES ('WarNat Tech', '45.123.789/0001-10', 'enterprise', 5000, true)
+        `INSERT INTO tenants (nome_empresa, documento, plano, limite_conversas_mes, ativo, status)
+         VALUES ('WarNat Tech', '45.123.789/0001-10', 'enterprise', 5000, true, 'ACTIVE')
          RETURNING id, nome_empresa`
       );
       tenantId = newTenant.rows[0].id;
-      console.log(`✅ Tenant criado: WarNat Tech (ID: ${tenantId})`);
+      console.log(`✅ Tenant Cliente criado: WarNat Tech (ID: ${tenantId})`);
     } else {
       tenantId = tenantRes.rows[0].id;
-      console.log(`ℹ️ Tenant WarNat Tech já existe (ID: ${tenantId})`);
+      console.log(`ℹ️ Tenant Cliente WarNat Tech já existe (ID: ${tenantId})`);
     }
 
-    // 2. Cadastrar / Atualizar Usuário Administrador & SuperAdmin (Warley Santos)
-    const adminEmail = 'admin@warnattech.com.br';
-    const existingUser = await client.query(`SELECT id FROM users WHERE email = $1`, [adminEmail]);
+    // 4. Cadastrar / Atualizar Usuário Operacional da WarNat Tech (warley.santos@warnattech.com.br)
+    const clientEmail = 'warley.santos@warnattech.com.br';
+    const clientCheck = await client.query(`SELECT id FROM users WHERE email = $1`, [clientEmail]);
+    const clientHash = await authService.hashPassword('WarnatAdmin2026!');
 
-    if (existingUser.rowCount === 0) {
-      const passwordHash = await authService.hashPassword('WarnatAdmin2026!');
-      const newUser = await client.query(
+    if (clientCheck.rowCount === 0) {
+      await client.query(
         `INSERT INTO users (tenant_id, email, password_hash, role, nome, is_super_admin)
-         VALUES ($1, $2, $3, 'admin', 'Warley Santos', true)
-         RETURNING id, email, role, nome, is_super_admin`,
-        [tenantId, adminEmail, passwordHash]
+         VALUES ($1, $2, $3, 'admin', 'Warley Santos', false)`,
+        [tenantId, clientEmail, clientHash]
       );
-      console.log(`✅ Usuário Admin criado: ${newUser.rows[0].nome} (${newUser.rows[0].email}) com is_super_admin = true`);
+      console.log(`✅ Usuário da WarNat Tech criado: ${clientEmail} (vinculado ao tenant WarNat Tech)`);
     } else {
       await client.query(
-        `UPDATE users SET is_super_admin = true, role = 'admin' WHERE email = $1`,
-        [adminEmail]
+        `UPDATE users SET tenant_id = $1, role = 'admin', is_super_admin = false WHERE email = $2`,
+        [tenantId, clientEmail]
       );
-      console.log(`ℹ️ Usuário Admin (${adminEmail}) sincronizado com is_super_admin = true.`);
+      console.log(`ℹ️ Usuário da WarNat Tech (${clientEmail}) sincronizado com o tenant WarNat Tech.`);
     }
 
     // 3. Cadastrar / Vincular Instância do WhatsApp da Evolution API
@@ -170,6 +208,95 @@ async function seedWarNatTech() {
       ]
     );
     console.log(`✅ Dossiê permanente do administrador Warley Santos provisionado.`);
+
+    // ==============================================================================
+    // 6. Cadastrar / Obter Tenant Cliente: WN Velas artesanais
+    // ==============================================================================
+    let velasRes = await client.query(
+      `SELECT id, nome_empresa FROM tenants WHERE nome_empresa ILIKE '%velas%' LIMIT 1`
+    );
+
+    let velasTenantId;
+    if (velasRes.rowCount === 0) {
+      const newVelas = await client.query(
+        `INSERT INTO tenants (nome_empresa, documento, plano, limite_conversas_mes, ativo, status)
+         VALUES ('WN Velas artesanais', '12.345.678/0001-90', 'pro', 5000, true, 'ACTIVE')
+         RETURNING id, nome_empresa`
+      );
+      velasTenantId = newVelas.rows[0].id;
+      console.log(`✅ Tenant Cliente criado: WN Velas artesanais (ID: ${velasTenantId})`);
+    } else {
+      velasTenantId = velasRes.rows[0].id;
+      console.log(`ℹ️ Tenant Cliente WN Velas artesanais já existe (ID: ${velasTenantId})`);
+    }
+
+    // 7. Cadastrar / Sincronizar Usuário da WN Velas artesanais (warley.santosst@gmail.com)
+    const velasEmail = 'warley.santosst@gmail.com';
+    const velasUserCheck = await client.query(`SELECT id FROM users WHERE email = $1`, [velasEmail]);
+    const velasHash = await authService.hashPassword('WarnatAdmin2026!');
+
+    if (velasUserCheck.rowCount === 0) {
+      await client.query(
+        `INSERT INTO users (tenant_id, email, password_hash, role, nome, is_super_admin)
+         VALUES ($1, $2, $3, 'admin', 'Warley Santos (Velas)', false)`,
+        [velasTenantId, velasEmail, velasHash]
+      );
+      console.log(`✅ Usuário da WN Velas artesanais criado: ${velasEmail}`);
+    } else {
+      await client.query(
+        `UPDATE users SET tenant_id = $1, role = 'admin', is_super_admin = false WHERE email = $2`,
+        [velasTenantId, velasEmail]
+      );
+      console.log(`ℹ️ Usuário da WN Velas artesanais (${velasEmail}) sincronizado.`);
+    }
+
+    // 8. Vincular Instância WhatsApp wn-velas
+    await client.query(
+      `INSERT INTO tenant_whatsapp_instances (
+         tenant_id, instance_name, instance_token, numero_telefone, status, webhook_url
+       ) VALUES ($1, 'wn-velas', 'token-interno-velas-123', '5531983525816', 'open', 'https://api.warnattech.com.br/api/webhook/whatsapp')
+       ON CONFLICT (instance_name)
+       DO UPDATE SET
+         tenant_id = EXCLUDED.tenant_id,
+         status = 'open',
+         updated_at = now()`,
+      [velasTenantId]
+    );
+    console.log(`✅ Instância WhatsApp "wn-velas" vinculada ao tenant WN Velas artesanais.`);
+
+    // 9. Configurar Regras da IA e Catálogo para WN Velas artesanais
+    const velasServicos = [
+      { nome: 'Vela Aromática Pote de Vidro 140g - Baunilha Negra', faixa_preco: 'R$ 45,00', detalhes: 'Cera de coco 100% vegetal com pavio de algodão' },
+      { nome: 'Vela Aromática Lata Retrô 90g - Lavanda Francesa', faixa_preco: 'R$ 35,00', detalhes: 'Relaxante e suave' },
+      { nome: 'Home Spray / Difusor de Ambiente 200ml - Flor de Cerejeira', faixa_preco: 'R$ 55,00', detalhes: 'Alta fixação e aroma floral sofisticado' },
+      { nome: 'Kit Trio de Mini Velas Aromáticas para Presente', faixa_preco: 'R$ 89,90', detalhes: 'Acompanha caixa especial e laço para presente' }
+    ];
+
+    await client.query(
+      `INSERT INTO tenant_ai_configs (
+         tenant_id, nicho_atuacao, tipo_negocio, objetivo_funil, tom_de_voz, sobre_empresa,
+         pergunta_inicial_qualificacao, diretrizes_funil, politicas_comerciais, servicos_oferecidos,
+         servicos_recusados, whatsapp_notificacao_humana
+       ) VALUES (
+         $1, 'Velas Artesanais Ecológicas & Aromas para Ambiente', 'produtos', 'venda_produtos',
+         'amigavel_e_caloroso', 'Ateliê especializado na confecção artesanal de velas ecológicas de cera de coco e aromatizadores de ambiente premium.',
+         'Você gostaria de conhecer nossos aromas e kits de velas para pronta-entrega ou está procurando lembrancinhas personalizadas para uma ocasião especial?',
+         '1. Descobrir se é para presente ou para uso próprio;\n2. Apresentar os aromas mais pedidos;\n3. Informar valores e frete.',
+         'Aceitamos Pix com 5% de desconto e Cartão de Crédito. Frete grátis para compras acima de R$ 180.',
+         $2::jsonb,
+         'Não fabricamos velas de parafina industrial comum.',
+         '5531983525816'
+       )
+       ON CONFLICT (tenant_id)
+       DO UPDATE SET
+         nicho_atuacao = EXCLUDED.nicho_atuacao,
+         tipo_negocio = EXCLUDED.tipo_negocio,
+         objetivo_funil = EXCLUDED.objetivo_funil,
+         servicos_oferecidos = EXCLUDED.servicos_oferecidos,
+         updated_at = now()`,
+      [velasTenantId, JSON.stringify(velasServicos)]
+    );
+    console.log(`✅ Regras da IA e catálogo de produtos configurados para WN Velas artesanais.`);
 
     await client.query('COMMIT');
     console.log('------------------------------------------------------------');

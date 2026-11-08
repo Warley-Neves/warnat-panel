@@ -1845,6 +1845,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
           COUNT(*) FILTER (WHERE status = 'SUSPENDED_BY_ADMIN' OR is_manually_blocked = true)::int as suspended,
           COUNT(*) FILTER (WHERE status = 'CANCELED')::int as canceled
         FROM tenants
+        WHERE nome_empresa NOT LIKE '%Gestão Master%'
       `);
 
       const subsRes = await query(`
@@ -1904,7 +1905,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
                (SELECT s.plan_id FROM subscriptions s WHERE s.tenant_id = t.id AND s.status = 'active' ORDER BY s.created_at DESC LIMIT 1) as active_sub_plan,
                (SELECT i.amount_cents FROM invoices i WHERE i.tenant_id = t.id AND i.status = 'PAID' ORDER BY i.created_at DESC LIMIT 1) as last_paid_amount
         FROM tenants t
-        WHERE 1=1
+        WHERE t.nome_empresa NOT LIKE '%Gestão Master%'
       `;
       const params = [];
 

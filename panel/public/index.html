@@ -3632,7 +3632,9 @@
           impBanner.classList.add('hidden');
         }
 
-        if (window.location.hash === '#superadmin' && isSuper) {
+        if (isSuper && !isImpersonating && (!window.location.hash || window.location.hash === '' || window.location.hash === '#' || window.location.hash === '#superadmin')) {
+          switchTab('superadmin');
+        } else if (window.location.hash === '#superadmin' && isSuper) {
           switchTab('superadmin');
         } else {
           switchTab('crm');
