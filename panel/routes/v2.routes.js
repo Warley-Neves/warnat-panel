@@ -1897,6 +1897,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
       let sql = `
         SELECT t.id, t.nome_empresa, t.documento, t.plano, t.status, t.trial_ends_at,
                t.is_manually_blocked, t.admin_notes, t.courtesy_plan, t.past_due_since, t.created_at,
+               (SELECT u.email FROM users u WHERE u.tenant_id = t.id ORDER BY u.created_at ASC LIMIT 1) as admin_email,
+               (SELECT u.nome FROM users u WHERE u.tenant_id = t.id ORDER BY u.created_at ASC LIMIT 1) as admin_nome,
                (SELECT COUNT(*)::int FROM users u WHERE u.tenant_id = t.id) as users_count,
                (SELECT COUNT(*)::int FROM chat_sessions cs WHERE cs.tenant_id = t.id) as sessions_count,
                (SELECT s.plan_id FROM subscriptions s WHERE s.tenant_id = t.id AND s.status = 'active' ORDER BY s.created_at DESC LIMIT 1) as active_sub_plan,
@@ -2125,6 +2127,46 @@ async function handleV2Routes(req, res, pathname, method, body) {
       return sendJson(200, {
         success: true,
         message: `Empresa "${companyName}" e todos os seus dados foram excluídos com sucesso.`
+      });
+    }
+
+    // 15.7 ALTERNAR TENANT ATIVO (IMPERSONATE / TROCAR EMPRESA NO PAINEL)
+    if (pathname === '/api/v2/superadmin/switch-tenant' && method === 'POST') {
+      const { target_tenant_id } = body;
+
+      let targetTenant;
+      if (target_tenant_id) {
+        const tRes = await query(`SELECT * FROM tenants WHERE id = $1`, [target_tenant_id]);
+        if (tRes.rowCount === 0) {
+          return sendJson(404, { success: false, error: 'Tenant não encontrado.' });
+        }
+        targetTenant = tRes.rows[0];
+      } else {
+        const origId = decodedUser.originalTenantId || decodedUser.tenantId;
+        const tRes = await query(`SELECT * FROM tenants WHERE id = $1`, [origId]);
+        targetTenant = tRes.rows[0];
+      }
+
+      const originalTenantId = decodedUser.originalTenantId || decodedUser.tenantId;
+      const isImpersonating = targetTenant.id !== originalTenantId;
+
+      const newToken = authService.generateToken({
+        id: decodedUser.userId,
+        tenant_id: targetTenant.id,
+        email: decodedUser.email,
+        role: 'admin',
+        nome: decodedUser.nome,
+        is_super_admin: true,
+        impersonated: isImpersonating,
+        originalTenantId: originalTenantId
+      });
+
+      return sendJson(200, {
+        success: true,
+        message: isImpersonating ? `Visualizando painel como "${targetTenant.nome_empresa}"` : `Contexto restaurado para "${targetTenant.nome_empresa}"`,
+        token: newToken,
+        tenant: targetTenant,
+        impersonated: isImpersonating
       });
     }
 

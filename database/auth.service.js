@@ -58,7 +58,9 @@ class AuthService {
       email: user.email,
       role: user.role,
       nome: user.nome,
-      isSuperAdmin: isSuper
+      isSuperAdmin: isSuper,
+      impersonated: !!user.impersonated,
+      originalTenantId: user.originalTenantId || null
     };
     return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
   }
