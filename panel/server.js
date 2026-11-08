@@ -631,6 +631,7 @@ const server = http.createServer(async (req, res) => {
     // --------------------------------------------------------------------------
     // ROTAS GOOGLE CALENDAR (AGENDAMENTO & VERIFICAÇÃO DE HORÁRIOS OCUPADOS)
     // --------------------------------------------------------------------------
+    const isCalendarRoute = pathname.startsWith('/api/calendar');
     if (isCalendarRoute) {
       const reqKey = req.headers['apikey'] || parsedUrl.query.apikey || '';
       const authHeader = req.headers['authorization'] || '';
