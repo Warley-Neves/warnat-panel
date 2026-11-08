@@ -2171,6 +2171,13 @@ async function handleV2Routes(req, res, pathname, method, body) {
       });
     }
 
+    // 15.8 SINCRONIZAR SEED & TENANTS MASTER (SUPERADMIN BACKOFFICE)
+    if (pathname === '/api/v2/superadmin/sync-seed' && method === 'POST') {
+      const { seedWarNatTech } = require('../../database/seed_warnat');
+      const seedResult = await seedWarNatTech();
+      return sendJson(200, { success: true, message: 'Seed e tenants sincronizados com sucesso!', seedResult });
+    }
+
     if (pathname === '/api/v2/superadmin/audit-logs' && method === 'GET') {
       const logsRes = await query(`
         SELECT a.id, a.action, a.details, a.created_at,
