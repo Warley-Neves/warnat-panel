@@ -4,7 +4,7 @@
 // ==============================================================================
 
 const authService = require('../../database/auth.service');
-const { query } = require('../../database/db');
+const { query, getClient } = require('../../database/db');
 const evolutionService = require('../../services/evolution.service');
 const webhookController = require('../../controllers/webhook.controller');
 const messageCache = require('../../services/message-cache.service');
@@ -1370,7 +1370,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
         return sendJson(403, { success: false, error: 'Apenas Administradores podem cadastrar novos membros na equipe.' });
       }
 
-      const { nome, email, password, role } = body;
+      const { nome, email, password, role, department_id, departmentId } = body;
       if (!nome || !email || !password) {
         return sendJson(400, { success: false, error: 'Nome, e-mail e senha são obrigatórios.' });
       }
@@ -1383,7 +1383,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
           nome,
           email,
           password,
-          role: userRole
+          role: userRole,
+          departmentId: department_id || departmentId || null
         });
         return sendJson(201, {
           success: true,
@@ -2176,6 +2177,89 @@ async function handleV2Routes(req, res, pathname, method, body) {
       const { seedWarNatTech } = require('../../database/seed_warnat');
       const seedResult = await seedWarNatTech();
       return sendJson(200, { success: true, message: 'Seed e tenants sincronizados com sucesso!', seedResult });
+    }
+
+    // 15.9 CADASTRAR NOVO TENANT / EMPRESA PELO SUPERADMIN
+    if (pathname === '/api/v2/superadmin/tenants' && method === 'POST') {
+      const { nome_empresa, documento, plano, admin_nome, admin_email, admin_password, trial_days, admin_notes } = body;
+
+      if (!nome_empresa || !admin_email || !admin_password) {
+        return sendJson(400, { success: false, error: 'Nome da empresa, e-mail e senha do administrador são obrigatórios.' });
+      }
+
+      const cleanEmail = admin_email.toLowerCase().trim();
+      const existingUser = await query(`SELECT id FROM users WHERE email = $1`, [cleanEmail]);
+      if (existingUser.rowCount > 0) {
+        return sendJson(400, { success: false, error: 'Já existe um usuário com este e-mail no sistema.' });
+      }
+
+      const client = await getClient();
+      try {
+        await client.query('BEGIN');
+
+        const days = Number(trial_days) > 0 ? Number(trial_days) : 7;
+        const trialEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+        const planId = (plano || 'PRO').toLowerCase();
+
+        const newTenantRes = await client.query(
+          `INSERT INTO tenants (
+             nome_empresa, documento, plano, limite_conversas_mes, ativo, status, trial_ends_at, admin_notes
+           ) VALUES ($1, $2, $3, 5000, true, 'TRIALING', $4, $5)
+           RETURNING id, nome_empresa, plano, status, trial_ends_at, created_at`,
+          [nome_empresa.trim(), documento || null, planId, trialEnd, admin_notes || null]
+        );
+        const newTenant = newTenantRes.rows[0];
+
+        // Cria usuário administrador do tenant
+        const passwordHash = await authService.hashPassword(admin_password);
+        const newUserRes = await client.query(
+          `INSERT INTO users (tenant_id, email, password_hash, role, nome, ativo, is_super_admin)
+           VALUES ($1, $2, $3, 'admin', $4, true, false)
+           RETURNING id, email, role, nome`,
+          [newTenant.id, cleanEmail, passwordHash, admin_nome ? admin_nome.trim() : 'Administrador']
+        );
+
+        // Auto-provisiona instância WhatsApp
+        const instanceSlug = `${nome_empresa.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${newTenant.id.substring(0, 6)}`;
+        await client.query(
+          `INSERT INTO tenant_whatsapp_instances (tenant_id, instance_name, instance_token, status, webhook_url)
+           VALUES ($1, $2, $3, 'disconnected', 'https://warnat-panel.onrender.com/api/webhook/whatsapp')
+           ON CONFLICT (instance_name) DO NOTHING`,
+          [newTenant.id, instanceSlug, `token-${instanceSlug}`]
+        );
+
+        // Inicializa configuração de IA
+        await client.query(
+          `INSERT INTO tenant_ai_configs (tenant_id, modo_atendimento, nome_assistente, responsavel_tecnico, tom_de_voz, sobre_empresa)
+           VALUES ($1, 'automacao', 'Assistente Virtual', $2, 'profissional_amigavel', $3)
+           ON CONFLICT (tenant_id) DO NOTHING`,
+          [newTenant.id, admin_nome ? admin_nome.trim() : 'Responsável', `Empresa ${nome_empresa}`]
+        );
+
+        // Log de Auditoria do SuperAdmin
+        await client.query(
+          `INSERT INTO admin_audit_logs (admin_user_id, target_tenant_id, action, details)
+           VALUES ($1, $2, 'CREATE_TENANT', $3)`,
+          [decodedUser.userId, newTenant.id, JSON.stringify({
+            tenant: newTenant,
+            admin_email: cleanEmail
+          })]
+        );
+
+        await client.query('COMMIT');
+
+        return sendJson(201, {
+          success: true,
+          message: `Empresa "${newTenant.nome_empresa}" cadastrada com sucesso!`,
+          tenant: newTenant,
+          user: newUserRes.rows[0]
+        });
+      } catch (err) {
+        await client.query('ROLLBACK');
+        return sendJson(500, { success: false, error: 'Falha ao cadastrar tenant: ' + err.message });
+      } finally {
+        client.release();
+      }
     }
 
     if (pathname === '/api/v2/superadmin/audit-logs' && method === 'GET') {

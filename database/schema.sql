@@ -308,6 +308,10 @@ BEGIN
     );
     CREATE INDEX IF NOT EXISTS idx_departments_tenant ON departments(tenant_id);
 
+    -- Vínculo de Membros da Equipe com Departamentos / Equipes
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS department_id UUID REFERENCES departments(id) ON DELETE SET NULL;
+    CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id);
+
     -- --------------------------------------------------------------------------
     -- 10. RESPOSTAS RÁPIDAS (CANNED RESPONSES)
     -- --------------------------------------------------------------------------

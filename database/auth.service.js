@@ -81,7 +81,7 @@ class AuthService {
   /**
    * Cadastra novo usuário vinculado a um tenant
    */
-  async registerUser({ tenantId, email, password, role = 'operador', nome }) {
+  async registerUser({ tenantId, email, password, role = 'operador', nome, departmentId = null }) {
     if (!tenantId || !email || !password || !nome) {
       throw new Error('Todos os campos são obrigatórios: tenantId, email, password, nome.');
     }
@@ -94,10 +94,10 @@ class AuthService {
 
     const passwordHash = await this.hashPassword(password);
     const result = await query(
-      `INSERT INTO users (tenant_id, email, password_hash, role, nome, ativo)
-       VALUES ($1, $2, $3, $4, $5, true)
-       RETURNING id, tenant_id, email, role, nome, ativo, created_at`,
-      [tenantId, cleanEmail, passwordHash, role, nome.trim()]
+      `INSERT INTO users (tenant_id, email, password_hash, role, nome, department_id, ativo)
+       VALUES ($1, $2, $3, $4, $5, $6, true)
+       RETURNING id, tenant_id, email, role, nome, department_id, ativo, created_at`,
+      [tenantId, cleanEmail, passwordHash, role, nome.trim(), departmentId || null]
     );
 
     return result.rows[0];
@@ -106,19 +106,22 @@ class AuthService {
   /**
    * Helper alternativo para criar usuário pelo Tenant
    */
-  async createUser(tenantId, { nome, email, password, role = 'atendente' }) {
-    return this.registerUser({ tenantId, email, password, role, nome });
+  async createUser(tenantId, { nome, email, password, role = 'atendente', departmentId = null }) {
+    return this.registerUser({ tenantId, email, password, role, nome, departmentId });
   }
 
   /**
-   * Lista todos os usuários de um tenant específico
+   * Lista todos os usuários de um tenant específico com suas equipes/departamentos
    */
   async listUsers(tenantId) {
     const res = await query(
-      `SELECT id, tenant_id, nome, email, role, COALESCE(ativo, true) as ativo, created_at, updated_at
-       FROM users
-       WHERE tenant_id = $1
-       ORDER BY created_at ASC`,
+      `SELECT u.id, u.tenant_id, u.nome, u.email, u.role, COALESCE(u.ativo, true) as ativo,
+              u.department_id, d.nome as department_name, d.cor as department_cor,
+              u.created_at, u.updated_at
+       FROM users u
+       LEFT JOIN departments d ON u.department_id = d.id
+       WHERE u.tenant_id = $1
+       ORDER BY u.created_at ASC`,
       [tenantId]
     );
     return res.rows;
@@ -127,7 +130,7 @@ class AuthService {
   /**
    * Atualiza dados de um usuário do tenant
    */
-  async updateUser(tenantId, userId, { nome, role, ativo, password }) {
+  async updateUser(tenantId, userId, { nome, role, ativo, password, departmentId, department_id }) {
     const updates = [];
     const values = [userId, tenantId];
     let idx = 3;
@@ -143,6 +146,11 @@ class AuthService {
     if (typeof ativo === 'boolean') {
       updates.push(`ativo = $${idx++}`);
       values.push(ativo);
+    }
+    const resolvedDeptId = departmentId !== undefined ? departmentId : department_id;
+    if (resolvedDeptId !== undefined) {
+      updates.push(`department_id = $${idx++}`);
+      values.push(resolvedDeptId || null);
     }
     if (password && password.trim().length >= 6) {
       const hash = await this.hashPassword(password.trim());

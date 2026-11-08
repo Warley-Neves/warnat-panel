@@ -1460,24 +1460,53 @@
     </section>
 
     <!-- ======================================================================== -->
-    <!-- ABA 5: GESTÃO DA EQUIPE & USUÁRIOS (RBAC MULTI-TENANT) -->
+    <!-- ABA 5: GESTÃO DA EQUIPE, SETORES & USUÁRIOS (RBAC MULTI-TENANT) -->
     <!-- ======================================================================== -->
     <section id="tab-team" class="tab-content hidden fade-in space-y-6">
+
+      <!-- BLOCO 1: EQUIPES & SETORES DE ATENDIMENTO -->
+      <div class="bg-dark-850 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+        <div class="p-6 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center space-x-2">
+              <i data-lucide="users" class="w-5 h-5 text-blue-400"></i>
+              <span>Equipes & Setores de Atendimento</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Crie e organize as equipes de atendimento da sua empresa (ex: Comercial, Suporte, Financeiro, Pós-Venda) para distribuição de chamados e conversas</p>
+          </div>
+          <div class="flex items-center space-x-3">
+            <button onclick="openDepartmentsModal(); resetDeptForm();" id="btnNewTeam" class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-2.5 rounded-xl text-xs flex items-center space-x-2 shadow-lg shadow-blue-600/20 transition">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              <span>Nova Equipe</span>
+            </button>
+            <button onclick="loadDepartments().then(renderTeamDepts)" class="p-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Recarregar equipes">
+              <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- GRID DE CARDS DAS EQUIPES -->
+        <div id="teamDeptsGrid" class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="col-span-full py-8 text-center text-slate-500 text-xs">Carregando equipes...</div>
+        </div>
+      </div>
+
+      <!-- BLOCO 2: MEMBROS DA EQUIPE & ATENDENTES -->
       <div class="bg-dark-850 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
         <div class="p-6 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 class="text-base font-bold text-white flex items-center space-x-2">
               <i data-lucide="shield" class="w-5 h-5 text-brand-500"></i>
-              <span>Membros da Equipe & Níveis de Acesso</span>
+              <span>Membros da Equipe & Operadores</span>
             </h3>
-            <p class="text-xs text-slate-400 mt-1">Gerencie operadores, atendentes e administradores do seu Tenant</p>
+            <p class="text-xs text-slate-400 mt-1">Gerencie operadores, atendentes e administradores vinculados às suas equipes</p>
           </div>
           <div class="flex items-center space-x-3">
             <button onclick="openNewUserModal()" id="btnNewUser" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2.5 rounded-xl text-xs flex items-center space-x-2 shadow-lg shadow-brand-600/20 transition">
               <i data-lucide="user-plus" class="w-4 h-4"></i>
               <span>Novo Membro</span>
             </button>
-            <button onclick="loadTeamUsers()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Recarregar equipe">
+            <button onclick="loadTeamUsers()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Recarregar membros">
               <i data-lucide="rotate-cw" class="w-4 h-4"></i>
             </button>
           </div>
@@ -1489,6 +1518,7 @@
               <tr>
                 <th class="px-6 py-4">Nome do Membro</th>
                 <th class="px-6 py-4">E-mail Corporativo</th>
+                <th class="px-6 py-4">Equipe / Setor</th>
                 <th class="px-6 py-4">Nível de Acesso (Cargo)</th>
                 <th class="px-6 py-4">Status</th>
                 <th class="px-6 py-4">Data de Cadastro</th>
@@ -1497,7 +1527,7 @@
             </thead>
             <tbody id="teamTableBody" class="divide-y divide-slate-800 text-slate-300">
               <tr>
-                <td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando membros da equipe...</td>
+                <td colspan="7" class="px-6 py-12 text-center text-slate-500">Carregando membros da equipe...</td>
               </tr>
             </tbody>
           </table>
@@ -1744,10 +1774,16 @@
           </div>
           <p class="text-xs text-slate-400 mt-1">Gestão centralizada de tenants, adimplência, extensão de períodos de testes e trilha de auditoria</p>
         </div>
-        <button onclick="loadSuperAdminData()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition self-start sm:self-auto flex items-center space-x-2 text-xs font-semibold">
-          <i data-lucide="rotate-cw" class="w-4 h-4"></i>
-          <span>Atualizar Visão</span>
-        </button>
+        <div class="flex items-center space-x-3 self-start sm:self-auto">
+          <button onclick="openNewTenantModal()" class="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white transition flex items-center space-x-2 text-xs font-semibold shadow-lg shadow-purple-600/30">
+            <i data-lucide="building-2" class="w-4 h-4"></i>
+            <span>Nova Empresa</span>
+          </button>
+          <button onclick="loadSuperAdminData()" class="p-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center space-x-2 text-xs font-semibold">
+            <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+            <span>Atualizar</span>
+          </button>
+        </div>
       </div>
 
       <!-- CARDS DE KPIS DO SAAS -->
@@ -2061,10 +2097,86 @@
           </select>
         </div>
 
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Equipe / Setor de Atendimento</label>
+          <select id="newUserDepartment" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+            <option value="">-- Nenhuma equipe específica (Fila Geral) --</option>
+          </select>
+        </div>
+
         <div class="pt-2 flex justify-end space-x-3">
           <button type="button" onclick="closeNewUserModal()" class="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm hover:bg-dark-800">Cancelar</button>
           <button type="submit" id="btnSubmitNewUser" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-medium text-sm flex items-center space-x-2">
             <span>Salvar Membro</span>
+            <i data-lucide="check" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
+  <!-- MODAL: CADASTRAR NOVA EMPRESA / TENANT (SUPERADMIN BACKOFFICE) -->
+  <!-- ============================================================================ -->
+  <div id="newTenantModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-purple-500/30 rounded-2xl w-full max-w-lg shadow-2xl fade-in overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-purple-950/20">
+        <h4 class="font-bold text-white text-base flex items-center space-x-2">
+          <i data-lucide="building-2" class="w-5 h-5 text-purple-400"></i>
+          <span>Cadastrar Nova Empresa / Tenant</span>
+        </h4>
+        <button onclick="closeNewTenantModal()" class="p-2 text-slate-400 hover:text-white rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form onsubmit="handleCreateTenant(event)" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Nome da Empresa / Loja</label>
+          <input type="text" id="newTenantNome" required placeholder="Ex: Ótica Bela Vista" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">CNPJ / CPF (Opcional)</label>
+            <input type="text" id="newTenantDoc" placeholder="00.000.000/0001-00" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Plano Inicial</label>
+            <select id="newTenantPlano" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500">
+              <option value="PRO">Plano PRO (IA + Automações)</option>
+              <option value="BASIC">Plano BÁSICO (Chat Manual)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Dias de Free Trial</label>
+          <input type="number" id="newTenantTrialDays" value="7" min="1" max="90" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500">
+        </div>
+
+        <div class="border-t border-slate-800 pt-3">
+          <p class="text-xs font-bold text-purple-400 uppercase tracking-wider mb-2">Dados do Administrador da Loja</p>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Nome do Responsável</label>
+              <input type="text" id="newTenantAdminNome" required placeholder="Ex: Roberto Gomes" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">E-mail do Administrador</label>
+              <input type="email" id="newTenantAdminEmail" required placeholder="roberto@empresa.com" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Senha Inicial</label>
+              <input type="password" id="newTenantAdminPassword" required minlength="6" placeholder="Mínimo 6 caracteres" class="w-full bg-dark-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500">
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-2 flex justify-end space-x-3">
+          <button type="button" onclick="closeNewTenantModal()" class="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm hover:bg-dark-800">Cancelar</button>
+          <button type="submit" id="btnSubmitNewTenant" class="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-sm flex items-center space-x-2">
+            <span>Criar Empresa</span>
             <i data-lucide="check" class="w-4 h-4"></i>
           </button>
         </div>
@@ -3074,6 +3186,56 @@
       }
     }
 
+    function openNewTenantModal() {
+      document.getElementById('newTenantModal')?.classList.remove('hidden');
+      document.getElementById('newTenantNome')?.focus();
+    }
+
+    function closeNewTenantModal() {
+      document.getElementById('newTenantModal')?.classList.add('hidden');
+    }
+
+    async function handleCreateTenant(e) {
+      e.preventDefault();
+      const nome_empresa = document.getElementById('newTenantNome').value.trim();
+      const documento = document.getElementById('newTenantDoc').value.trim();
+      const plano = document.getElementById('newTenantPlano').value;
+      const trial_days = document.getElementById('newTenantTrialDays').value;
+      const admin_nome = document.getElementById('newTenantAdminNome').value.trim();
+      const admin_email = document.getElementById('newTenantAdminEmail').value.trim();
+      const admin_password = document.getElementById('newTenantAdminPassword').value;
+
+      const btn = document.getElementById('btnSubmitNewTenant');
+      btn.disabled = true;
+
+      try {
+        const res = await apiFetch('/api/v2/superadmin/tenants', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome_empresa,
+            documento,
+            plano,
+            trial_days,
+            admin_nome,
+            admin_email,
+            admin_password
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          closeNewTenantModal();
+          alert(`✅ Empresa "${nome_empresa}" criada com sucesso!`);
+          await loadSuperAdminData();
+        } else {
+          alert('❌ Falha ao criar empresa: ' + (res.data?.error || 'Erro desconhecido'));
+        }
+      } catch (err) {
+        alert('Erro ao criar empresa: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     async function loadSuperAdminData() {
       const tbody = document.getElementById('saTenantsTableBody');
       try {
@@ -3680,7 +3842,10 @@
       if (tab === 'crm') loadLeads();
       if (tab === 'atendimentos') loadAtendimentos();
       if (tab === 'appointments') loadAppointments();
-      if (tab === 'team') loadTeamUsers();
+      if (tab === 'team') {
+        loadDepartments().then(renderTeamDepts);
+        loadTeamUsers();
+      }
       if (tab === 'ai') loadAiConfig();
       if (tab === 'whatsapp') checkWhatsAppStatus();
       if (tab === 'billing') loadBillingInfo();
@@ -5869,20 +6034,23 @@
     }
 
     // --------------------------------------------------------------------------
-    // 5. GESTÃO DA EQUIPE (RBAC)
+    // 5. GESTÃO DA EQUIPE, SETORES & USUÁRIOS (RBAC)
     // --------------------------------------------------------------------------
     async function loadTeamUsers() {
       const tbody = document.getElementById('teamTableBody');
-      tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">Carregando membros da equipe...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-slate-500">Carregando membros da equipe...</td></tr>';
 
       try {
         const res = await apiFetch('/api/v2/tenant/users');
         if (!res.ok || !Array.isArray(res.data?.users)) {
-          tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-rose-400">Falha ao carregar equipe.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-rose-400">Falha ao carregar equipe.</td></tr>';
           return;
         }
 
         const users = res.data.users;
+        tenantUsersCache = users;
+        renderTeamDepts();
+
         tbody.innerHTML = users.map(u => {
           const roleLabels = {
             'admin': '👑 Administrador',
@@ -5892,15 +6060,20 @@
           const roleBadgeClass = u.role === 'admin' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : u.role === 'supervisor' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-slate-700/50 text-slate-300 border-slate-600';
           const isMe = currentUserProfile && currentUserProfile.id === u.id;
 
+          const deptBadge = u.department_name
+            ? `<span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-semibold" style="background-color: ${u.department_cor || '#3b82f6'}20; color: ${u.department_cor || '#60a5fa'}; border: 1px solid ${u.department_cor || '#3b82f6'}40;"><span class="w-1.5 h-1.5 rounded-full" style="background-color: ${u.department_cor || '#3b82f6'};"></span><span>${escapeHtml(u.department_name)}</span></span>`
+            : '<span class="text-xs text-slate-500 italic">Geral (Sem equipe)</span>';
+
           return `
             <tr class="hover:bg-dark-800/50 transition">
               <td class="px-6 py-4">
                 <div class="font-medium text-white flex items-center space-x-2">
-                  <span>${u.nome}</span>
+                  <span>${escapeHtml(u.nome)}</span>
                   ${isMe ? '<span class="text-[10px] bg-brand-600/30 text-brand-300 px-2 py-0.5 rounded font-bold">Você</span>' : ''}
                 </div>
               </td>
-              <td class="px-6 py-4 font-mono text-xs text-slate-300">${u.email}</td>
+              <td class="px-6 py-4 font-mono text-xs text-slate-300">${escapeHtml(u.email)}</td>
+              <td class="px-6 py-4">${deptBadge}</td>
               <td class="px-6 py-4">
                 <span class="text-xs font-semibold px-2.5 py-1 rounded-full border ${roleBadgeClass}">
                   ${roleLabels[u.role] || u.role}
@@ -5915,11 +6088,11 @@
               <td class="px-6 py-4 text-xs text-slate-400">${new Date(u.created_at).toLocaleDateString('pt-BR')}</td>
               <td class="px-6 py-4 text-right space-x-2">
                 ${!isMe ? `
-                  <button onclick="toggleUserStatus('${u.id}', ${u.ativo})" class="px-2.5 py-1 rounded-lg text-xs font-semibold border ${u.ativo ? 'text-rose-400 border-rose-500/30 hover:bg-rose-500/10' : 'text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10'}">
+                  <button onclick="toggleUserStatus('${u.id}', ${u.ativo})" class="px-2.5 py-1 rounded-lg text-xs font-semibold border ${u.ativo ? 'text-rose-400 border-rose-500/30 hover:bg-rose-500/10' : 'text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10'} transition">
                     ${u.ativo ? 'Desativar' : 'Ativar'}
                   </button>
-                  <button onclick="deleteTeamUser('${u.id}', '${u.nome}')" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition" title="Excluir Usuário">
-                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                  <button onclick="deleteTeamUser('${u.id}', '${escapeHtml(u.nome)}')" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition" title="Excluir Usuário">
+                    <i data-lucide="trash-2" class="w-4 h-4 inline"></i>
                   </button>
                 ` : '<span class="text-xs text-slate-500 italic">Conta Atual</span>'}
               </td>
@@ -5928,11 +6101,94 @@
         }).join('');
         lucide.createIcons();
       } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-rose-400">Erro ao carregar equipe.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-12 text-center text-rose-400">Erro ao carregar equipe.</td></tr>';
+      }
+    }
+
+    function renderTeamDepts() {
+      const container = document.getElementById('teamDeptsGrid');
+      if (!container) return;
+
+      if (!departmentsCache || departmentsCache.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-10 px-6 text-center rounded-2xl bg-dark-900/40 border border-dashed border-slate-800 flex flex-col items-center justify-center space-y-3">
+            <div class="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+              <i data-lucide="users" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-white">Nenhuma equipe cadastrada ainda</p>
+              <p class="text-xs text-slate-400 max-w-sm mt-1">Crie equipes como Comercial, Suporte ou Financeiro para organizar filas e transferir atendimentos facilmente.</p>
+            </div>
+            <button onclick="openDepartmentsModal(); resetDeptForm();" class="mt-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-xl text-xs flex items-center space-x-2 transition shadow-lg shadow-blue-600/20">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i>
+              <span>Criar Primeira Equipe</span>
+            </button>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = departmentsCache.map(d => {
+        const memberCount = (tenantUsersCache || []).filter(u => u.department_id === d.id).length;
+        return `
+          <div class="bg-dark-900/60 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-4 transition shadow-md flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center space-x-2.5">
+                  <span class="w-3.5 h-3.5 rounded-full shadow-sm flex-shrink-0" style="background-color: ${d.cor || '#3b82f6'}"></span>
+                  <h4 class="font-bold text-white text-sm truncate">${escapeHtml(d.nome)}</h4>
+                </div>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${d.ativo ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-700 text-slate-400'}">
+                  ${d.ativo ? 'Ativa' : 'Inativa'}
+                </span>
+              </div>
+              <p class="text-xs text-slate-400 line-clamp-2 min-h-[2rem]">${escapeHtml(d.descricao || 'Sem descrição cadastrada.')}</p>
+            </div>
+
+            <div class="pt-3 border-t border-slate-800/80 mt-3 flex items-center justify-between text-xs">
+              <span class="text-[11px] text-slate-400 flex items-center space-x-1">
+                <i data-lucide="user" class="w-3.5 h-3.5 text-slate-500"></i>
+                <span><b>${memberCount}</b> ${memberCount === 1 ? 'membro' : 'membros'}</span>
+              </span>
+              <div class="flex items-center space-x-1">
+                <button onclick="openDepartmentsModal(); editDepartment('${d.id}');" class="p-1.5 text-slate-400 hover:text-blue-400 rounded-lg hover:bg-dark-800 transition" title="Editar Equipe">
+                  <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="deleteDepartmentQuick('${d.id}', '${escapeHtml(d.nome)}')" class="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-dark-800 transition" title="Excluir Equipe">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    async function deleteDepartmentQuick(id, name) {
+      if (!confirm(`Deseja realmente excluir a equipe "${name}"? Conversas continuarão no histórico.`)) return;
+      try {
+        const res = await apiFetch(`/api/v2/tenant/departments/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          await loadDepartments();
+          renderTeamDepts();
+          renderDeptList();
+          await loadTeamUsers();
+        } else {
+          alert('Erro ao excluir equipe: ' + (res.data?.error || 'Erro'));
+        }
+      } catch (e) {
+        alert('Erro ao excluir equipe.');
       }
     }
 
     function openNewUserModal() {
+      const deptSelect = document.getElementById('newUserDepartment');
+      if (deptSelect) {
+        deptSelect.innerHTML = '<option value="">-- Nenhuma equipe específica (Fila Geral) --</option>' +
+          (departmentsCache || []).map(d => `<option value="${d.id}">${escapeHtml(d.nome)}</option>`).join('');
+      }
       document.getElementById('newUserModal').classList.remove('hidden');
       document.getElementById('newUserNome').focus();
     }
@@ -5947,6 +6203,7 @@
       const email = document.getElementById('newUserEmail').value.trim();
       const password = document.getElementById('newUserPassword').value;
       const role = document.getElementById('newUserRole').value;
+      const department_id = document.getElementById('newUserDepartment')?.value || null;
 
       const btn = document.getElementById('btnSubmitNewUser');
       btn.disabled = true;
@@ -5954,7 +6211,7 @@
       try {
         const res = await apiFetch('/api/v2/tenant/users', {
           method: 'POST',
-          body: JSON.stringify({ nome, email, password, role })
+          body: JSON.stringify({ nome, email, password, role, department_id })
         });
 
         if (res.ok) {
@@ -6812,33 +7069,37 @@
         if (res.ok) {
           await loadDepartments();
           renderDeptList();
+          renderTeamDepts();
           resetDeptForm();
+          await loadTeamUsers();
           await loadAtendimentos();
         } else {
-          alert('Erro ao salvar departamento: ' + (res.data?.error || 'Erro'));
+          alert('Erro ao salvar equipe/departamento: ' + (res.data?.error || 'Erro'));
         }
       } catch (err) {
-        alert('Erro ao salvar departamento.');
+        alert('Erro ao salvar equipe/departamento.');
       }
     }
 
     async function handleDeleteDepartment() {
       const id = document.getElementById('deptEditId')?.value;
       if (!id) return;
-      if (!confirm('Deseja realmente excluir este departamento? Conversas vinculadas continuarão no sistema.')) return;
+      if (!confirm('Deseja realmente excluir esta equipe? Conversas continuarão no histórico.')) return;
 
       try {
         const res = await apiFetch(`/api/v2/tenant/departments/${id}`, { method: 'DELETE' });
         if (res.ok) {
           await loadDepartments();
           renderDeptList();
+          renderTeamDepts();
           resetDeptForm();
+          await loadTeamUsers();
           await loadAtendimentos();
         } else {
           alert('Erro ao excluir: ' + (res.data?.error || 'Erro'));
         }
       } catch (e) {
-        alert('Erro ao excluir departamento.');
+        alert('Erro ao excluir equipe.');
       }
     }
 

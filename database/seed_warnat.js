@@ -330,6 +330,34 @@ async function seedWarNatTech() {
     );
     console.log(`✅ Regras da IA e catálogo de produtos configurados para WN Velas artesanais.`);
 
+    // 10. Provisionar Equipes / Departamentos Iniciais para os Tenants
+    const checkDeptWarNat = await client.query(`SELECT id FROM departments WHERE tenant_id = $1 AND nome = $2`, [tenantId, 'Comercial & Vendas']);
+    if (checkDeptWarNat.rowCount === 0) {
+      await client.query(
+        `INSERT INTO departments (tenant_id, nome, descricao, cor)
+         VALUES ($1, 'Comercial & Vendas', 'Atendimento a novos leads, orçamentos e vendas', '#10b981')`,
+        [tenantId]
+      );
+    }
+    const checkSuporteWarNat = await client.query(`SELECT id FROM departments WHERE tenant_id = $1 AND nome = $2`, [tenantId, 'Suporte & Instalação']);
+    if (checkSuporteWarNat.rowCount === 0) {
+      await client.query(
+        `INSERT INTO departments (tenant_id, nome, descricao, cor)
+         VALUES ($1, 'Suporte & Instalação', 'Visitas técnicas, diagnóstico e manutenção CFTV', '#3b82f6')`,
+        [tenantId]
+      );
+    }
+
+    const checkVelasDept = await client.query(`SELECT id FROM departments WHERE tenant_id = $1 AND nome = $2`, [velasTenantId, 'Vendas & Pedidos']);
+    if (checkVelasDept.rowCount === 0) {
+      await client.query(
+        `INSERT INTO departments (tenant_id, nome, descricao, cor)
+         VALUES ($1, 'Vendas & Pedidos', 'Atendimento a pedidos de velas artesanais, aromas e presentes', '#f59e0b')`,
+        [velasTenantId]
+      );
+    }
+    console.log(`✅ Equipes e setores de atendimento iniciais configurados.`);
+
     await client.query('COMMIT');
     console.log('------------------------------------------------------------');
     console.log('🎉 Seed da WarNat Tech concluído com sucesso!');
