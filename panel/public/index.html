@@ -5,679 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Painel de Atendimento Inteligente - WarNat Tech</title>
   <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com">
-    // ==========================================================================
-    // FUNÇÕES DE FATURAMENTO, CHECKOUT & CICLO DE VIDA (PAGAR.ME V5)
-    // ==========================================================================
-    let currentSelectedPlan = 'PRO';
-    let currentPaymentMethod = 'card';
-    let superAdminTenantsList = [];
-
-    function updateTrialBannerUI(lifecycle) {
-      const banner = document.getElementById('trialCountdownBanner');
-      if (!banner) return;
-
-      if (lifecycle.status === 'TRIALING' && lifecycle.trialEndsAt) {
-        const diffMs = new Date(lifecycle.trialEndsAt).getTime() - Date.now();
-        const diffHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
-        const days = Math.floor(diffHours / 24);
-        const hours = diffHours % 24;
-
-        banner.className = 'mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between text-sm gap-3 shadow-xl bg-gradient-to-r from-brand-950/40 via-dark-850 to-indigo-950/40 border-brand-500/30';
-        document.getElementById('trialBannerIcon').className = 'w-10 h-10 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center shrink-0 border border-brand-500/30';
-        document.getElementById('trialBannerTitle').textContent = 'Período de Testes Ativo (Recursos Pro Liberados)';
-        document.getElementById('trialBannerSubtitle').textContent = `Você possui acesso total. Restam ${days} dias e ${hours} horas para o término do teste.`;
-        const btn = document.getElementById('trialBannerActionBtn');
-        btn.textContent = 'Assinar Plano Agora';
-        btn.className = 'px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg transition shrink-0';
-        banner.classList.remove('hidden');
-      } else if (lifecycle.status === 'PAST_DUE') {
-        banner.className = 'mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between text-sm gap-3 shadow-xl bg-amber-950/30 border-amber-500/30 text-amber-200';
-        document.getElementById('trialBannerIcon').className = 'w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30';
-        document.getElementById('trialBannerTitle').textContent = 'Fatura Pendente (Carência de Pagamento)';
-        document.getElementById('trialBannerSubtitle').textContent = 'Sua assinatura encontra-se em atraso. Regularize seu pagamento para evitar bloqueio da automação.';
-        const btn = document.getElementById('trialBannerActionBtn');
-        btn.textContent = 'Pagar Fatura';
-        btn.className = 'px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg transition shrink-0';
-        banner.classList.remove('hidden');
-      } else {
-        banner.classList.add('hidden');
-      }
-      lucide.createIcons();
-    }
-
-    function showFriendlyBlock(type, message) {
-      const overlay = document.getElementById('overlayFriendlyBlock');
-      if (!overlay) return;
-
-      const titleEl = document.getElementById('blockModalTitle');
-      const descEl = document.getElementById('blockModalDesc');
-      const iconEl = document.getElementById('blockModalIcon');
-
-      if (type === 'suspended') {
-        iconEl.className = 'w-16 h-16 rounded-2xl mx-auto flex items-center justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20';
-        titleEl.textContent = 'Conta Suspensa pela Administração';
-        descEl.textContent = message || 'Esta organização foi temporariamente suspensa pelo administrador da plataforma. Entre em contato com o suporte: suporte@warnattech.com.br';
-      } else {
-        iconEl.className = 'w-16 h-16 rounded-2xl mx-auto flex items-center justify-center bg-amber-500/10 text-amber-400 border border-amber-500/20';
-        titleEl.textContent = 'Período de Testes Encerrado';
-        descEl.textContent = message || 'Seu período de teste gratuito de 7 dias encerrou. Faça o upgrade agora para desbloquear seu atendimento e automações!';
-      }
-
-      overlay.classList.remove('hidden');
-      lucide.createIcons();
-    }
-
-    function closeFriendlyBlockAndGoBilling() {
-      document.getElementById('overlayFriendlyBlock')?.classList.add('hidden');
-      switchTab('billing');
-    }
-
-    function showUpgradeAlert(message) {
-      alert(`⚠️ ${message || 'Recurso exclusivo do Plano Pro.'}`);
-      switchTab('billing');
-    }
-
-    function selectBillingPlan(planId) {
-      currentSelectedPlan = planId.toUpperCase();
-      const cardBasic = document.getElementById('planCard-BASIC');
-      const cardPro = document.getElementById('planCard-PRO');
-      const planNameEl = document.getElementById('checkoutSelectedPlanName');
-
-      if (currentSelectedPlan === 'PRO') {
-        cardPro.classList.add('border-brand-500', 'shadow-brand-500/10');
-        cardPro.classList.remove('border-slate-800');
-        cardBasic.classList.remove('border-brand-500');
-        cardBasic.classList.add('border-slate-800');
-        planNameEl.textContent = 'Plano Pro (R$ 247,00/mês)';
-      } else {
-        cardBasic.classList.add('border-brand-500');
-        cardBasic.classList.remove('border-slate-800');
-        cardPro.classList.remove('border-brand-500', 'shadow-brand-500/10');
-        cardPro.classList.add('border-slate-800');
-        planNameEl.textContent = 'Plano Básico (R$ 127,00/mês)';
-      }
-    }
-
-    function selectPaymentMethod(method) {
-      currentPaymentMethod = method;
-      const btnCard = document.getElementById('btnMethodCard');
-      const btnPix = document.getElementById('btnMethodPix');
-      const formCard = document.getElementById('checkoutFormCard');
-      const formPix = document.getElementById('checkoutFormPix');
-
-      if (method === 'card') {
-        btnCard.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 bg-brand-600 text-white shadow-sm';
-        btnPix.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 text-slate-400 hover:text-white';
-        formCard.classList.remove('hidden');
-        formPix.classList.add('hidden');
-      } else {
-        btnPix.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 bg-brand-600 text-white shadow-sm';
-        btnCard.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 text-slate-400 hover:text-white';
-        formPix.classList.remove('hidden');
-        formCard.classList.add('hidden');
-      }
-      lucide.createIcons();
-    }
-
-    async function loadBillingInfo() {
-      try {
-        const res = await apiFetch('/api/v2/tenant/billing/status');
-        if (res.ok && res.data) {
-          const b = res.data.billing || {};
-          const badgeEl = document.getElementById('billingStatusBadge');
-          const badgeBasic = document.getElementById('badgeCurrentBasic');
-          const badgePro = document.getElementById('badgeCurrentPro');
-
-          const st = b.status || 'TRIALING';
-          const eff = (b.effectivePlan || 'PRO').toUpperCase();
-
-          if (st === 'ACTIVE') {
-            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
-            badgeEl.textContent = `Assinatura Ativa (${eff})`;
-          } else if (st === 'TRIALING') {
-            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-500/10 text-brand-400 border border-brand-500/20';
-            badgeEl.textContent = 'Em Teste Free 7 Dias';
-          } else if (st === 'PAST_DUE') {
-            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20';
-            badgeEl.textContent = 'Fatura Pendente (Past Due)';
-          } else {
-            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20';
-            badgeEl.textContent = `Status: ${st}`;
-          }
-
-          if (eff === 'PRO') {
-            badgePro.classList.remove('hidden');
-            badgeBasic.classList.add('hidden');
-            selectBillingPlan('PRO');
-          } else {
-            badgeBasic.classList.remove('hidden');
-            badgePro.classList.add('hidden');
-            selectBillingPlan('BASIC');
-          }
-
-          // Faturas recentes
-          const tbody = document.getElementById('tenantInvoicesTableBody');
-          if (tbody) {
-            const invoices = b.recentInvoices || [];
-            if (invoices.length === 0) {
-              tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-6 text-center text-slate-500">Nenhuma fatura registrada ainda.</td></tr>';
-            } else {
-              tbody.innerHTML = invoices.map(inv => `
-                <tr class="hover:bg-dark-800/40 transition">
-                  <td class="px-5 py-3 font-mono text-slate-300">${new Date(inv.created_at).toLocaleDateString('pt-BR')}</td>
-                  <td class="px-5 py-3 font-mono text-slate-400">${escapeHtml(inv.pagarme_invoice_id || inv.id.slice(0, 8))}</td>
-                  <td class="px-5 py-3 font-bold text-white">R$ ${(inv.amount_cents / 100).toFixed(2)}</td>
-                  <td class="px-5 py-3">
-                    <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${inv.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}">
-                      ${inv.status === 'PAID' ? 'Pago' : 'Pendente'}
-                    </span>
-                  </td>
-                  <td class="px-5 py-3 text-right">
-                    <span class="text-xs text-slate-400">Pagar.me v5</span>
-                  </td>
-                </tr>
-              `).join('');
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Erro ao carregar dados de billing:', e);
-      }
-      lucide.createIcons();
-    }
-
-    async function processCardSubscription() {
-      const holder = document.getElementById('cardHolderName').value.trim();
-      const doc = document.getElementById('cardDocument').value.trim();
-      const num = document.getElementById('cardNumber').value.trim();
-      const exp = document.getElementById('cardExp').value.trim();
-      const cvv = document.getElementById('cardCvv').value.trim();
-
-      if (!holder || !doc || !num || !exp || !cvv) {
-        alert('Por favor, preencha todos os campos do cartão de crédito.');
-        return;
-      }
-
-      const btn = document.getElementById('btnSubmitCard');
-      const btnText = document.getElementById('btnSubmitCardText');
-      btn.disabled = true;
-      btnText.textContent = 'Processando com a Pagar.me v5...';
-
-      try {
-        // Tokenização client-side segura
-        const cardToken = `tok_card_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-
-        const res = await apiFetch('/api/v2/tenant/billing/checkout/card', {
-          method: 'POST',
-          body: JSON.stringify({
-            plan_id: currentSelectedPlan,
-            card_token: cardToken,
-            customer: {
-              name: holder,
-              document: doc,
-              email: currentUserProfile?.email || 'contato@empresa.com'
-            }
-          })
-        });
-
-        if (res.ok && res.data?.success) {
-          alert(`🎉 Assinatura do ${currentSelectedPlan === 'PRO' ? 'Plano Pro' : 'Plano Básico'} realizada com sucesso!`);
-          await initDashboard();
-          await loadBillingInfo();
-        } else {
-          alert('Erro ao processar assinatura: ' + (res.data?.error || 'Tente novamente'));
-        }
-      } catch (err) {
-        alert('Falha na comunicação com o gateway: ' + err.message);
-      } finally {
-        btn.disabled = false;
-        btnText.textContent = 'Confirmar Assinatura Segura';
-      }
-    }
-
-    async function generatePixPayment() {
-      const btn = document.getElementById('btnGeneratePix');
-      btn.disabled = true;
-      btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Gerando PIX Pagar.me...</span>';
-      lucide.createIcons();
-
-      try {
-        const res = await apiFetch('/api/v2/tenant/billing/checkout/pix', {
-          method: 'POST',
-          body: JSON.stringify({
-            plan_id: currentSelectedPlan
-          })
-        });
-
-        if (res.ok && res.data?.success) {
-          const data = res.data;
-          document.getElementById('pixCopyPasteInput').value = data.pix_copy_paste;
-          const qrContainer = document.getElementById('pixQrCodeContainer');
-          qrContainer.innerHTML = `<img src="${data.pix_qr_code}" alt="QR Code PIX" class="w-full h-full object-contain">`;
-          document.getElementById('pixResultBox').classList.remove('hidden');
-        } else {
-          alert('Erro ao gerar cobrança PIX: ' + (res.data?.error || 'Tente novamente'));
-        }
-      } catch (e) {
-        alert('Erro ao conectar ao serviço PIX: ' + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i data-lucide="zap" class="w-4 h-4"></i><span>Gerar QR Code PIX</span>';
-        lucide.createIcons();
-      }
-    }
-
-    function copyPixCode() {
-      const input = document.getElementById('pixCopyPasteInput');
-      input.select();
-      navigator.clipboard.writeText(input.value).then(() => {
-        alert('Código PIX Copia e Cola copiado para a área de transferência!');
-      }).catch(() => {
-        alert('Código selecionado. Pressione Ctrl+C para copiar.');
-      });
-    }
-
-    // ==========================================================================
-    // FUNÇÕES DO SUPERADMIN BACKOFFICE (DONO DO SAAS)
-    // ==========================================================================
-    let currentExtendTenantId = null;
-
-    
-    function toggleTenantSwitcherDropdown(e) {
-      if (e) e.stopPropagation();
-      const dd = document.getElementById('tenantSwitcherDropdown');
-      dd?.classList.toggle('hidden');
-    }
-
-    document.addEventListener('click', (e) => {
-      const container = document.getElementById('tenantSwitcherContainer');
-      const dd = document.getElementById('tenantSwitcherDropdown');
-      if (dd && !container?.contains(e.target)) {
-        dd.classList.add('hidden');
-      }
-    });
-
-    function populateTenantSwitcherList(tenants) {
-      const listEl = document.getElementById('tenantSwitcherList');
-      if (!listEl) return;
-
-      listEl.innerHTML = tenants.map(t => {
-        const isCurrent = t.id === currentUserProfile?.tenantId;
-        return `
-          <div onclick="switchTenantContext('${t.id}', '${escapeJsArg(t.nome_empresa)}')" class="p-2 rounded-lg ${isCurrent ? 'bg-purple-500/20 border border-purple-500/40 text-purple-200' : 'hover:bg-dark-800 text-slate-300 hover:text-white border border-transparent'} cursor-pointer flex items-center justify-between text-xs transition">
-            <div class="truncate mr-2">
-              <div class="font-bold truncate">${escapeHtml(t.nome_empresa)}</div>
-              <div class="text-[10px] text-slate-400 truncate">${escapeHtml(t.admin_email || '')}</div>
-            </div>
-            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded ${isCurrent ? 'bg-purple-600 text-white' : 'bg-dark-900 text-slate-500'}">
-              ${isCurrent ? 'Ativo' : (t.status || 'TRIAL')}
-            </span>
-          </div>
-        `;
-      }).join('');
-      lucide.createIcons();
-    }
-
-    async function switchTenantContext(targetTenantId, companyName) {
-      try {
-        const res = await apiFetch('/api/v2/superadmin/switch-tenant', {
-          method: 'POST',
-          body: JSON.stringify({ target_tenant_id: targetTenantId })
-        });
-        if (res.ok && res.data?.token) {
-          currentToken = res.data.token;
-          localStorage.setItem('warnat_saas_token', currentToken);
-          document.getElementById('tenantSwitcherDropdown')?.classList.add('hidden');
-          switchTab('crm');
-          await initDashboard();
-        } else {
-          alert('Erro ao alternar empresa: ' + (res.data?.error || 'Tente novamente'));
-        }
-      } catch (e) {
-        alert('Erro de comunicação: ' + e.message);
-      }
-    }
-
-    async function revertTenantContext() {
-      try {
-        const res = await apiFetch('/api/v2/superadmin/switch-tenant', {
-          method: 'POST',
-          body: JSON.stringify({ target_tenant_id: null })
-        });
-        if (res.ok && res.data?.token) {
-          currentToken = res.data.token;
-          localStorage.setItem('warnat_saas_token', currentToken);
-          switchTab('superadmin');
-          await initDashboard();
-        } else {
-          alert('Erro ao restaurar contexto: ' + (res.data?.error || 'Tente novamente'));
-        }
-      } catch (e) {
-        alert('Erro: ' + e.message);
-      }
-    }
-
-    async function loadSuperAdminData() {
-      try {
-        // Carrega KPIs
-        const kpiRes = await apiFetch('/api/v2/superadmin/kpis');
-        if (kpiRes.ok && kpiRes.data?.kpis) {
-          const k = kpiRes.data.kpis;
-          document.getElementById('saKpiMrr').textContent = k.mrrReais || '0,00';
-          document.getElementById('saKpiTotal').textContent = k.totalTenants || '0';
-          document.getElementById('saKpiActive').textContent = k.activeTenants || '0';
-          document.getElementById('saKpiTrialing').textContent = k.trialingTenants || '0';
-          document.getElementById('saKpiExpired').textContent = (k.trialExpiredTenants + k.pastDueTenants) || '0';
-        }
-
-        // Carrega Tenants
-        const tRes = await apiFetch('/api/v2/superadmin/tenants');
-        if (tRes.ok && tRes.data?.tenants) {
-          superAdminTenantsList = tRes.data.tenants;
-          renderSuperAdminTenants(superAdminTenantsList);
-        }
-
-        // Carrega Logs
-        const logsRes = await apiFetch('/api/v2/superadmin/audit-logs');
-        if (logsRes.ok && logsRes.data?.logs) {
-          renderSuperAdminLogs(logsRes.data.logs);
-        }
-      } catch (e) {
-        console.error('Erro ao carregar dados do SuperAdmin:', e);
-      }
-      lucide.createIcons();
-    }
-
-    function renderSuperAdminTenants(tenants) {
-      const tbody = document.getElementById('saTenantsTableBody');
-      if (!tbody) return;
-
-      if (tenants.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-slate-500">Nenhum tenant correspondente aos filtros.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = tenants.map(t => {
-        const isBlocked = Boolean(t.is_manually_blocked) || t.status === 'SUSPENDED_BY_ADMIN';
-        const isCourtesy = t.courtesy_plan === 'pro';
-        const trialDate = t.trial_ends_at ? new Date(t.trial_ends_at).toLocaleDateString('pt-BR') : '-';
-
-        return `
-          <tr class="hover:bg-dark-800/40 transition">
-            <td class="px-5 py-3">
-              <div class="font-bold text-white flex items-center space-x-1.5">
-                <span>${escapeHtml(t.nome_empresa)}</span>
-                ${t.id === currentUserProfile?.tenantId ? '<span class="text-[9px] bg-brand-500/20 text-brand-300 px-1.5 py-0.5 rounded border border-brand-500/30">Atual</span>' : ''}
-              </div>
-              <div class="text-[10px] text-slate-400">${escapeHtml(t.admin_email || '')} ${t.admin_nome ? '(' + escapeHtml(t.admin_nome) + ')' : ''}</div>
-              <div class="text-[10px] text-slate-500 font-mono">${escapeHtml(t.documento || t.id.slice(0, 8))}</div>
-            </td>
-            <td class="px-5 py-3">
-              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${(t.plano || '').toUpperCase() === 'PRO' || isCourtesy ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-slate-800 text-slate-300 border border-slate-700'}">
-                ${isCourtesy ? 'PRO (Cortesia)' : (t.plano || 'BASIC').toUpperCase()}
-              </span>
-            </td>
-            <td class="px-5 py-3">
-              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                isBlocked ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
-                t.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                t.status === 'TRIALING' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-              }">
-                ${isBlocked ? 'SUSPENSO' : t.status || 'TRIALING'}
-              </span>
-            </td>
-            <td class="px-5 py-3 text-slate-300 font-mono text-xs">
-              ${trialDate}
-            </td>
-            <td class="px-5 py-3 text-slate-400 text-xs">
-              ${t.users_count || 1} op. / ${t.sessions_count || 0} conv.
-            </td>
-            <td class="px-5 py-3">
-              <input type="text" value="${escapeHtml(t.admin_notes || '')}" placeholder="Anotação privada..." 
-                     onchange="saveAdminNotes('${t.id}', this.value)"
-                     class="bg-dark-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-300 w-32 focus:w-48 transition-all">
-            </td>
-            <td class="px-5 py-3 text-right">
-              <div class="flex items-center justify-end space-x-1.5">
-                <button onclick="switchTenantContext('${t.id}', '${escapeJsArg(t.nome_empresa)}')" title="Acessar Painel Desta Empresa (Entrar como)" class="p-1.5 bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 rounded-lg border border-brand-500/30 transition flex items-center space-x-1 text-xs px-2">
-                  <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
-                  <span class="text-[10px] font-semibold">Acessar</span>
-                </button>
-                <button onclick="openExtendTrialModal('${t.id}', '${t.trial_ends_at || ''}', '${escapeJsArg(t.nome_empresa)}')" title="Estender Período de Teste" class="p-1.5 bg-dark-800 hover:bg-dark-700 text-purple-400 rounded-lg border border-slate-700 transition">
-                  <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
-                </button>
-                <button onclick="toggleCourtesyPlan('${t.id}', '${t.courtesy_plan || ''}', '${escapeJsArg(t.nome_empresa)}')" title="Alternar Pro Cortesia" class="p-1.5 bg-dark-800 hover:bg-dark-700 text-amber-400 rounded-lg border border-slate-700 transition">
-                  <i data-lucide="gift" class="w-3.5 h-3.5"></i>
-                </button>
-                <button onclick="openTenantInvoicesModal('${t.id}', '${escapeJsArg(t.nome_empresa)}')" title="Ver Faturas" class="p-1.5 bg-dark-800 hover:bg-dark-700 text-slate-300 rounded-lg border border-slate-700 transition">
-                  <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
-                </button>
-                <button onclick="toggleBlockTenant('${t.id}', ${isBlocked}, '${escapeJsArg(t.nome_empresa)}')" title="${isBlocked ? 'Desbloquear Tenant' : 'Bloquear Tenant'}" class="p-1.5 bg-dark-800 hover:bg-dark-700 ${isBlocked ? 'text-emerald-400' : 'text-rose-400'} rounded-lg border border-slate-700 transition">
-                  <i data-lucide="${isBlocked ? 'shield-check' : 'shield-alert'}" class="w-3.5 h-3.5"></i>
-                </button>
-                  <button onclick="deleteTenantAction('${t.id}', '${escapeJsArg(t.nome_empresa)}')" title="Excluir Empresa Definitivamente" class="p-1.5 bg-dark-800 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 rounded-lg border border-slate-700 transition">
-                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                  </button>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
-      lucide.createIcons();
-    }
-
-    function renderSuperAdminLogs(logs) {
-      const tbody = document.getElementById('saAuditLogsBody');
-      if (!tbody) return;
-
-      if (logs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-6 text-center text-slate-500">Nenhum log registrado ainda.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = logs.map(l => `
-        <tr class="hover:bg-dark-800/40 transition">
-          <td class="px-5 py-2.5 font-mono text-[11px] text-slate-400">${new Date(l.created_at).toLocaleString('pt-BR')}</td>
-          <td class="px-5 py-2.5 text-xs text-white">${escapeHtml(l.admin_name || 'SuperAdmin')}</td>
-          <td class="px-5 py-2.5 text-xs text-purple-300 font-semibold">${escapeHtml(l.target_company_name || '-')}</td>
-          <td class="px-5 py-2.5">
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-dark-900 border border-slate-700 text-slate-300">${escapeHtml(l.action)}</span>
-          </td>
-          <td class="px-5 py-2.5 text-[11px] font-mono text-slate-400 max-w-xs truncate">${escapeHtml(JSON.stringify(l.details))}</td>
-        </tr>
-      `).join('');
-    }
-
-    function filterSuperAdminTenants() {
-      const search = (document.getElementById('saSearchInput')?.value || '').toLowerCase();
-      const statusFilter = document.getElementById('saStatusFilter')?.value || '';
-
-      const filtered = superAdminTenantsList.filter(t => {
-        const matchesSearch = !search || t.nome_empresa.toLowerCase().includes(search) || (t.documento && t.documento.includes(search));
-        const matchesStatus = !statusFilter || t.status === statusFilter;
-        return matchesSearch && matchesStatus;
-      });
-
-      renderSuperAdminTenants(filtered);
-    }
-
-    function openExtendTrialModal(tenantId, currentTrial, companyName) {
-      currentExtendTenantId = tenantId;
-      document.getElementById('extendTrialCompanyName').textContent = companyName;
-      const dateInput = document.getElementById('extendTrialNewDate');
-      
-      const baseDate = currentTrial ? new Date(currentTrial) : new Date();
-      const defaultExtend = new Date(baseDate.getTime() + 15 * 24 * 60 * 60 * 1000);
-      dateInput.value = defaultExtend.toISOString().slice(0, 16);
-
-      document.getElementById('modalExtendTrial').classList.remove('hidden');
-      lucide.createIcons();
-    }
-
-    function closeExtendTrialModal() {
-      document.getElementById('modalExtendTrial')?.classList.add('hidden');
-      currentExtendTenantId = null;
-    }
-
-    function setExtendPresetDays(days) {
-      const dateInput = document.getElementById('extendTrialNewDate');
-      const target = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-      dateInput.value = target.toISOString().slice(0, 16);
-    }
-
-    async function submitExtendTrial() {
-      if (!currentExtendTenantId) return;
-      const newDate = document.getElementById('extendTrialNewDate').value;
-      const reason = document.getElementById('extendTrialReason').value.trim();
-
-      try {
-        const res = await apiFetch(`/api/v2/superadmin/tenants/${currentExtendTenantId}/extend-trial`, {
-          method: 'POST',
-          body: JSON.stringify({
-            new_trial_ends_at: newDate ? new Date(newDate).toISOString() : null,
-            reason
-          })
-        });
-
-        if (res.ok && res.data?.success) {
-          alert('Período de testes estendido com sucesso!');
-          closeExtendTrialModal();
-          await loadSuperAdminData();
-        } else {
-          alert('Erro ao estender testes: ' + (res.data?.error || 'Tente novamente'));
-        }
-      } catch (e) {
-        alert('Erro ao comunicar com o servidor: ' + e.message);
-      }
-    }
-
-    async function toggleBlockTenant(tenantId, isCurrentlyBlocked, companyName) {
-      const actionText = isCurrentlyBlocked ? 'DESBLOQUEAR' : 'BLOQUEAR IMEDIATAMENTE';
-      if (!confirm(`Deseja realmente ${actionText} a empresa "${companyName}"?`)) return;
-
-      try {
-        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/block`, {
-          method: 'POST',
-          body: JSON.stringify({
-            blocked: !isCurrentlyBlocked,
-            reason: isCurrentlyBlocked ? 'Desbloqueio efetuado pelo SuperAdmin' : 'Bloqueio administrativo efetuado pelo Dono'
-          })
-        });
-
-        if (res.ok && res.data?.success) {
-          alert(res.data.message || 'Status administrativo atualizado!');
-          await loadSuperAdminData();
-        } else {
-          alert('Erro ao atualizar bloqueio: ' + (res.data?.error || 'Tente novamente'));
-        }
-
-    async function deleteTenantAction(tenantId, companyName) {
-      const confirmWord = prompt(`⚠️ ATENÇÃO: A exclusão da empresa "${companyName}" apagará definitivamente todas as instâncias do WhatsApp, operadores, atendimentos, mensagens e faturas vinculadas.\n\nPara confirmar, digite EXCLUIR:`);
-      if (confirmWord !== 'EXCLUIR') {
-        if (confirmWord !== null) alert('Operação cancelada: você não digitou EXCLUIR.');
-        return;
-      }
-
-      try {
-        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}`, {
-          method: 'DELETE',
-          body: JSON.stringify({ reason: 'Exclusão solicitada pelo Dono via Painel SuperAdmin' })
-        });
-
-        if (res.ok && res.data?.success) {
-          alert(res.data.message || `Empresa "${companyName}" foi excluída com sucesso!`);
-          await loadSuperAdminData();
-        } else {
-          alert('Erro ao excluir empresa: ' + (res.data?.message || res.data?.error || 'Tente novamente'));
-        }
-      } catch (e) {
-        alert('Erro ao comunicar com o servidor: ' + e.message);
-      }
-    }
-      } catch (e) {
-        alert('Erro: ' + e.message);
-      }
-    }
-
-    async function toggleCourtesyPlan(tenantId, currentCourtesy, companyName) {
-      const willGrant = currentCourtesy !== 'pro';
-      const promptMsg = willGrant 
-        ? `Deseja CONCEDER CORTESIA PRO para "${companyName}"? (Acesso Pro irrestrito)` 
-        : `Deseja REVOGAR CORTESIA PRO de "${companyName}"?`;
-
-      if (!confirm(promptMsg)) return;
-
-      try {
-        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/courtesy-plan`, {
-          method: 'POST',
-          body: JSON.stringify({
-            courtesy_plan: willGrant ? 'pro' : null,
-            reason: willGrant ? 'Concessão cortesia VIP' : 'Revogação cortesia'
-          })
-        });
-
-        if (res.ok && res.data?.success) {
-          alert(res.data.message);
-          await loadSuperAdminData();
-        } else {
-          alert('Erro: ' + (res.data?.error || 'Tente novamente'));
-        }
-      } catch (e) {
-        alert('Erro: ' + e.message);
-      }
-    }
-
-    async function saveAdminNotes(tenantId, notes) {
-      try {
-        await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/notes`, {
-          method: 'PUT',
-          body: JSON.stringify({ notes })
-        });
-      } catch (e) {
-        console.warn('Erro ao salvar notas do tenant:', e);
-      }
-    }
-
-    async function openTenantInvoicesModal(tenantId, companyName) {
-      document.getElementById('saInvoicesCompanyName').textContent = companyName;
-      const tbody = document.getElementById('saInvoicesTableBody');
-      tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-500">Buscando faturas...</td></tr>';
-      document.getElementById('modalSuperAdminInvoices').classList.remove('hidden');
-
-      try {
-        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/invoices`);
-        if (res.ok && res.data?.invoices) {
-          const invoices = res.data.invoices;
-          if (invoices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Nenhuma fatura registrada para esta empresa.</td></tr>';
-          } else {
-            tbody.innerHTML = invoices.map(inv => `
-              <tr class="hover:bg-dark-800/40 transition">
-                <td class="px-4 py-2 font-mono text-slate-400">${new Date(inv.created_at).toLocaleDateString('pt-BR')}</td>
-                <td class="px-4 py-2 font-bold text-white">R$ ${(inv.amount_cents / 100).toFixed(2)}</td>
-                <td class="px-4 py-2">
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${inv.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}">
-                    ${inv.status === 'PAID' ? 'PAGO' : 'PENDENTE'}
-                  </span>
-                </td>
-                <td class="px-4 py-2 font-mono text-slate-400 text-[11px]">${escapeHtml(inv.pagarme_invoice_id || inv.id)}</td>
-              </tr>
-            `).join('');
-          }
-        }
-      } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-rose-400">Falha ao carregar faturas.</td></tr>';
-      }
-      lucide.createIcons();
-    }
-
-    function closeSuperAdminInvoicesModal() {
-      document.getElementById('modalSuperAdminInvoices')?.classList.add('hidden');
-    }
-
-  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>
@@ -3393,6 +2721,685 @@
   <!-- ============================================================================ -->
   <script>
     let currentToken = localStorage.getItem('warnat_saas_token');
+
+    // ==========================================================================
+    // FUNÇÕES DE FATURAMENTO, CHECKOUT & CICLO DE VIDA (PAGAR.ME V5)
+    // ==========================================================================
+    let currentSelectedPlan = 'PRO';
+    let currentPaymentMethod = 'card';
+    let superAdminTenantsList = [];
+
+    function updateTrialBannerUI(lifecycle) {
+      const banner = document.getElementById('trialCountdownBanner');
+      if (!banner) return;
+
+      if (lifecycle.status === 'TRIALING' && lifecycle.trialEndsAt) {
+        const diffMs = new Date(lifecycle.trialEndsAt).getTime() - Date.now();
+        const diffHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+        const days = Math.floor(diffHours / 24);
+        const hours = diffHours % 24;
+
+        banner.className = 'mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between text-sm gap-3 shadow-xl bg-gradient-to-r from-brand-950/40 via-dark-850 to-indigo-950/40 border-brand-500/30';
+        document.getElementById('trialBannerIcon').className = 'w-10 h-10 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center shrink-0 border border-brand-500/30';
+        document.getElementById('trialBannerTitle').textContent = 'Período de Testes Ativo (Recursos Pro Liberados)';
+        document.getElementById('trialBannerSubtitle').textContent = `Você possui acesso total. Restam ${days} dias e ${hours} horas para o término do teste.`;
+        const btn = document.getElementById('trialBannerActionBtn');
+        btn.textContent = 'Assinar Plano Agora';
+        btn.className = 'px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg transition shrink-0';
+        banner.classList.remove('hidden');
+      } else if (lifecycle.status === 'PAST_DUE') {
+        banner.className = 'mb-6 p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between text-sm gap-3 shadow-xl bg-amber-950/30 border-amber-500/30 text-amber-200';
+        document.getElementById('trialBannerIcon').className = 'w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30';
+        document.getElementById('trialBannerTitle').textContent = 'Fatura Pendente (Carência de Pagamento)';
+        document.getElementById('trialBannerSubtitle').textContent = 'Sua assinatura encontra-se em atraso. Regularize seu pagamento para evitar bloqueio da automação.';
+        const btn = document.getElementById('trialBannerActionBtn');
+        btn.textContent = 'Pagar Fatura';
+        btn.className = 'px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg transition shrink-0';
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    function showFriendlyBlock(type, message) {
+      const overlay = document.getElementById('overlayFriendlyBlock');
+      if (!overlay) return;
+
+      const titleEl = document.getElementById('blockModalTitle');
+      const descEl = document.getElementById('blockModalDesc');
+      const iconEl = document.getElementById('blockModalIcon');
+
+      if (type === 'suspended') {
+        iconEl.className = 'w-16 h-16 rounded-2xl mx-auto flex items-center justify-center bg-rose-500/10 text-rose-400 border border-rose-500/20';
+        titleEl.textContent = 'Conta Suspensa pela Administração';
+        descEl.textContent = message || 'Esta organização foi temporariamente suspensa pelo administrador da plataforma. Entre em contato com o suporte: suporte@warnattech.com.br';
+      } else {
+        iconEl.className = 'w-16 h-16 rounded-2xl mx-auto flex items-center justify-center bg-amber-500/10 text-amber-400 border border-amber-500/20';
+        titleEl.textContent = 'Período de Testes Encerrado';
+        descEl.textContent = message || 'Seu período de teste gratuito de 7 dias encerrou. Faça o upgrade agora para desbloquear seu atendimento e automações!';
+      }
+
+      overlay.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeFriendlyBlockAndGoBilling() {
+      document.getElementById('overlayFriendlyBlock')?.classList.add('hidden');
+      switchTab('billing');
+    }
+
+    function showUpgradeAlert(message) {
+      alert(`⚠️ ${message || 'Recurso exclusivo do Plano Pro.'}`);
+      switchTab('billing');
+    }
+
+    function selectBillingPlan(planId) {
+      currentSelectedPlan = planId.toUpperCase();
+      const cardBasic = document.getElementById('planCard-BASIC');
+      const cardPro = document.getElementById('planCard-PRO');
+      const planNameEl = document.getElementById('checkoutSelectedPlanName');
+
+      if (currentSelectedPlan === 'PRO') {
+        cardPro.classList.add('border-brand-500', 'shadow-brand-500/10');
+        cardPro.classList.remove('border-slate-800');
+        cardBasic.classList.remove('border-brand-500');
+        cardBasic.classList.add('border-slate-800');
+        planNameEl.textContent = 'Plano Pro (R$ 247,00/mês)';
+      } else {
+        cardBasic.classList.add('border-brand-500');
+        cardBasic.classList.remove('border-slate-800');
+        cardPro.classList.remove('border-brand-500', 'shadow-brand-500/10');
+        cardPro.classList.add('border-slate-800');
+        planNameEl.textContent = 'Plano Básico (R$ 127,00/mês)';
+      }
+    }
+
+    function selectPaymentMethod(method) {
+      currentPaymentMethod = method;
+      const btnCard = document.getElementById('btnMethodCard');
+      const btnPix = document.getElementById('btnMethodPix');
+      const formCard = document.getElementById('checkoutFormCard');
+      const formPix = document.getElementById('checkoutFormPix');
+
+      if (method === 'card') {
+        btnCard.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 bg-brand-600 text-white shadow-sm';
+        btnPix.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 text-slate-400 hover:text-white';
+        formCard.classList.remove('hidden');
+        formPix.classList.add('hidden');
+      } else {
+        btnPix.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 bg-brand-600 text-white shadow-sm';
+        btnCard.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 text-slate-400 hover:text-white';
+        formPix.classList.remove('hidden');
+        formCard.classList.add('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    async function loadBillingInfo() {
+      try {
+        const res = await apiFetch('/api/v2/tenant/billing/status');
+        if (res.ok && res.data) {
+          const b = res.data.billing || {};
+          const badgeEl = document.getElementById('billingStatusBadge');
+          const badgeBasic = document.getElementById('badgeCurrentBasic');
+          const badgePro = document.getElementById('badgeCurrentPro');
+
+          const st = b.status || 'TRIALING';
+          const eff = (b.effectivePlan || 'PRO').toUpperCase();
+
+          if (st === 'ACTIVE') {
+            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+            badgeEl.textContent = `Assinatura Ativa (${eff})`;
+          } else if (st === 'TRIALING') {
+            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-500/10 text-brand-400 border border-brand-500/20';
+            badgeEl.textContent = 'Em Teste Free 7 Dias';
+          } else if (st === 'PAST_DUE') {
+            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20';
+            badgeEl.textContent = 'Fatura Pendente (Past Due)';
+          } else {
+            badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20';
+            badgeEl.textContent = `Status: ${st}`;
+          }
+
+          if (eff === 'PRO') {
+            badgePro.classList.remove('hidden');
+            badgeBasic.classList.add('hidden');
+            selectBillingPlan('PRO');
+          } else {
+            badgeBasic.classList.remove('hidden');
+            badgePro.classList.add('hidden');
+            selectBillingPlan('BASIC');
+          }
+
+          // Faturas recentes
+          const tbody = document.getElementById('tenantInvoicesTableBody');
+          if (tbody) {
+            const invoices = b.recentInvoices || [];
+            if (invoices.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-6 text-center text-slate-500">Nenhuma fatura registrada ainda.</td></tr>';
+            } else {
+              tbody.innerHTML = invoices.map(inv => `
+                <tr class="hover:bg-dark-800/40 transition">
+                  <td class="px-5 py-3 font-mono text-slate-300">${new Date(inv.created_at).toLocaleDateString('pt-BR')}</td>
+                  <td class="px-5 py-3 font-mono text-slate-400">${escapeHtml(inv.pagarme_invoice_id || inv.id.slice(0, 8))}</td>
+                  <td class="px-5 py-3 font-bold text-white">R$ ${(inv.amount_cents / 100).toFixed(2)}</td>
+                  <td class="px-5 py-3">
+                    <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${inv.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}">
+                      ${inv.status === 'PAID' ? 'Pago' : 'Pendente'}
+                    </span>
+                  </td>
+                  <td class="px-5 py-3 text-right">
+                    <span class="text-xs text-slate-400">Pagar.me v5</span>
+                  </td>
+                </tr>
+              `).join('');
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao carregar dados de billing:', e);
+      }
+      lucide.createIcons();
+    }
+
+    async function processCardSubscription() {
+      const holder = document.getElementById('cardHolderName').value.trim();
+      const doc = document.getElementById('cardDocument').value.trim();
+      const num = document.getElementById('cardNumber').value.trim();
+      const exp = document.getElementById('cardExp').value.trim();
+      const cvv = document.getElementById('cardCvv').value.trim();
+
+      if (!holder || !doc || !num || !exp || !cvv) {
+        alert('Por favor, preencha todos os campos do cartão de crédito.');
+        return;
+      }
+
+      const btn = document.getElementById('btnSubmitCard');
+      const btnText = document.getElementById('btnSubmitCardText');
+      btn.disabled = true;
+      btnText.textContent = 'Processando com a Pagar.me v5...';
+
+      try {
+        // Tokenização client-side segura
+        const cardToken = `tok_card_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+        const res = await apiFetch('/api/v2/tenant/billing/checkout/card', {
+          method: 'POST',
+          body: JSON.stringify({
+            plan_id: currentSelectedPlan,
+            card_token: cardToken,
+            customer: {
+              name: holder,
+              document: doc,
+              email: currentUserProfile?.email || 'contato@empresa.com'
+            }
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          alert(`🎉 Assinatura do ${currentSelectedPlan === 'PRO' ? 'Plano Pro' : 'Plano Básico'} realizada com sucesso!`);
+          await initDashboard();
+          await loadBillingInfo();
+        } else {
+          alert('Erro ao processar assinatura: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (err) {
+        alert('Falha na comunicação com o gateway: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btnText.textContent = 'Confirmar Assinatura Segura';
+      }
+    }
+
+    async function generatePixPayment() {
+      const btn = document.getElementById('btnGeneratePix');
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Gerando PIX Pagar.me...</span>';
+      lucide.createIcons();
+
+      try {
+        const res = await apiFetch('/api/v2/tenant/billing/checkout/pix', {
+          method: 'POST',
+          body: JSON.stringify({
+            plan_id: currentSelectedPlan
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          const data = res.data;
+          document.getElementById('pixCopyPasteInput').value = data.pix_copy_paste;
+          const qrContainer = document.getElementById('pixQrCodeContainer');
+          qrContainer.innerHTML = `<img src="${data.pix_qr_code}" alt="QR Code PIX" class="w-full h-full object-contain">`;
+          document.getElementById('pixResultBox').classList.remove('hidden');
+        } else {
+          alert('Erro ao gerar cobrança PIX: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro ao conectar ao serviço PIX: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="zap" class="w-4 h-4"></i><span>Gerar QR Code PIX</span>';
+        lucide.createIcons();
+      }
+    }
+
+    function copyPixCode() {
+      const input = document.getElementById('pixCopyPasteInput');
+      input.select();
+      navigator.clipboard.writeText(input.value).then(() => {
+        alert('Código PIX Copia e Cola copiado para a área de transferência!');
+      }).catch(() => {
+        alert('Código selecionado. Pressione Ctrl+C para copiar.');
+      });
+    }
+
+    // ==========================================================================
+    // FUNÇÕES DO SUPERADMIN BACKOFFICE (DONO DO SAAS)
+    // ==========================================================================
+    let currentExtendTenantId = null;
+
+    
+    function toggleTenantSwitcherDropdown(e) {
+      if (e) e.stopPropagation();
+      const dd = document.getElementById('tenantSwitcherDropdown');
+      dd?.classList.toggle('hidden');
+    }
+
+    document.addEventListener('click', (e) => {
+      const container = document.getElementById('tenantSwitcherContainer');
+      const dd = document.getElementById('tenantSwitcherDropdown');
+      if (dd && !container?.contains(e.target)) {
+        dd.classList.add('hidden');
+      }
+    });
+
+    function populateTenantSwitcherList(tenants) {
+      const listEl = document.getElementById('tenantSwitcherList');
+      if (!listEl) return;
+
+      listEl.innerHTML = tenants.map(t => {
+        const isCurrent = t.id === currentUserProfile?.tenantId;
+        return `
+          <div onclick="switchTenantContext('${t.id}', '${escapeJsArg(t.nome_empresa)}')" class="p-2 rounded-lg ${isCurrent ? 'bg-purple-500/20 border border-purple-500/40 text-purple-200' : 'hover:bg-dark-800 text-slate-300 hover:text-white border border-transparent'} cursor-pointer flex items-center justify-between text-xs transition">
+            <div class="truncate mr-2">
+              <div class="font-bold truncate">${escapeHtml(t.nome_empresa)}</div>
+              <div class="text-[10px] text-slate-400 truncate">${escapeHtml(t.admin_email || '')}</div>
+            </div>
+            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded ${isCurrent ? 'bg-purple-600 text-white' : 'bg-dark-900 text-slate-500'}">
+              ${isCurrent ? 'Ativo' : (t.status || 'TRIAL')}
+            </span>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    async function switchTenantContext(targetTenantId, companyName) {
+      try {
+        const res = await apiFetch('/api/v2/superadmin/switch-tenant', {
+          method: 'POST',
+          body: JSON.stringify({ target_tenant_id: targetTenantId })
+        });
+        if (res.ok && res.data?.token) {
+          currentToken = res.data.token;
+          localStorage.setItem('warnat_saas_token', currentToken);
+          document.getElementById('tenantSwitcherDropdown')?.classList.add('hidden');
+          switchTab('crm');
+          await initDashboard();
+        } else {
+          alert('Erro ao alternar empresa: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro de comunicação: ' + e.message);
+      }
+    }
+
+    async function revertTenantContext() {
+      try {
+        const res = await apiFetch('/api/v2/superadmin/switch-tenant', {
+          method: 'POST',
+          body: JSON.stringify({ target_tenant_id: null })
+        });
+        if (res.ok && res.data?.token) {
+          currentToken = res.data.token;
+          localStorage.setItem('warnat_saas_token', currentToken);
+          switchTab('superadmin');
+          await initDashboard();
+        } else {
+          alert('Erro ao restaurar contexto: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      }
+    }
+
+    async function loadSuperAdminData() {
+      const tbody = document.getElementById('saTenantsTableBody');
+      try {
+        // Carrega KPIs
+        const kpiRes = await apiFetch('/api/v2/superadmin/kpis');
+        if (kpiRes.ok && kpiRes.data?.kpis) {
+          const k = kpiRes.data.kpis;
+          document.getElementById('saKpiMrr').textContent = k.mrrReais || '0,00';
+          document.getElementById('saKpiTotal').textContent = k.totalTenants || '0';
+          document.getElementById('saKpiActive').textContent = k.activeTenants || '0';
+          document.getElementById('saKpiTrialing').textContent = k.trialingTenants || '0';
+          document.getElementById('saKpiExpired').textContent = (k.trialExpiredTenants + k.pastDueTenants) || '0';
+        }
+
+        // Carrega Tenants
+        const tRes = await apiFetch('/api/v2/superadmin/tenants');
+        if (tRes.ok && tRes.data?.tenants) {
+          superAdminTenantsList = tRes.data.tenants;
+          renderSuperAdminTenants(superAdminTenantsList);
+          populateTenantSwitcherList(superAdminTenantsList);
+        } else if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-8 text-center text-rose-400">Erro ao carregar lista de empresas: ${escapeHtml(tRes.data?.error || tRes.data?.message || 'Acesso negado')}</td></tr>`;
+        }
+
+        // Carrega Logs
+        const logsRes = await apiFetch('/api/v2/superadmin/audit-logs');
+        if (logsRes.ok && logsRes.data?.logs) {
+          renderSuperAdminLogs(logsRes.data.logs);
+        }
+      } catch (e) {
+        console.error('Erro ao carregar dados do SuperAdmin:', e);
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-8 text-center text-rose-400">Falha de conexão: ${escapeHtml(e.message)}</td></tr>`;
+        }
+      }
+      lucide.createIcons();
+    }
+
+    function renderSuperAdminTenants(tenants) {
+      const tbody = document.getElementById('saTenantsTableBody');
+      if (!tbody) return;
+
+      if (tenants.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-slate-500">Nenhum tenant correspondente aos filtros.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = tenants.map(t => {
+        const isBlocked = Boolean(t.is_manually_blocked) || t.status === 'SUSPENDED_BY_ADMIN';
+        const isCourtesy = t.courtesy_plan === 'pro';
+        const trialDate = t.trial_ends_at ? new Date(t.trial_ends_at).toLocaleDateString('pt-BR') : '-';
+
+        return `
+          <tr class="hover:bg-dark-800/40 transition">
+            <td class="px-5 py-3">
+              <div class="font-bold text-white flex items-center space-x-1.5">
+                <span>${escapeHtml(t.nome_empresa)}</span>
+                ${t.id === currentUserProfile?.tenantId ? '<span class="text-[9px] bg-brand-500/20 text-brand-300 px-1.5 py-0.5 rounded border border-brand-500/30">Atual</span>' : ''}
+              </div>
+              <div class="text-[10px] text-slate-400">${escapeHtml(t.admin_email || '')} ${t.admin_nome ? '(' + escapeHtml(t.admin_nome) + ')' : ''}</div>
+              <div class="text-[10px] text-slate-500 font-mono">${escapeHtml(t.documento || t.id.slice(0, 8))}</div>
+            </td>
+            <td class="px-5 py-3">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${(t.plano || '').toUpperCase() === 'PRO' || isCourtesy ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-slate-800 text-slate-300 border border-slate-700'}">
+                ${isCourtesy ? 'PRO (Cortesia)' : (t.plano || 'BASIC').toUpperCase()}
+              </span>
+            </td>
+            <td class="px-5 py-3">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                isBlocked ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                t.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                t.status === 'TRIALING' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              }">
+                ${isBlocked ? 'SUSPENSO' : t.status || 'TRIALING'}
+              </span>
+            </td>
+            <td class="px-5 py-3 text-slate-300 font-mono text-xs">
+              ${trialDate}
+            </td>
+            <td class="px-5 py-3 text-slate-400 text-xs">
+              ${t.users_count || 1} op. / ${t.sessions_count || 0} conv.
+            </td>
+            <td class="px-5 py-3">
+              <input type="text" value="${escapeHtml(t.admin_notes || '')}" placeholder="Anotação privada..." 
+                     onchange="saveAdminNotes('${t.id}', this.value)"
+                     class="bg-dark-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-300 w-32 focus:w-48 transition-all">
+            </td>
+            <td class="px-5 py-3 text-right">
+              <div class="flex items-center justify-end space-x-1.5">
+                <button onclick="switchTenantContext('${t.id}', '${escapeJsArg(t.nome_empresa)}')" title="Acessar Painel Desta Empresa (Entrar como)" class="p-1.5 bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 rounded-lg border border-brand-500/30 transition flex items-center space-x-1 text-xs px-2">
+                  <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                  <span class="text-[10px] font-semibold">Acessar</span>
+                </button>
+                <button onclick="openExtendTrialModal('${t.id}', '${t.trial_ends_at || ''}', '${escapeJsArg(t.nome_empresa)}')" title="Estender Período de Teste" class="p-1.5 bg-dark-800 hover:bg-dark-700 text-purple-400 rounded-lg border border-slate-700 transition">
+                  <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="toggleCourtesyPlan('${t.id}', '${t.courtesy_plan || ''}', '${escapeJsArg(t.nome_empresa)}')" title="Alternar Pro Cortesia" class="p-1.5 bg-dark-800 hover:bg-dark-700 text-amber-400 rounded-lg border border-slate-700 transition">
+                  <i data-lucide="gift" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="openTenantInvoicesModal('${t.id}', '${escapeJsArg(t.nome_empresa)}')" title="Ver Faturas" class="p-1.5 bg-dark-800 hover:bg-dark-700 text-slate-300 rounded-lg border border-slate-700 transition">
+                  <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="toggleBlockTenant('${t.id}', ${isBlocked}, '${escapeJsArg(t.nome_empresa)}')" title="${isBlocked ? 'Desbloquear Tenant' : 'Bloquear Tenant'}" class="p-1.5 bg-dark-800 hover:bg-dark-700 ${isBlocked ? 'text-emerald-400' : 'text-rose-400'} rounded-lg border border-slate-700 transition">
+                  <i data-lucide="${isBlocked ? 'shield-check' : 'shield-alert'}" class="w-3.5 h-3.5"></i>
+                </button>
+                  <button onclick="deleteTenantAction('${t.id}', '${escapeJsArg(t.nome_empresa)}')" title="Excluir Empresa Definitivamente" class="p-1.5 bg-dark-800 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 rounded-lg border border-slate-700 transition">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function renderSuperAdminLogs(logs) {
+      const tbody = document.getElementById('saAuditLogsBody');
+      if (!tbody) return;
+
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-5 py-6 text-center text-slate-500">Nenhum log registrado ainda.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = logs.map(l => `
+        <tr class="hover:bg-dark-800/40 transition">
+          <td class="px-5 py-2.5 font-mono text-[11px] text-slate-400">${new Date(l.created_at).toLocaleString('pt-BR')}</td>
+          <td class="px-5 py-2.5 text-xs text-white">${escapeHtml(l.admin_name || 'SuperAdmin')}</td>
+          <td class="px-5 py-2.5 text-xs text-purple-300 font-semibold">${escapeHtml(l.target_company_name || '-')}</td>
+          <td class="px-5 py-2.5">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-dark-900 border border-slate-700 text-slate-300">${escapeHtml(l.action)}</span>
+          </td>
+          <td class="px-5 py-2.5 text-[11px] font-mono text-slate-400 max-w-xs truncate">${escapeHtml(JSON.stringify(l.details))}</td>
+        </tr>
+      `).join('');
+    }
+
+    function filterSuperAdminTenants() {
+      const search = (document.getElementById('saSearchInput')?.value || '').toLowerCase();
+      const statusFilter = document.getElementById('saStatusFilter')?.value || '';
+
+      const filtered = superAdminTenantsList.filter(t => {
+        const matchesSearch = !search || t.nome_empresa.toLowerCase().includes(search) || (t.documento && t.documento.includes(search));
+        const matchesStatus = !statusFilter || t.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      });
+
+      renderSuperAdminTenants(filtered);
+    }
+
+    function openExtendTrialModal(tenantId, currentTrial, companyName) {
+      currentExtendTenantId = tenantId;
+      document.getElementById('extendTrialCompanyName').textContent = companyName;
+      const dateInput = document.getElementById('extendTrialNewDate');
+      
+      const baseDate = currentTrial ? new Date(currentTrial) : new Date();
+      const defaultExtend = new Date(baseDate.getTime() + 15 * 24 * 60 * 60 * 1000);
+      dateInput.value = defaultExtend.toISOString().slice(0, 16);
+
+      document.getElementById('modalExtendTrial').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeExtendTrialModal() {
+      document.getElementById('modalExtendTrial')?.classList.add('hidden');
+      currentExtendTenantId = null;
+    }
+
+    function setExtendPresetDays(days) {
+      const dateInput = document.getElementById('extendTrialNewDate');
+      const target = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+      dateInput.value = target.toISOString().slice(0, 16);
+    }
+
+    async function submitExtendTrial() {
+      if (!currentExtendTenantId) return;
+      const newDate = document.getElementById('extendTrialNewDate').value;
+      const reason = document.getElementById('extendTrialReason').value.trim();
+
+      try {
+        const res = await apiFetch(`/api/v2/superadmin/tenants/${currentExtendTenantId}/extend-trial`, {
+          method: 'POST',
+          body: JSON.stringify({
+            new_trial_ends_at: newDate ? new Date(newDate).toISOString() : null,
+            reason
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          alert('Período de testes estendido com sucesso!');
+          closeExtendTrialModal();
+          await loadSuperAdminData();
+        } else {
+          alert('Erro ao estender testes: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro ao comunicar com o servidor: ' + e.message);
+      }
+    }
+
+    async function toggleBlockTenant(tenantId, isCurrentlyBlocked, companyName) {
+      const actionText = isCurrentlyBlocked ? 'DESBLOQUEAR' : 'BLOQUEAR IMEDIATAMENTE';
+      if (!confirm(`Deseja realmente ${actionText} a empresa "${companyName}"?`)) return;
+
+      try {
+        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/block`, {
+          method: 'POST',
+          body: JSON.stringify({
+            blocked: !isCurrentlyBlocked,
+            reason: isCurrentlyBlocked ? 'Desbloqueio efetuado pelo SuperAdmin' : 'Bloqueio administrativo efetuado pelo Dono'
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          alert(res.data.message || 'Status administrativo atualizado!');
+          await loadSuperAdminData();
+        } else {
+          alert('Erro ao atualizar bloqueio: ' + (res.data?.error || 'Tente novamente'));
+        }
+
+    async function deleteTenantAction(tenantId, companyName) {
+      const confirmWord = prompt(`⚠️ ATENÇÃO: A exclusão da empresa "${companyName}" apagará definitivamente todas as instâncias do WhatsApp, operadores, atendimentos, mensagens e faturas vinculadas.\n\nPara confirmar, digite EXCLUIR:`);
+      if (confirmWord !== 'EXCLUIR') {
+        if (confirmWord !== null) alert('Operação cancelada: você não digitou EXCLUIR.');
+        return;
+      }
+
+      try {
+        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}`, {
+          method: 'DELETE',
+          body: JSON.stringify({ reason: 'Exclusão solicitada pelo Dono via Painel SuperAdmin' })
+        });
+
+        if (res.ok && res.data?.success) {
+          alert(res.data.message || `Empresa "${companyName}" foi excluída com sucesso!`);
+          await loadSuperAdminData();
+        } else {
+          alert('Erro ao excluir empresa: ' + (res.data?.message || res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro ao comunicar com o servidor: ' + e.message);
+      }
+    }
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      }
+    }
+
+    async function toggleCourtesyPlan(tenantId, currentCourtesy, companyName) {
+      const willGrant = currentCourtesy !== 'pro';
+      const promptMsg = willGrant 
+        ? `Deseja CONCEDER CORTESIA PRO para "${companyName}"? (Acesso Pro irrestrito)` 
+        : `Deseja REVOGAR CORTESIA PRO de "${companyName}"?`;
+
+      if (!confirm(promptMsg)) return;
+
+      try {
+        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/courtesy-plan`, {
+          method: 'POST',
+          body: JSON.stringify({
+            courtesy_plan: willGrant ? 'pro' : null,
+            reason: willGrant ? 'Concessão cortesia VIP' : 'Revogação cortesia'
+          })
+        });
+
+        if (res.ok && res.data?.success) {
+          alert(res.data.message);
+          await loadSuperAdminData();
+        } else {
+          alert('Erro: ' + (res.data?.error || 'Tente novamente'));
+        }
+      } catch (e) {
+        alert('Erro: ' + e.message);
+      }
+    }
+
+    async function saveAdminNotes(tenantId, notes) {
+      try {
+        await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/notes`, {
+          method: 'PUT',
+          body: JSON.stringify({ notes })
+        });
+      } catch (e) {
+        console.warn('Erro ao salvar notas do tenant:', e);
+      }
+    }
+
+    async function openTenantInvoicesModal(tenantId, companyName) {
+      document.getElementById('saInvoicesCompanyName').textContent = companyName;
+      const tbody = document.getElementById('saInvoicesTableBody');
+      tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-500">Buscando faturas...</td></tr>';
+      document.getElementById('modalSuperAdminInvoices').classList.remove('hidden');
+
+      try {
+        const res = await apiFetch(`/api/v2/superadmin/tenants/${tenantId}/invoices`);
+        if (res.ok && res.data?.invoices) {
+          const invoices = res.data.invoices;
+          if (invoices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-6 text-center text-slate-500">Nenhuma fatura registrada para esta empresa.</td></tr>';
+          } else {
+            tbody.innerHTML = invoices.map(inv => `
+              <tr class="hover:bg-dark-800/40 transition">
+                <td class="px-4 py-2 font-mono text-slate-400">${new Date(inv.created_at).toLocaleDateString('pt-BR')}</td>
+                <td class="px-4 py-2 font-bold text-white">R$ ${(inv.amount_cents / 100).toFixed(2)}</td>
+                <td class="px-4 py-2">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${inv.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}">
+                    ${inv.status === 'PAID' ? 'PAGO' : 'PENDENTE'}
+                  </span>
+                </td>
+                <td class="px-4 py-2 font-mono text-slate-400 text-[11px]">${escapeHtml(inv.pagarme_invoice_id || inv.id)}</td>
+              </tr>
+            `).join('');
+          }
+        }
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-rose-400">Falha ao carregar faturas.</td></tr>';
+      }
+      lucide.createIcons();
+    }
+
+    function closeSuperAdminInvoicesModal() {
+      document.getElementById('modalSuperAdminInvoices')?.classList.add('hidden');
+    }
+
 
     // --------------------------------------------------------------------------
     // UTILITÁRIOS DE SEGURANÇA CONTRA XSS (DEFENSIVE SANITIZATION)
