@@ -94,21 +94,38 @@ async function seedWarNatTech() {
       console.log(`ℹ️ Usuário da WarNat Tech (${clientEmail}) sincronizado com o tenant WarNat Tech.`);
     }
 
-    // 3. Cadastrar / Vincular Instância do WhatsApp da Evolution API
-    const instanceName = 'warnat-tech';
-    await client.query(
-      `INSERT INTO tenant_whatsapp_instances (
-         tenant_id, instance_name, instance_token, numero_telefone, status, webhook_url
-       ) VALUES ($1, $2, 'token-interno-warnat-123', '5531983525816', 'open', 'https://api.warnattech.com.br/api/webhook/whatsapp')
-       ON CONFLICT (instance_name)
-       DO UPDATE SET
-         tenant_id = EXCLUDED.tenant_id,
-         numero_telefone = EXCLUDED.numero_telefone,
-         status = 'open',
-         updated_at = now()`,
-      [tenantId, instanceName]
+    // 5. Cadastrar / Vincular Instância do WhatsApp da Evolution API
+    const existingInstance = await client.query(
+      `SELECT id, instance_name FROM tenant_whatsapp_instances WHERE tenant_id = $1 LIMIT 1`,
+      [tenantId]
     );
-    console.log(`✅ Instância WhatsApp "${instanceName}" vinculada ao tenant WarNat Tech com número (31) 98352-5816.`);
+    if (existingInstance.rowCount > 0) {
+      await client.query(
+        `UPDATE tenant_whatsapp_instances
+         SET status = 'open',
+             numero_telefone = COALESCE(numero_telefone, '5531983525816'),
+             webhook_url = COALESCE(webhook_url, 'https://warnat-panel.onrender.com/api/webhook/whatsapp'),
+             updated_at = now()
+         WHERE tenant_id = $1`,
+        [tenantId]
+      );
+      console.log(`ℹ️ Instância WhatsApp existente mantida para tenant ${tenantId} (${existingInstance.rows[0].instance_name})`);
+    } else {
+      const instanceName = 'warnat-tech';
+      await client.query(
+        `INSERT INTO tenant_whatsapp_instances (
+           tenant_id, instance_name, instance_token, numero_telefone, status, webhook_url
+         ) VALUES ($1, $2, 'token-interno-warnat-123', '5531983525816', 'open', 'https://warnat-panel.onrender.com/api/webhook/whatsapp')
+         ON CONFLICT (instance_name)
+         DO UPDATE SET
+           tenant_id = EXCLUDED.tenant_id,
+           numero_telefone = EXCLUDED.numero_telefone,
+           status = 'open',
+           updated_at = now()`,
+        [tenantId, instanceName]
+      );
+      console.log(`✅ Instância WhatsApp "${instanceName}" vinculada ao tenant WarNat Tech com número (31) 98352-5816.`);
+    }
 
     // 4. Cadastrar Regras da IA e Prompt Compiler Dinâmico
     const servicosOferecidos = [
@@ -251,18 +268,33 @@ async function seedWarNatTech() {
     }
 
     // 8. Vincular Instância WhatsApp wn-velas
-    await client.query(
-      `INSERT INTO tenant_whatsapp_instances (
-         tenant_id, instance_name, instance_token, numero_telefone, status, webhook_url
-       ) VALUES ($1, 'wn-velas', 'token-interno-velas-123', '5531983525816', 'open', 'https://api.warnattech.com.br/api/webhook/whatsapp')
-       ON CONFLICT (instance_name)
-       DO UPDATE SET
-         tenant_id = EXCLUDED.tenant_id,
-         status = 'open',
-         updated_at = now()`,
+    const existingVelasInst = await client.query(
+      `SELECT id, instance_name FROM tenant_whatsapp_instances WHERE tenant_id = $1 LIMIT 1`,
       [velasTenantId]
     );
-    console.log(`✅ Instância WhatsApp "wn-velas" vinculada ao tenant WN Velas artesanais.`);
+    if (existingVelasInst.rowCount > 0) {
+      await client.query(
+        `UPDATE tenant_whatsapp_instances
+         SET status = 'open',
+             updated_at = now()
+         WHERE tenant_id = $1`,
+        [velasTenantId]
+      );
+      console.log(`ℹ️ Instância WhatsApp existente mantida para WN Velas (${existingVelasInst.rows[0].instance_name})`);
+    } else {
+      await client.query(
+        `INSERT INTO tenant_whatsapp_instances (
+           tenant_id, instance_name, instance_token, numero_telefone, status, webhook_url
+         ) VALUES ($1, 'wn-velas', 'token-interno-velas-123', '5531983525816', 'open', 'https://warnat-panel.onrender.com/api/webhook/whatsapp')
+         ON CONFLICT (instance_name)
+         DO UPDATE SET
+           tenant_id = EXCLUDED.tenant_id,
+           status = 'open',
+           updated_at = now()`,
+        [velasTenantId]
+      );
+      console.log(`✅ Instância WhatsApp "wn-velas" vinculada ao tenant WN Velas artesanais.`);
+    }
 
     // 9. Configurar Regras da IA e Catálogo para WN Velas artesanais
     const velasServicos = [
