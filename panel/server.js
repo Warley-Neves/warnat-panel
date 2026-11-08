@@ -157,23 +157,31 @@ const server = http.createServer(async (req, res) => {
   // CORS & Security Headers (OWASP)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-token, apikey');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-token, apikey, x-hub-signature, x-pagarme-signature, x-signature');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
   if (method === 'OPTIONS') {
     res.writeHead(200);
     return res.end();
   }
 
-  // Parse JSON Body
+  // Parse JSON Body com Limite de Tamanho (Proteção DoS - Max 15MB)
   let body = {};
   if (method === 'POST' || method === 'PUT') {
     try {
       const buffers = [];
+      let totalSize = 0;
+      const MAX_BODY_SIZE = 15 * 1024 * 1024; // 15MB
       for await (const chunk of req) {
+        totalSize += chunk.length;
+        if (totalSize > MAX_BODY_SIZE) {
+          res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ error: 'Payload muito grande. Limite de 15MB excedido.' }));
+        }
         buffers.push(chunk);
       }
       const dataStr = Buffer.concat(buffers).toString();
@@ -182,7 +190,7 @@ const server = http.createServer(async (req, res) => {
         body = JSON.parse(dataStr);
       }
     } catch (e) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify({ error: 'JSON inválido' }));
     }
   }
@@ -205,14 +213,18 @@ const server = http.createServer(async (req, res) => {
     // --------------------------------------------------------------------------
     // ROTAS PÚBLICAS DE AUTENTICAÇÃO LEGADA
     
-    // Login com Senha Administrativa
+    // Login com Senha Administrativa (Comparação Timing-Safe)
     if (pathname === '/api/auth/login' && method === 'POST') {
       const { password } = body;
       if (!password) {
         return sendJson(400, { error: 'Senha não fornecida' });
       }
 
-      if (password === ADMIN_PASSWORD) {
+      const passBuffer = Buffer.from(String(password));
+      const adminPassBuffer = Buffer.from(String(ADMIN_PASSWORD));
+      const isMatch = passBuffer.length === adminPassBuffer.length && crypto.timingSafeEqual(passBuffer, adminPassBuffer);
+
+      if (isMatch) {
         const token = generateAdminToken();
         return sendJson(200, {
           success: true,
@@ -241,12 +253,11 @@ const server = http.createServer(async (req, res) => {
     // --------------------------------------------------------------------------
     // MIDDLEWARE DE PROTEÇÃO: TODAS AS ROTAS /api/* EXIGEM AUTENTICAÇÃO
     // --------------------------------------------------------------------------
-    const isCalendarRoute = pathname.startsWith('/api/calendar');
     const isWebhookRoute = pathname.startsWith('/api/webhook') || pathname.startsWith('/api/webhooks');
     const isPublicRoute = pathname.startsWith('/api/public/');
 
     const reqKey = req.headers['apikey'] || parsedUrl.query.apikey || '';
-    if (pathname.startsWith('/api/') && !isCalendarRoute && !isWebhookRoute && !isPublicRoute) {
+    if (pathname.startsWith('/api/') && !isWebhookRoute && !isPublicRoute) {
       const authHeader = req.headers['authorization'] || '';
       const customHeader = req.headers['x-admin-token'] || '';
       const token = authHeader.replace(/^Bearer\s+/i, '') || customHeader;

@@ -4606,7 +4606,7 @@
 
             let audioPlayer = '';
             if (m.media_url && (m.media_url.startsWith('data:audio') || m.media_url.startsWith('http'))) {
-              audioPlayer = `<audio controls src="${m.media_url}" class="mt-2 w-full max-w-xs h-8"></audio>`;
+              audioPlayer = `<audio controls src="${escapeHtml(m.media_url)}" class="mt-2 w-full max-w-xs h-8"></audio>`;
             }
 
             msgDiv.innerHTML = `
@@ -5125,7 +5125,7 @@
 
             let audioPlayer = '';
             if (m.media_url && (m.media_url.startsWith('data:audio') || m.media_url.startsWith('http'))) {
-              audioPlayer = `<audio controls src="${m.media_url}" class="mt-2 w-full max-w-xs h-8"></audio>`;
+              audioPlayer = `<audio controls src="${escapeHtml(m.media_url)}" class="mt-2 w-full max-w-xs h-8"></audio>`;
             }
 
             msgDiv.innerHTML = `

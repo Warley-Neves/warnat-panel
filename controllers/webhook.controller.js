@@ -69,16 +69,8 @@ class WebhookController {
       }
     }
 
-    // Fallback: se houver apenas um tenant cadastrado ou instância padrão
     if (!tenantId) {
-      const defaultTenant = await query(`SELECT id FROM tenants WHERE ativo = true ORDER BY created_at ASC LIMIT 1`);
-      if (defaultTenant.rowCount > 0) {
-        tenantId = defaultTenant.rows[0].id;
-      }
-    }
-
-    if (!tenantId) {
-      throw new Error(`Nenhum tenant ativo encontrado para a instância: ${instanceName}`);
+      throw new Error(`Instância WhatsApp "${instanceName || 'desconhecida'}" não está associada a nenhuma empresa cadastrada.`);
     }
 
     return { tenantId, instanceName };

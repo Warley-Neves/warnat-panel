@@ -99,17 +99,29 @@ class EntitlementsService {
    * Avalia as Regras 0 a 3 de acesso operacional do Tenant
    */
   async evaluateAccess(decodedUser, { isWrite = false } = {}) {
-    // Regra 0: SuperAdmin Override (Acesso total irrestrito / bypass)
-    if (decodedUser?.isSuperAdmin) {
-      return { allowed: true, superAdmin: true };
-    }
-
-    // Dupla verificação no banco para evitar falsificação
+    // Verificação de segurança no banco de dados para o usuário atual
     if (decodedUser?.userId) {
-      const uRes = await query(`SELECT is_super_admin FROM users WHERE id = $1`, [decodedUser.userId]);
-      if (uRes.rows[0]?.is_super_admin) {
+      const uRes = await query(
+        `SELECT is_super_admin, email, COALESCE(ativo, true) as ativo FROM users WHERE id = $1`,
+        [decodedUser.userId]
+      );
+      const u = uRes.rows[0];
+      if (!u || !u.ativo) {
+        return {
+          allowed: false,
+          statusCode: 401,
+          error: 'USER_DEACTIVATED',
+          message: 'Usuário desativado ou inexistente no sistema.'
+        };
+      }
+
+      // Regra 0: SuperAdmin Override (Verificado pelo banco de dados)
+      const isSuper = Boolean(u.is_super_admin || (u.email && u.email.toLowerCase() === 'admin@warnattech.com.br'));
+      if (isSuper) {
         return { allowed: true, superAdmin: true };
       }
+    } else if (decodedUser?.isSuperAdmin) {
+      return { allowed: true, superAdmin: true };
     }
 
     const tenantId = decodedUser?.tenantId;

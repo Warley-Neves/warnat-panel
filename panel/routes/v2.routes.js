@@ -10,6 +10,7 @@ const webhookController = require('../../controllers/webhook.controller');
 const messageCache = require('../../services/message-cache.service');
 const pagarmeService = require('../../services/pagarme.service');
 const entitlementsService = require('../../services/entitlements.service');
+const rateLimiterService = require('../../services/rate-limiter.service');
 const url = require('url');
 
 async function handleV2Routes(req, res, pathname, method, body) {
@@ -21,9 +22,15 @@ async function handleV2Routes(req, res, pathname, method, body) {
 
   try {
     // --------------------------------------------------------------------------
-    // 1. AUTENTICAÇÃO PÚBLICA (LOGIN & AUTO-CADASTRO)
+    // 1. AUTENTICAÇÃO PÚBLICA (LOGIN & AUTO-CADASTRO COM RATE LIMITING OWASP)
     // --------------------------------------------------------------------------
     if (pathname === '/api/v2/auth/register' && method === 'POST') {
+      const clientIp = rateLimiterService.getClientIp(req);
+      const regRate = rateLimiterService.checkRegisterRate(clientIp);
+      if (!regRate.allowed) {
+        return sendJson(429, { success: false, error: regRate.error });
+      }
+
       const { nome_empresa, documento, plano, nome, email, password, sobre_empresa, privacy_policy_accepted } = body;
       if (!nome_empresa || !nome || !email || !password) {
         return sendJson(400, { success: false, error: 'Campos obrigatórios: nome_empresa, nome, email e password.' });
@@ -32,7 +39,6 @@ async function handleV2Routes(req, res, pathname, method, body) {
         return sendJson(400, { success: false, error: 'É obrigatório declarar ciência e consentimento com a Política de Privacidade e Termos da LGPD.' });
       }
 
-      const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null;
       const userAgent = req.headers['user-agent'] || null;
 
       try {
@@ -45,7 +51,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
           password,
           sobre_empresa,
           privacy_policy_accepted: true,
-          ipAddress: clientIp ? String(clientIp).split(',')[0].trim() : null,
+          ipAddress: clientIp,
           userAgent
         });
         return sendJson(201, {
@@ -64,27 +70,54 @@ async function handleV2Routes(req, res, pathname, method, body) {
         return sendJson(400, { success: false, error: 'E-mail e senha são obrigatórios.' });
       }
 
+      const clientIp = rateLimiterService.getClientIp(req);
+      const loginRate = rateLimiterService.checkLoginRate(clientIp, email);
+      if (!loginRate.allowed) {
+        res.setHeader('Retry-After', String(loginRate.waitSeconds || 60));
+        return sendJson(429, {
+          success: false,
+          error: loginRate.error,
+          retryAfterSeconds: loginRate.waitSeconds
+        });
+      }
+
       try {
         const result = await authService.login(email, password);
+        rateLimiterService.recordLoginSuccess(clientIp, email);
         return sendJson(200, {
           success: true,
           message: 'Autenticado com sucesso!',
           ...result
         });
       } catch (authErr) {
+        rateLimiterService.recordLoginFailure(clientIp, email);
         return sendJson(401, { success: false, error: authErr.message });
       }
     }
 
     // --------------------------------------------------------------------------
-    // 1.1 WEBHOOK PAGAR.ME V5 (PÚBLICO COM VALIDAÇÃO HMAC E IDEMPOTÊNCIA)
+    // 1.1 WEBHOOKS PÚBLICOS (WHATSAPP & PAGAR.ME V5 COM HMAC E IDEMPOTÊNCIA)
     // --------------------------------------------------------------------------
+    if ((pathname === '/api/v2/webhook/whatsapp' || pathname === '/api/v2/webhooks/whatsapp' || pathname === '/api/webhook/whatsapp') && method === 'POST') {
+      try {
+        webhookController.handleWebhook(body).catch(e => console.error('[Webhook] Async error:', e.message));
+        return sendJson(200, { received: true });
+      } catch (e) {
+        console.error('[Panel] Erro ao processar webhook whatsapp:', e.message);
+        return sendJson(500, { error: e.message });
+      }
+    }
+
     if ((pathname === '/api/v2/webhooks/pagarme' || pathname === '/api/webhooks/pagarme' || pathname === '/api/webhook/pagarme') && method === 'POST') {
       const sig = req.headers['x-hub-signature'] || req.headers['x-pagarme-signature'] || req.headers['x-signature'] || '';
       const rawBody = req.rawBody || JSON.stringify(body);
 
-      // Validação HMAC de assinatura se configurada e presente
-      if (sig && !pagarmeService.verifyWebhookSignature(rawBody, sig)) {
+      // Validação HMAC estrita contra signature stripping se webhookSecret estiver configurado
+      if (pagarmeService.webhookSecret) {
+        if (!sig || !pagarmeService.verifyWebhookSignature(rawBody, sig)) {
+          return sendJson(401, { success: false, error: 'Assinatura HMAC inválida ou ausente no webhook' });
+        }
+      } else if (sig && !pagarmeService.verifyWebhookSignature(rawBody, sig)) {
         return sendJson(401, { success: false, error: 'Assinatura inválida do webhook' });
       }
 
@@ -122,15 +155,18 @@ async function handleV2Routes(req, res, pathname, method, body) {
     const tenantId = decodedUser.tenantId;
 
     // --------------------------------------------------------------------------
-    // GUARD DE SUPERADMIN PARA ROTAS /api/v2/superadmin/*
+    // GUARD DE SUPERADMIN PARA ROTAS /api/v2/superadmin/* (CONSULTA DIRETA AO BANCO)
     // --------------------------------------------------------------------------
     const isSuperAdminRoute = pathname.startsWith('/api/v2/superadmin');
     if (isSuperAdminRoute) {
-      const isOwnerEmail = decodedUser.email && decodedUser.email.toLowerCase() === 'admin@warnattech.com.br';
-      let isSuper = Boolean(decodedUser.isSuperAdmin || isOwnerEmail);
-      if (!isSuper && decodedUser.userId) {
-        const uCheck = await query(`SELECT is_super_admin, email FROM users WHERE id = $1`, [decodedUser.userId]);
-        isSuper = Boolean(uCheck.rows[0]?.is_super_admin || (uCheck.rows[0]?.email && uCheck.rows[0].email.toLowerCase() === 'admin@warnattech.com.br'));
+      let isSuper = false;
+      if (decodedUser.userId) {
+        const uCheck = await query(
+          `SELECT is_super_admin, email, COALESCE(ativo, true) as ativo FROM users WHERE id = $1`,
+          [decodedUser.userId]
+        );
+        const uRow = uCheck.rows[0];
+        isSuper = Boolean(uRow && uRow.ativo && (uRow.is_super_admin || (uRow.email && uRow.email.toLowerCase() === 'admin@warnattech.com.br')));
       }
       if (!isSuper) {
         return sendJson(403, {
@@ -143,7 +179,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
 
     // --------------------------------------------------------------------------
     // MOTOR CENTRAL DE ENTITLEMENTS (REGRAS 0-3: BLOQUEIO ADMIN, TRIAL EXPIRED, GRACE PERIOD)
-    // Rotas de billing e contexto de usuário permanecem abertas para regularização
+    // Rotas de billing, consentimento e contexto de usuário permanecem abertas
     // --------------------------------------------------------------------------
     const isBillingRoute = pathname.startsWith('/api/v2/tenant/billing');
     const isMeRoute = pathname === '/api/v2/auth/me';
@@ -159,6 +195,26 @@ async function handleV2Routes(req, res, pathname, method, body) {
           message: accessResult.message,
           required_action: accessResult.required_action,
           status: accessResult.status
+        });
+      }
+
+      // --------------------------------------------------------------------------
+      // GUARD DE CONSENTIMENTO OBRIGATÓRIO (LGPD - LEI 13.709/2018)
+      // Bloqueia chamadas operacionais se o usuário ainda não tiver aceito os termos
+      // --------------------------------------------------------------------------
+      const uConsentRes = await query(
+        `SELECT privacy_policy_accepted_at, privacy_policy_version FROM users WHERE id = $1`,
+        [decodedUser.userId]
+      );
+      const uConsent = uConsentRes.rows[0];
+      const hasAccepted = Boolean(uConsent?.privacy_policy_accepted_at && uConsent?.privacy_policy_version === 'v1.0');
+      if (!hasAccepted) {
+        return sendJson(403, {
+          success: false,
+          error: 'PRIVACY_POLICY_CONSENT_REQUIRED',
+          message: 'É necessário manifestar consentimento formal com a Política de Privacidade e Termos de Uso (LGPD) para acessar este recurso.',
+          required_action: 'CONSENT_PRIVACY_POLICY',
+          policy_version: 'v1.0'
         });
       }
     }
@@ -1857,6 +1913,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     if (pathname === '/api/v2/tenant/billing/checkout/card' && method === 'POST') {
+      if (decodedUser.role !== 'admin' && !decodedUser.isSuperAdmin) {
+        return sendJson(403, { success: false, error: 'Apenas Administradores podem contratar ou alterar planos de assinatura.' });
+      }
+
       const { plan_id, card_token, customer } = body;
       if (!plan_id || !card_token) {
         return sendJson(400, { success: false, error: 'plan_id e card_token são obrigatórios.' });
@@ -1876,6 +1936,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
     }
 
     if (pathname === '/api/v2/tenant/billing/checkout/pix' && method === 'POST') {
+      if (decodedUser.role !== 'admin' && !decodedUser.isSuperAdmin) {
+        return sendJson(403, { success: false, error: 'Apenas Administradores podem contratar ou alterar planos de assinatura.' });
+      }
+
       const { plan_id, customer } = body;
       if (!plan_id) {
         return sendJson(400, { success: false, error: 'plan_id é obrigatório.' });

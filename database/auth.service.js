@@ -87,6 +87,18 @@ class AuthService {
     }
 
     const cleanEmail = email.toLowerCase().trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      throw new Error('Formato de e-mail inválido.');
+    }
+
+    if (password.length < 6) {
+      throw new Error('A senha deve conter no mínimo 6 caracteres.');
+    }
+
+    const validRoles = ['admin', 'supervisor', 'atendente'];
+    const safeRole = validRoles.includes(role) ? role : 'atendente';
+
     const existing = await query('SELECT id FROM users WHERE email = $1', [cleanEmail]);
     if (existing.rowCount > 0) {
       throw new Error('E-mail já cadastrado na plataforma.');
@@ -97,7 +109,7 @@ class AuthService {
       `INSERT INTO users (tenant_id, email, password_hash, role, nome, department_id, ativo)
        VALUES ($1, $2, $3, $4, $5, $6, true)
        RETURNING id, tenant_id, email, role, nome, department_id, ativo, created_at`,
-      [tenantId, cleanEmail, passwordHash, role, nome.trim(), departmentId || null]
+      [tenantId, cleanEmail, passwordHash, safeRole, nome.trim(), departmentId || null]
     );
 
     return result.rows[0];
@@ -140,6 +152,10 @@ class AuthService {
       values.push(nome.trim());
     }
     if (role) {
+      const validRoles = ['admin', 'supervisor', 'atendente'];
+      if (!validRoles.includes(role)) {
+        throw new Error('Cargo de usuário inválido.');
+      }
       updates.push(`role = $${idx++}`);
       values.push(role);
     }
@@ -152,7 +168,10 @@ class AuthService {
       updates.push(`department_id = $${idx++}`);
       values.push(resolvedDeptId || null);
     }
-    if (password && password.trim().length >= 6) {
+    if (password !== undefined) {
+      if (typeof password !== 'string' || password.trim().length < 6) {
+        throw new Error('A nova senha deve conter no mínimo 6 caracteres.');
+      }
       const hash = await this.hashPassword(password.trim());
       updates.push(`password_hash = $${idx++}`);
       values.push(hash);
@@ -174,9 +193,18 @@ class AuthService {
   }
 
   /**
-   * Remove um usuário do tenant
+   * Remove um usuário do tenant com proteção para o último administrador
    */
   async deleteUser(tenantId, userId) {
+    // Impede a remoção se este for o único administrador ativo do tenant
+    const adminCheck = await query(
+      `SELECT id FROM users WHERE tenant_id = $1 AND role = 'admin' AND COALESCE(ativo, true) = true`,
+      [tenantId]
+    );
+    if (adminCheck.rowCount <= 1 && adminCheck.rows[0]?.id === userId) {
+      throw new Error('Não é permitido remover o único administrador ativo da empresa.');
+    }
+
     const res = await query(
       `DELETE FROM users WHERE id = $1 AND tenant_id = $2 RETURNING id`,
       [userId, tenantId]
@@ -311,6 +339,15 @@ class AuthService {
     }
 
     const cleanEmail = email.toLowerCase().trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      throw new Error('Formato de e-mail inválido.');
+    }
+
+    if (typeof password !== 'string' || password.length < 6) {
+      throw new Error('A senha deve conter no mínimo 6 caracteres.');
+    }
+
     const existing = await query('SELECT id FROM users WHERE email = $1;', [cleanEmail]);
     if (existing.rowCount > 0) {
       throw new Error(`O e-mail '${cleanEmail}' já está cadastrado.`);
