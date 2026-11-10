@@ -42,14 +42,14 @@ async function seedWarNatTech() {
 
     if (saCheck.rowCount === 0) {
       await client.query(
-        `INSERT INTO users (tenant_id, email, password_hash, role, nome, is_super_admin)
-         VALUES ($1, $2, $3, 'admin', 'Warley Santos (Dono)', true)`,
+        `INSERT INTO users (tenant_id, email, password_hash, role, nome, is_super_admin, telefone)
+         VALUES ($1, $2, $3, 'admin', 'Warley Santos (Dono)', true, '5531983525816')`,
         [masterTenantId, saEmail, saHash]
       );
       console.log(`✅ Usuário Dono do SaaS criado: ${saEmail}`);
     } else {
       await client.query(
-        `UPDATE users SET tenant_id = $1, is_super_admin = true, role = 'admin', nome = 'Warley Santos (Dono)' WHERE email = $2`,
+        `UPDATE users SET tenant_id = $1, is_super_admin = true, role = 'admin', nome = 'Warley Santos (Dono)', telefone = COALESCE(telefone, '5531983525816') WHERE email = $2`,
         [masterTenantId, saEmail]
       );
       console.log(`ℹ️ Usuário Dono do SaaS (${saEmail}) vinculado exclusivamente ao Tenant Master.`);
@@ -81,14 +81,14 @@ async function seedWarNatTech() {
 
     if (clientCheck.rowCount === 0) {
       await client.query(
-        `INSERT INTO users (tenant_id, email, password_hash, role, nome, is_super_admin)
-         VALUES ($1, $2, $3, 'admin', 'Warley Santos', false)`,
+        `INSERT INTO users (tenant_id, email, password_hash, role, nome, is_super_admin, telefone)
+         VALUES ($1, $2, $3, 'admin', 'Warley Santos', false, '5531983525816')`,
         [tenantId, clientEmail, clientHash]
       );
       console.log(`✅ Usuário da WarNat Tech criado: ${clientEmail} (vinculado ao tenant WarNat Tech)`);
     } else {
       await client.query(
-        `UPDATE users SET tenant_id = $1, role = 'admin', is_super_admin = false WHERE email = $2`,
+        `UPDATE users SET tenant_id = $1, role = 'admin', is_super_admin = false, telefone = COALESCE(telefone, '5531983525816') WHERE email = $2`,
         [tenantId, clientEmail]
       );
       console.log(`ℹ️ Usuário da WarNat Tech (${clientEmail}) sincronizado com o tenant WarNat Tech.`);
@@ -254,14 +254,14 @@ async function seedWarNatTech() {
 
     if (velasUserCheck.rowCount === 0) {
       await client.query(
-        `INSERT INTO users (tenant_id, email, password_hash, role, nome, is_super_admin)
-         VALUES ($1, $2, $3, 'admin', 'Warley Santos (Velas)', false)`,
+        `INSERT INTO users (tenant_id, email, password_hash, role, nome, is_super_admin, telefone)
+         VALUES ($1, $2, $3, 'admin', 'Warley Santos (Velas)', false, '5531983525816')`,
         [velasTenantId, velasEmail, velasHash]
       );
       console.log(`✅ Usuário da WN Velas artesanais criado: ${velasEmail}`);
     } else {
       await client.query(
-        `UPDATE users SET tenant_id = $1, role = 'admin', is_super_admin = false WHERE email = $2`,
+        `UPDATE users SET tenant_id = $1, role = 'admin', is_super_admin = false, telefone = COALESCE(telefone, '5531983525816') WHERE email = $2`,
         [velasTenantId, velasEmail]
       );
       console.log(`ℹ️ Usuário da WN Velas artesanais (${velasEmail}) sincronizado.`);

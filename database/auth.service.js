@@ -329,6 +329,7 @@ class AuthService {
     nome,
     email,
     password,
+    telefone = null,
     sobre_empresa = 'Empresa inovadora atendendo via WhatsApp.',
     privacy_policy_accepted = true,
     ipAddress = null,
@@ -339,6 +340,7 @@ class AuthService {
     }
 
     const cleanEmail = email.toLowerCase().trim();
+    const cleanPhone = telefone ? String(telefone).replace(/\D/g, '') : null;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       throw new Error('Formato de e-mail inválido.');
@@ -369,10 +371,10 @@ class AuthService {
     const policyVersion = privacy_policy_accepted ? 'v1.0' : null;
 
     const userRes = await query(
-      `INSERT INTO users (tenant_id, nome, email, password_hash, role, is_super_admin, privacy_policy_accepted_at, privacy_policy_version)
-       VALUES ($1, $2, $3, $4, 'admin', $5, $6, $7)
-       RETURNING id, tenant_id, nome, email, role, is_super_admin, privacy_policy_accepted_at, privacy_policy_version, created_at;`,
-      [tenant.id, nome.trim(), cleanEmail, passwordHash, isSuper, policyAcceptedAt, policyVersion]
+      `INSERT INTO users (tenant_id, nome, email, password_hash, role, is_super_admin, privacy_policy_accepted_at, privacy_policy_version, telefone)
+       VALUES ($1, $2, $3, $4, 'admin', $5, $6, $7, $8)
+       RETURNING id, tenant_id, nome, email, role, is_super_admin, privacy_policy_accepted_at, privacy_policy_version, telefone, created_at;`,
+      [tenant.id, nome.trim(), cleanEmail, passwordHash, isSuper, policyAcceptedAt, policyVersion, cleanPhone]
     );
     const user = userRes.rows[0];
 

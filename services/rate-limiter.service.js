@@ -133,6 +133,66 @@ class RateLimiterService {
     this.hits.set(key, entry);
     return { allowed: true };
   }
+
+  /**
+   * Limita solicitações de recuperação de senha por IP e por identificador
+   * Limite: máximo 5 solicitações a cada 15 minutos por IP ou por identificador
+   */
+  checkPasswordResetRate(ip, identifier) {
+    const now = Date.now();
+    const cleanId = String(identifier || '').toLowerCase().trim();
+    const key = `pw_reset:${ip}:${cleanId}`;
+    const ipKey = `pw_reset_ip:${ip}`;
+
+    const entry = this.hits.get(key);
+    if (entry && now < entry.blockedUntil) {
+      const waitSeconds = Math.ceil((entry.blockedUntil - now) / 1000);
+      return {
+        allowed: false,
+        waitSeconds,
+        error: `Muitas solicitações de recuperação para este contato. Aguarde ${Math.ceil(waitSeconds / 60)} minutos.`
+      };
+    }
+
+    const ipEntry = this.hits.get(ipKey);
+    if (ipEntry && now < ipEntry.blockedUntil) {
+      const waitSeconds = Math.ceil((ipEntry.blockedUntil - now) / 1000);
+      return {
+        allowed: false,
+        waitSeconds,
+        error: `Muitas solicitações a partir deste IP. Aguarde ${Math.ceil(waitSeconds / 60)} minutos.`
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  recordPasswordResetAttempt(ip, identifier) {
+    const now = Date.now();
+    const cleanId = String(identifier || '').toLowerCase().trim();
+    const key = `pw_reset:${ip}:${cleanId}`;
+    const ipKey = `pw_reset_ip:${ip}`;
+
+    let entry = this.hits.get(key) || { count: 0, firstAttempt: now, blockedUntil: 0 };
+    if ((now - entry.firstAttempt) > 15 * 60 * 1000) {
+      entry = { count: 0, firstAttempt: now, blockedUntil: 0 };
+    }
+    entry.count += 1;
+    if (entry.count >= 5) {
+      entry.blockedUntil = now + 15 * 60 * 1000;
+    }
+    this.hits.set(key, entry);
+
+    let ipEntry = this.hits.get(ipKey) || { count: 0, firstAttempt: now, blockedUntil: 0 };
+    if ((now - ipEntry.firstAttempt) > 15 * 60 * 1000) {
+      ipEntry = { count: 0, firstAttempt: now, blockedUntil: 0 };
+    }
+    ipEntry.count += 1;
+    if (ipEntry.count >= 10) {
+      ipEntry.blockedUntil = now + 15 * 60 * 1000;
+    }
+    this.hits.set(ipKey, ipEntry);
+  }
 }
 
 module.exports = new RateLimiterService();

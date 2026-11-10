@@ -11,6 +11,7 @@ const messageCache = require('../../services/message-cache.service');
 const pagarmeService = require('../../services/pagarme.service');
 const entitlementsService = require('../../services/entitlements.service');
 const rateLimiterService = require('../../services/rate-limiter.service');
+const passwordRecoveryService = require('../../services/password-recovery.service');
 const url = require('url');
 
 async function handleV2Routes(req, res, pathname, method, body) {
@@ -92,6 +93,36 @@ async function handleV2Routes(req, res, pathname, method, body) {
       } catch (authErr) {
         rateLimiterService.recordLoginFailure(clientIp, email);
         return sendJson(401, { success: false, error: authErr.message });
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 1.01 RECUPERAÇÃO DE SENHA MULTICANAL (SOLICITAÇÃO DE CÓDIGO EMAIL/TELEFONE)
+    // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/auth/forgot-password' && method === 'POST') {
+      const clientIp = rateLimiterService.getClientIp(req);
+      const { type, identifier } = body;
+      try {
+        const result = await passwordRecoveryService.requestResetCode({ type, identifier, clientIp });
+        return sendJson(200, result);
+      } catch (recErr) {
+        const status = recErr.statusCode || 400;
+        return sendJson(status, { success: false, error: recErr.message });
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 1.02 VALIDAÇÃO DE CÓDIGO OTP & REDEFINIÇÃO DE SENHA (OWASP / NIST SP 800-63B)
+    // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/auth/reset-password' && method === 'POST') {
+      const clientIp = rateLimiterService.getClientIp(req);
+      const { code, new_password } = body;
+      try {
+        const result = await passwordRecoveryService.verifyAndResetPassword({ code, newPassword: new_password, clientIp });
+        return sendJson(200, result);
+      } catch (rstErr) {
+        const status = rstErr.statusCode || 400;
+        return sendJson(status, { success: false, error: rstErr.message });
       }
     }
 

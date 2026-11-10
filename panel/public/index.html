@@ -80,7 +80,12 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Senha</label>
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">Senha</label>
+            <button type="button" onclick="openForgotPasswordModal()" class="text-xs text-brand-400 hover:text-brand-300 font-medium transition hover:underline">
+              Esqueceu a senha?
+            </button>
+          </div>
           <div class="relative">
             <i data-lucide="lock" class="w-5 h-5 absolute left-3.5 top-3 text-slate-500"></i>
             <input type="password" id="loginPassword" required placeholder="••••••••" class="w-full bg-dark-800 border border-slate-700 rounded-xl pl-11 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
@@ -2357,6 +2362,124 @@
   </div>
 
   <!-- ============================================================================ -->
+  <!-- MODAL: RECUPERAÇÃO DE SENHA MULTICANAL (E-MAIL & WHATSAPP) -->
+  <!-- ============================================================================ -->
+  <div id="forgotPasswordModal" class="hidden fixed inset-0 z-[130] bg-dark-900/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-dark-850 border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden fade-in">
+      
+      <!-- HEADER DO MODAL -->
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-dark-900/60">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/15 text-brand-400 border border-brand-500/30 flex items-center justify-center shadow-lg shadow-brand-500/10">
+            <i data-lucide="key-round" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-white text-base">Recuperar Acesso</h4>
+            <p class="text-xs text-slate-400">Redefina sua senha com código de verificação</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeForgotPasswordModal()" class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-dark-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- ETAPA 1: SOLICITAR CÓDIGO (E-MAIL OU WHATSAPP) -->
+      <div id="forgotStep1" class="p-6 space-y-4">
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Selecione o canal onde deseja receber seu código seguro de 6 dígitos:
+        </p>
+
+        <!-- SELETOR DE CANAL (TABS) -->
+        <div class="grid grid-cols-2 gap-2 p-1 bg-dark-900 rounded-xl border border-slate-800">
+          <button type="button" id="tabChannelEmail" onclick="switchForgotChannel('email')" class="py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition bg-brand-600 text-white shadow-md">
+            <i data-lucide="mail" class="w-4 h-4"></i>
+            <span>Por E-mail</span>
+          </button>
+          <button type="button" id="tabChannelPhone" onclick="switchForgotChannel('telefone')" class="py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition text-slate-400 hover:text-slate-200">
+            <i data-lucide="message-square" class="w-4 h-4 text-emerald-400"></i>
+            <span>Por WhatsApp</span>
+          </button>
+        </div>
+
+        <form id="formRequestResetCode" onsubmit="handleRequestResetCode(event)" class="space-y-4 pt-1">
+          <div id="forgotStep1Alert" class="hidden p-3 rounded-xl text-xs font-medium"></div>
+
+          <!-- CAMPO EMAIL -->
+          <div id="groupForgotEmail">
+            <label class="block text-xs font-medium text-slate-300 mb-1.5">E-mail Cadastrado *</label>
+            <div class="relative">
+              <i data-lucide="mail" class="w-4 h-4 absolute left-3.5 top-3 text-slate-500"></i>
+              <input type="email" id="inputForgotEmail" placeholder="seu.email@empresa.com" class="w-full bg-dark-900 border border-slate-700/80 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Enviaremos o código de segurança para o seu e-mail e WhatsApp vinculado.</p>
+          </div>
+
+          <!-- CAMPO TELEFONE / WHATSAPP -->
+          <div id="groupForgotPhone" class="hidden">
+            <label class="block text-xs font-medium text-slate-300 mb-1.5">Número de WhatsApp *</label>
+            <div class="relative">
+              <i data-lucide="phone" class="w-4 h-4 absolute left-3.5 top-3 text-slate-500"></i>
+              <input type="tel" id="inputForgotPhone" placeholder="(31) 98352-5816" oninput="formatPhoneInput(this)" class="w-full bg-dark-900 border border-slate-700/80 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Informe seu celular com DDD para envio da mensagem de verificação.</p>
+          </div>
+
+          <div class="pt-2 flex items-center justify-between">
+            <button type="button" onclick="goToForgotStep(2)" class="text-xs text-brand-400 hover:text-brand-300 underline font-medium">
+              Já possuo um código
+            </button>
+            <button type="submit" id="btnSubmitForgotStep1" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition flex items-center space-x-2 shadow-lg shadow-brand-600/30">
+              <span>Enviar Código</span>
+              <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- ETAPA 2: VALIDAR CÓDIGO E DEFINIR NOVA SENHA -->
+      <div id="forgotStep2" class="p-6 space-y-4 hidden">
+        <div class="p-3 rounded-xl bg-dark-900 border border-slate-800 flex items-center justify-between">
+          <div class="flex items-center space-x-2 text-xs text-slate-300">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-brand-400 shrink-0"></i>
+            <span id="labelForgotTarget">Código de 6 dígitos enviado</span>
+          </div>
+          <button type="button" onclick="goToForgotStep(1)" class="text-[11px] text-brand-400 hover:underline">Alterar</button>
+        </div>
+
+        <form id="formSubmitNewPassword" onsubmit="handleResetPasswordSubmit(event)" class="space-y-3.5">
+          <div id="forgotStep2Alert" class="hidden p-3 rounded-xl text-xs font-medium"></div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1.5">Código de 6 Dígitos *</label>
+            <input type="text" id="inputResetCode" required maxlength="6" pattern="[0-9]{6}" placeholder="000000" class="w-full bg-dark-900 border border-slate-700/80 rounded-xl px-4 py-2.5 text-center text-lg font-mono font-bold tracking-widest text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1.5">Nova Senha * (mínimo 6 caracteres)</label>
+            <input type="password" id="inputResetNewPassword" required minlength="6" placeholder="Digite sua nova senha" class="w-full bg-dark-900 border border-slate-700/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1.5">Confirmar Nova Senha *</label>
+            <input type="password" id="inputResetConfirmPassword" required minlength="6" placeholder="Confirme a nova senha" class="w-full bg-dark-900 border border-slate-700/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+
+          <div class="pt-2 flex items-center justify-between">
+            <button type="button" onclick="goToForgotStep(1)" class="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 text-xs font-medium hover:bg-dark-800 transition">
+              Voltar
+            </button>
+            <button type="submit" id="btnSubmitForgotStep2" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center space-x-2 shadow-lg shadow-emerald-600/30">
+              <span>Redefinir Senha</span>
+              <i data-lucide="check" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================================ -->
   <!-- MODAL DE DETALHES DO AGENDAMENTO (FICHA COMPLETA) -->
   <!-- ============================================================================ -->
   <div id="appointmentDetailsModal" class="hidden fixed inset-0 z-50 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -3901,6 +4024,223 @@
       } catch (err) {
         errBox.textContent = 'Erro de conexão com o servidor.';
         errBox.classList.remove('hidden');
+      }
+    }
+
+    // ============================================================================
+    // RECUPERAÇÃO DE SENHA MULTICANAL (E-MAIL & WHATSAPP) - FLUXO COMPLETO
+    // ============================================================================
+    let currentForgotChannel = 'email';
+
+    function formatPhoneInput(input) {
+      let v = input.value.replace(/\D/g, '');
+      if (v.length > 11) v = v.slice(0, 11);
+      if (v.length > 6) {
+        input.value = `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7)}`;
+      } else if (v.length > 2) {
+        input.value = `(${v.slice(0, 2)}) ${v.slice(2)}`;
+      } else if (v.length > 0) {
+        input.value = `(${v}`;
+      } else {
+        input.value = '';
+      }
+    }
+
+    function switchForgotChannel(channel) {
+      currentForgotChannel = channel;
+      const tabEmail = document.getElementById('tabChannelEmail');
+      const tabPhone = document.getElementById('tabChannelPhone');
+      const grpEmail = document.getElementById('groupForgotEmail');
+      const grpPhone = document.getElementById('groupForgotPhone');
+      const alertBox = document.getElementById('forgotStep1Alert');
+      if (alertBox) alertBox.className = 'hidden p-3 rounded-xl text-xs font-medium';
+
+      if (channel === 'telefone') {
+        tabPhone.className = 'py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition bg-brand-600 text-white shadow-md';
+        tabEmail.className = 'py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition text-slate-400 hover:text-slate-200';
+        grpPhone.classList.remove('hidden');
+        grpEmail.classList.add('hidden');
+        document.getElementById('inputForgotPhone')?.focus();
+      } else {
+        tabEmail.className = 'py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition bg-brand-600 text-white shadow-md';
+        tabPhone.className = 'py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition text-slate-400 hover:text-slate-200';
+        grpEmail.classList.remove('hidden');
+        grpPhone.classList.add('hidden');
+        document.getElementById('inputForgotEmail')?.focus();
+      }
+      lucide.createIcons();
+    }
+
+    function goToForgotStep(step) {
+      const step1 = document.getElementById('forgotStep1');
+      const step2 = document.getElementById('forgotStep2');
+      const alert1 = document.getElementById('forgotStep1Alert');
+      const alert2 = document.getElementById('forgotStep2Alert');
+      if (alert1) alert1.className = 'hidden p-3 rounded-xl text-xs font-medium';
+      if (alert2) alert2.className = 'hidden p-3 rounded-xl text-xs font-medium';
+
+      if (step === 2) {
+        step1.classList.add('hidden');
+        step2.classList.remove('hidden');
+        document.getElementById('inputResetCode')?.focus();
+      } else {
+        step2.classList.add('hidden');
+        step1.classList.remove('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    function openForgotPasswordModal() {
+      const modal = document.getElementById('forgotPasswordModal');
+      const alert1 = document.getElementById('forgotStep1Alert');
+      const alert2 = document.getElementById('forgotStep2Alert');
+      if (alert1) alert1.className = 'hidden p-3 rounded-xl text-xs font-medium';
+      if (alert2) alert2.className = 'hidden p-3 rounded-xl text-xs font-medium';
+
+      // Preenche com o e-mail digitado no login, se houver
+      const loginEmail = document.getElementById('loginEmail')?.value?.trim();
+      const inputEmail = document.getElementById('inputForgotEmail');
+      if (inputEmail && loginEmail) {
+        inputEmail.value = loginEmail;
+      }
+
+      switchForgotChannel('email');
+      goToForgotStep(1);
+
+      if (modal) modal.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeForgotPasswordModal() {
+      const modal = document.getElementById('forgotPasswordModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    async function handleRequestResetCode(e) {
+      e.preventDefault();
+      const alertBox = document.getElementById('forgotStep1Alert');
+      const submitBtn = document.getElementById('btnSubmitForgotStep1');
+
+      let identifier = '';
+      if (currentForgotChannel === 'email') {
+        identifier = document.getElementById('inputForgotEmail')?.value?.trim();
+        if (!identifier) {
+          alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300';
+          alertBox.innerText = 'Por favor, informe seu e-mail cadastrado.';
+          return;
+        }
+      } else {
+        identifier = document.getElementById('inputForgotPhone')?.value?.trim();
+        if (!identifier) {
+          alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300';
+          alertBox.innerText = 'Por favor, informe seu número de WhatsApp com DDD.';
+          return;
+        }
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span>Enviando...</span>';
+
+      try {
+        const res = await fetch('/api/v2/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: currentForgotChannel, identifier })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          // Atualiza etiqueta do step 2
+          const targetLabel = document.getElementById('labelForgotTarget');
+          if (targetLabel) {
+            targetLabel.innerText = `Código enviado para: ${data.masked_target || identifier}`;
+          }
+          goToForgotStep(2);
+          const alert2 = document.getElementById('forgotStep2Alert');
+          if (alert2) {
+            alert2.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300';
+            alert2.innerText = data.message || 'Código gerado com sucesso! Verifique seu contato.';
+          }
+        } else {
+          alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300';
+          alertBox.innerText = data.error || 'Falha ao solicitar código.';
+        }
+      } catch (err) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300';
+        alertBox.innerText = err.message || 'Erro de conexão com o servidor.';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>Enviar Código</span><i data-lucide="arrow-right" class="w-4 h-4"></i>';
+        lucide.createIcons();
+      }
+    }
+
+    async function handleResetPasswordSubmit(e) {
+      e.preventDefault();
+      const code = document.getElementById('inputResetCode')?.value?.trim();
+      const newPassword = document.getElementById('inputResetNewPassword')?.value?.trim();
+      const confirmPassword = document.getElementById('inputResetConfirmPassword')?.value?.trim();
+      const alertBox = document.getElementById('forgotStep2Alert');
+      const submitBtn = document.getElementById('btnSubmitForgotStep2');
+
+      if (!code || !newPassword || !confirmPassword) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300';
+        alertBox.innerText = 'Preencha todos os campos obrigatórios.';
+        return;
+      }
+
+      if (!/^\d{6}$/.test(code)) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300';
+        alertBox.innerText = 'O código deve conter exatamente 6 números.';
+        return;
+      }
+
+      if (newPassword.length < 6) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300';
+        alertBox.innerText = 'A nova senha deve ter pelo menos 6 caracteres.';
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300';
+        alertBox.innerText = 'A nova senha e a confirmação não coincidem.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span>Redefinindo...</span>';
+
+      try {
+        const res = await fetch('/api/v2/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, new_password: newPassword })
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300';
+          alertBox.innerText = 'Senha alterada com sucesso! Redirecionando para o login...';
+
+          // Preenche a senha no formulário de login para facilitar
+          const loginPass = document.getElementById('loginPassword');
+          if (loginPass) loginPass.value = '';
+
+          setTimeout(() => {
+            closeForgotPasswordModal();
+            document.getElementById('loginPassword')?.focus();
+          }, 1500);
+        } else {
+          alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300';
+          alertBox.innerText = data.error || 'Falha ao redefinir senha.';
+        }
+      } catch (err) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300';
+        alertBox.innerText = err.message || 'Erro de conexão com o servidor.';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>Redefinir Senha</span><i data-lucide="check" class="w-4 h-4"></i>';
+        lucide.createIcons();
       }
     }
 

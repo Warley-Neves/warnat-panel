@@ -397,6 +397,8 @@ BEGIN
     -- Extensão de usuários para SuperAdmin
     ALTER TABLE users ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE;
     CREATE INDEX IF NOT EXISTS idx_users_is_super_admin ON users(is_super_admin);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS telefone VARCHAR(30);
+    CREATE INDEX IF NOT EXISTS idx_users_telefone ON users(telefone);
 
     -- Extensão de tenants com ciclo de vida, trial de 7 dias e travas administrativas
     ALTER TABLE tenants ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'TRIALING';
@@ -461,4 +463,20 @@ BEGIN
     );
     CREATE INDEX IF NOT EXISTS idx_admin_audit_target ON admin_audit_logs(target_tenant_id);
     CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_logs(created_at DESC);
+
+    -- 14. RECUPERAÇÃO DE SENHA MULTICANAL (EMAIL & WHATSAPP) - OWASP / NIST SP 800-63B
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash VARCHAR(64) NOT NULL,
+        target_type VARCHAR(20) NOT NULL, -- 'email' ou 'telefone'
+        target_value VARCHAR(150) NOT NULL,
+        attempts INT DEFAULT 0,
+        used BOOLEAN DEFAULT FALSE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_reset_user ON password_reset_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS idx_reset_token_hash ON password_reset_tokens(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_reset_expires ON password_reset_tokens(expires_at);
 END $$;
