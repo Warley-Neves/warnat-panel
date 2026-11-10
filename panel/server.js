@@ -163,6 +163,8 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: blob:; media-src 'self' data: blob: https:; connect-src 'self' https:; frame-ancestors 'self';");
 
   if (method === 'OPTIONS') {
     res.writeHead(200);
@@ -1181,12 +1183,25 @@ const server = http.createServer(async (req, res) => {
 
   } catch (err) {
     console.error('Erro no servidor:', err);
-    sendJson(500, { error: 'Erro interno no servidor', details: err.message });
+    sendJson(500, { error: 'Erro interno no servidor' });
   }
 });
 
 const { runMigration } = require('../database/migrator');
 const { seedWarNatTech } = require('../database/seed_warnat');
+
+// Tratamento global de exceções para imunidade a interrupção por crashes assíncronos
+process.on('uncaughtException', (err) => {
+  console.error('💥 [CRITICAL] Uncaught Exception:', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ [CRITICAL] Unhandled Rejection:', reason);
+});
+
+// Proteção contra ataques Slowloris e esgotamento de conexões/sockets
+server.timeout = 30000;
+server.keepAliveTimeout = 5000;
+server.headersTimeout = 35000;
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`==========================================================`);

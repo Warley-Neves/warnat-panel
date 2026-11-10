@@ -184,8 +184,9 @@ async function handleV2Routes(req, res, pathname, method, body) {
     const isBillingRoute = pathname.startsWith('/api/v2/tenant/billing');
     const isMeRoute = pathname === '/api/v2/auth/me';
     const isConsentRoute = pathname === '/api/v2/auth/consent';
+    const isChangePasswordRoute = pathname === '/api/v2/auth/change-password';
 
-    if (!isSuperAdminRoute && !isBillingRoute && !isMeRoute && !isConsentRoute) {
+    if (!isSuperAdminRoute && !isBillingRoute && !isMeRoute && !isConsentRoute && !isChangePasswordRoute) {
       const isWrite = method === 'POST' || method === 'PUT' || method === 'DELETE';
       const accessResult = await entitlementsService.evaluateAccess(decodedUser, { isWrite });
       if (!accessResult.allowed) {
@@ -273,6 +274,22 @@ async function handleV2Routes(req, res, pathname, method, body) {
         });
       } catch (cErr) {
         return sendJson(500, { success: false, error: 'Falha ao registrar consentimento: ' + cErr.message });
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 2.2 ALTERAR SENHA DO USUÁRIO LOGADO
+    // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/auth/change-password' && method === 'POST') {
+      try {
+        const { current_password, new_password } = body;
+        if (!current_password || !new_password) {
+          return sendJson(400, { success: false, error: 'Senha atual e nova senha são obrigatórias.' });
+        }
+        const result = await authService.changePassword(decodedUser.userId, current_password, new_password);
+        return sendJson(200, { success: true, message: result.message });
+      } catch (pwErr) {
+        return sendJson(400, { success: false, error: pwErr.message });
       }
     }
 
@@ -2409,7 +2426,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
     return false; // Rota v2 não correspondida
   } catch (err) {
     console.error('[API v2] Erro na rota:', pathname, err);
-    return sendJson(500, { success: false, error: err.message });
+    return sendJson(500, { success: false, error: 'Ocorreu um erro interno no servidor.' });
   }
 }
 

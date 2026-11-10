@@ -115,6 +115,37 @@ async function runSecurityAuditTests() {
   assert(!resolveCode.includes('ORDER BY created_at ASC LIMIT 1'), 'Fallback perigoso que vazava mensagens para o tenant mais antigo foi 100% removido');
   assert(resolveCode.includes('não está associada a nenhuma empresa'), 'Instância desconhecida lança erro explícito de isolamento');
 
+  // --------------------------------------------------------------------------
+  // TESTE 7: Endpoint e Serviço de Rotação de Senha
+  // --------------------------------------------------------------------------
+  console.log('\n--- TESTE 7: Endpoint & Serviço de Rotação de Senha ---');
+  assert(typeof authService.changePassword === 'function', 'authService.changePassword existe e está exposto');
+  try {
+    await authService.changePassword('some-user-id', 'senhaAtual', '123');
+    assert(false, 'Deveria ter rejeitado nova senha com menos de 6 caracteres');
+  } catch (pwErr) {
+    assert(pwErr.message.includes('6 caracteres'), 'changePassword exige nova senha com pelo menos 6 caracteres');
+  }
+
+  // --------------------------------------------------------------------------
+  // TESTE 8: Resiliência contra Crash e Handlers Globais (server.js)
+  // --------------------------------------------------------------------------
+  console.log('\n--- TESTE 8: Resiliência de Processo & Sockets no Servidor ---');
+  const serverCode = require('fs').readFileSync(path.resolve(__dirname, '../panel/server.js'), 'utf8');
+  assert(serverCode.includes("process.on('uncaughtException'"), 'server.js trata uncaughtException para evitar derrubada de processo');
+  assert(serverCode.includes("process.on('unhandledRejection'"), 'server.js trata unhandledRejection para evitar interrupção por promessas assíncronas');
+  assert(serverCode.includes('server.timeout = 30000'), 'Timeout de sockets configurado para mitigar ataques Slowloris');
+  assert(serverCode.includes('Strict-Transport-Security'), 'HSTS (Strict-Transport-Security) configurado');
+  assert(serverCode.includes('Content-Security-Policy'), 'CSP (Content-Security-Policy) configurado');
+
+  // --------------------------------------------------------------------------
+  // TESTE 9: Sanitização de Erros HTTP 500 (Vazamento de Stack/SQL)
+  // --------------------------------------------------------------------------
+  console.log('\n--- TESTE 9: Sanitização de Erros HTTP 500 ---');
+  const v2Code = require('fs').readFileSync(path.resolve(__dirname, '../panel/routes/v2.routes.js'), 'utf8');
+  assert(v2Code.includes("error: 'Ocorreu um erro interno no servidor.'"), 'Catch-all v2 routes não vaza err.message ou SQL queries para o cliente');
+  assert(serverCode.includes("sendJson(500, { error: 'Erro interno no servidor' });"), 'Catch-all server.js não vaza details de exceções internas');
+
   console.log('\n====================================================================');
   console.log(`📊 RESULTADO DA AUDITORIA:`);
   console.log(`   ✅ PASS: ${passed}`);

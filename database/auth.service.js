@@ -455,6 +455,34 @@ class AuthService {
   }
 
   /**
+   * Altera a senha de um usuário existente após verificar a senha atual.
+   */
+  async changePassword(userId, currentPassword, newPassword) {
+    if (!userId) {
+      throw new Error('ID do usuário é obrigatório.');
+    }
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+      throw new Error('A nova senha deve conter pelo menos 6 caracteres.');
+    }
+
+    const userRes = await query('SELECT id, password_hash, email FROM users WHERE id = $1 AND ativo = true', [userId]);
+    if (userRes.rowCount === 0) {
+      throw new Error('Usuário não encontrado ou inativo.');
+    }
+
+    const user = userRes.rows[0];
+    const isCurrentValid = await this.comparePasswords(currentPassword || '', user.password_hash);
+    if (!isCurrentValid) {
+      throw new Error('Senha atual incorreta.');
+    }
+
+    const newHash = await this.hashPassword(newPassword);
+    await query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [newHash, userId]);
+
+    return { success: true, message: 'Senha atualizada com sucesso.' };
+  }
+
+  /**
    * Middleware para extrair e validar autenticação em requisições HTTP
    */
   authenticateRequest(req) {
