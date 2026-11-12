@@ -1449,18 +1449,22 @@
               <span id="instancePhoneText" class="text-white font-mono">-</span>
             </div>
             <div class="flex justify-between border-b border-slate-800 pb-2">
-              <span class="text-slate-500">Atualização Automática</span>
+              <span class="text-slate-500">Status em Tempo Real</span>
               <span class="text-emerald-400 flex items-center space-x-1">
                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                <span>A cada 5 segundos</span>
+                <span>Ativo (Auto-Sync)</span>
               </span>
             </div>
           </div>
 
           <div class="pt-4 flex flex-col space-y-2">
-            <button onclick="refreshQRCode()" class="w-full bg-dark-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium py-2.5 rounded-xl text-sm transition flex items-center justify-center space-x-2">
+            <button onclick="refreshQRCode(true)" id="btnRefreshQr" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-medium py-2.5 rounded-xl text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-brand-500/20">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-              <span>Atualizar QR Code</span>
+              <span id="btnRefreshQrText">Gerar Novo QR Code</span>
+            </button>
+            <button onclick="restartWhatsAppInstance()" id="btnRestartInstance" class="w-full bg-dark-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium py-2 rounded-xl text-xs transition flex items-center justify-center space-x-2">
+              <i data-lucide="power" class="w-3.5 h-3.5 text-rose-400"></i>
+              <span id="btnRestartInstanceText">Reiniciar Sessão WhatsApp</span>
             </button>
           </div>
         </div>
@@ -4601,7 +4605,7 @@
           await checkWhatsAppStatus();
           await loadAiConfig();
           if (qrPollingInterval) clearInterval(qrPollingInterval);
-          qrPollingInterval = setInterval(checkWhatsAppStatus, 5000);
+          qrPollingInterval = setInterval(checkWhatsAppStatus, 10000);
         }
       } catch (e) {
         console.error('Erro ao inicializar painel:', e);
@@ -4640,7 +4644,13 @@
         loadTeamUsers();
       }
       if (tab === 'ai') loadAiConfig();
-      if (tab === 'whatsapp') checkWhatsAppStatus();
+      if (tab === 'whatsapp') {
+        checkWhatsAppStatus();
+        const qrImg = document.getElementById('qrImage');
+        if (!qrImg || qrImg.classList.contains('hidden') || !qrImg.getAttribute('src')) {
+          refreshQRCode();
+        }
+      }
       if (tab === 'billing') loadBillingInfo();
       if (tab === 'superadmin') loadSuperAdminData();
     }
@@ -7051,8 +7061,11 @@
     }
 
     // --------------------------------------------------------------------------
-    // 6. GESTÃO DO WHATSAPP (STATUS & QR CODE POLLING)
+    // 6. GESTÃO DO WHATSAPP (STATUS & QR CODE COM AUTO-RECUPERAÇÃO E CONTROLE DE CONCORRÊNCIA)
     // --------------------------------------------------------------------------
+    let isRefreshingQr = false;
+    let isRestartingInstance = false;
+
     async function checkWhatsAppStatus() {
       try {
         const res = await apiFetch('/api/v2/whatsapp/status');
@@ -7062,68 +7075,193 @@
         const dot = document.getElementById('whatsappDot');
         const text = document.getElementById('whatsappText');
         const badge = document.getElementById('instanceStatusBadge');
+        const qrImg = document.getElementById('qrImage');
+        const qrLoading = document.getElementById('qrLoading');
+        const qrStatusMessage = document.getElementById('qrStatusMessage');
 
-        document.getElementById('instanceNameText').textContent = instanceName || 'Não configurada';
-        document.getElementById('instancePhoneText').textContent = numeroTelefone ? `+${numeroTelefone}` : 'Nenhum';
+        if (document.getElementById('instanceNameText')) {
+          document.getElementById('instanceNameText').textContent = instanceName || 'Não configurada';
+        }
+        if (document.getElementById('instancePhoneText')) {
+          document.getElementById('instancePhoneText').textContent = numeroTelefone ? `+${numeroTelefone}` : 'Nenhum';
+        }
 
         if (status === 'open') {
-          dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
-          text.textContent = 'WhatsApp Conectado';
-          badge.className = 'text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
-          badge.textContent = '🟢 Online (Open)';
-          
-          document.getElementById('qrLoading').classList.add('hidden');
-          document.getElementById('qrImage').classList.add('hidden');
-          document.getElementById('qrStatusMessage').textContent = '✅ WhatsApp conectado e pronto para receber mensagens!';
+          if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+          if (text) text.textContent = 'WhatsApp Conectado';
+          if (badge) {
+            badge.className = 'text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+            badge.textContent = '🟢 Online (Open)';
+          }
+          if (qrLoading) qrLoading.classList.add('hidden');
+          if (qrImg) qrImg.classList.add('hidden');
+          if (qrStatusMessage) {
+            qrStatusMessage.innerHTML = '<span class="text-emerald-400 font-medium">✅ WhatsApp conectado e pronto para receber mensagens!</span>';
+          }
         } else if (status === 'connecting') {
-          dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
-          text.textContent = 'Conectando WhatsApp...';
-          badge.className = 'text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20';
-          badge.textContent = '🟡 Conectando';
-          await refreshQRCode();
+          if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
+          if (text) text.textContent = 'Conectando WhatsApp...';
+          if (badge) {
+            badge.className = 'text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20';
+            badge.textContent = '🟡 Conectando';
+          }
+          // Só busca QR code se não tiver uma imagem já exibida e se não estiver em progresso
+          const isTabActive = !document.getElementById('tab-whatsapp')?.classList.contains('hidden');
+          if (isTabActive && (!qrImg || qrImg.classList.contains('hidden') || !qrImg.getAttribute('src')) && !isRefreshingQr) {
+            refreshQRCode();
+          }
         } else {
-          dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
-          text.textContent = 'WhatsApp Desconectado';
-          badge.className = 'text-xs px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20';
-          badge.textContent = '🔴 Desconectado';
-          await refreshQRCode();
+          if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
+          if (text) text.textContent = 'WhatsApp Desconectado';
+          if (badge) {
+            badge.className = 'text-xs px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20';
+            badge.textContent = '🔴 Desconectado';
+          }
+          // Só busca QR code se a aba WhatsApp estiver aberta e não tiver imagem
+          const isTabActive = !document.getElementById('tab-whatsapp')?.classList.contains('hidden');
+          if (isTabActive && (!qrImg || qrImg.classList.contains('hidden') || !qrImg.getAttribute('src')) && !isRefreshingQr) {
+            refreshQRCode();
+          }
         }
       } catch (e) {}
     }
 
-    async function refreshQRCode() {
+    async function refreshQRCode(force = false) {
+      if (isRefreshingQr) return;
+      isRefreshingQr = true;
+
+      const qrLoading = document.getElementById('qrLoading');
+      const qrImg = document.getElementById('qrImage');
+      const qrStatusMessage = document.getElementById('qrStatusMessage');
+      const btnText = document.getElementById('btnRefreshQrText');
+
+      try {
+        if (btnText) btnText.textContent = 'Gerando QR Code...';
+        if (qrLoading) {
+          qrLoading.classList.remove('hidden');
+          qrLoading.innerHTML = `
+            <div class="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-xs text-slate-700 font-medium">Iniciando Baileys e gerando QR Code...</span>
+          `;
+        }
+        if (force && qrImg) {
+          qrImg.classList.add('hidden');
+          qrImg.removeAttribute('src');
+        }
+        if (qrStatusMessage) qrStatusMessage.textContent = 'Aguarde, gerando chave de pareamento WhatsApp...';
+
+        const qrRes = await apiFetch('/api/v2/whatsapp/qrcode');
+
+        if (qrRes.ok && qrRes.data?.qrcode) {
+          const qrSrc = qrRes.data.qrcode.startsWith('data:') ? qrRes.data.qrcode : `data:image/png;base64,${qrRes.data.qrcode}`;
+          if (qrImg) {
+            qrImg.src = qrSrc;
+            qrImg.classList.remove('hidden');
+          }
+          if (qrLoading) qrLoading.classList.add('hidden');
+
+          if (qrStatusMessage) {
+            if (qrRes.data.pairingCode) {
+              qrStatusMessage.innerHTML = `
+                <p class="text-sm font-medium text-slate-200">Aponte a câmera do WhatsApp ou use o código:</p>
+                <div class="mt-2.5 p-2.5 bg-slate-800/80 border border-brand-500/30 rounded-xl">
+                  <span class="text-[11px] text-slate-400 block font-medium">Código de Pareamento</span>
+                  <span class="text-lg font-mono font-bold tracking-widest text-brand-400 block select-all">${qrRes.data.pairingCode}</span>
+                </div>
+              `;
+            } else {
+              qrStatusMessage.textContent = 'Aponte a câmera do WhatsApp para conectar';
+            }
+          }
+        } else if (qrRes.data?.state === 'open') {
+          if (qrLoading) qrLoading.classList.add('hidden');
+          if (qrImg) qrImg.classList.add('hidden');
+          if (qrStatusMessage) qrStatusMessage.innerHTML = '<span class="text-emerald-400 font-medium">✅ WhatsApp já conectado com sucesso!</span>';
+          checkWhatsAppStatus();
+        } else {
+          if (qrLoading) qrLoading.classList.add('hidden');
+          const errDetail = qrRes.data?.error || 'serviço temporariamente ocupado';
+          if (qrStatusMessage) {
+            qrStatusMessage.innerHTML = `
+              <span class="text-rose-400 text-xs font-medium block">Não foi possível carregar o QR Code (${errDetail}).</span>
+              <div class="mt-3 flex items-center justify-center space-x-2">
+                <button onclick="refreshQRCode(true)" class="text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium px-3.5 py-1.5 rounded-lg transition shadow">Tentar Novamente</button>
+                <button onclick="restartWhatsAppInstance()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium px-3 py-1.5 rounded-lg transition">Reiniciar Sessão</button>
+              </div>
+            `;
+          }
+        }
+      } catch (e) {
+        if (qrLoading) qrLoading.classList.add('hidden');
+        if (qrStatusMessage) {
+          qrStatusMessage.innerHTML = `
+            <span class="text-rose-400 text-xs font-medium block">Erro de rede ao conectar com o serviço WhatsApp.</span>
+            <button onclick="refreshQRCode(true)" class="mt-2 text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium px-3.5 py-1.5 rounded-lg transition">Tentar Novamente</button>
+          `;
+        }
+      } finally {
+        isRefreshingQr = false;
+        if (btnText) btnText.textContent = 'Gerar Novo QR Code';
+      }
+    }
+
+    async function restartWhatsAppInstance() {
+      if (isRestartingInstance) return;
+      if (!confirm('Deseja reiniciar a sessão do WhatsApp? Uma nova conexão e QR Code serão gerados para leitura.')) return;
+
+      isRestartingInstance = true;
+      const btnText = document.getElementById('btnRestartInstanceText');
       const qrLoading = document.getElementById('qrLoading');
       const qrImg = document.getElementById('qrImage');
       const qrStatusMessage = document.getElementById('qrStatusMessage');
 
       try {
-        qrLoading.classList.remove('hidden');
-        qrStatusMessage.textContent = 'Gerando QR Code de conexão...';
-
-        const qrRes = await apiFetch('/api/v2/whatsapp/qrcode');
-        if (qrRes.ok && qrRes.data?.qrcode) {
-          const qrSrc = qrRes.data.qrcode.startsWith('data:') ? qrRes.data.qrcode : `data:image/png;base64,${qrRes.data.qrcode}`;
-          qrImg.src = qrSrc;
-          qrImg.classList.remove('hidden');
-          qrLoading.classList.add('hidden');
-
-          if (qrRes.data.pairingCode) {
-            qrStatusMessage.innerHTML = `Escaneie o QR Code ou use o código de pareamento: <strong class="text-brand-400 font-mono text-base block mt-1">${qrRes.data.pairingCode}</strong>`;
-          } else {
-            qrStatusMessage.textContent = 'Aponte a câmera do WhatsApp para conectar';
-          }
-        } else if (qrRes.data?.state === 'open') {
-          qrLoading.classList.add('hidden');
-          qrImg.classList.add('hidden');
-          qrStatusMessage.textContent = '✅ WhatsApp já conectado com sucesso!';
-          checkWhatsAppStatus();
-        } else {
-          qrLoading.classList.add('hidden');
-          qrStatusMessage.innerHTML = `<span class="text-rose-400">Falha ao obter QR Code (${qrRes.data?.error || 'serviço ocupado'}).</span><br><button onclick="refreshQRCode()" class="mt-2 text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium px-3 py-1.5 rounded-lg transition">Tentar Novamente</button>`;
+        if (btnText) btnText.textContent = 'Reiniciando sessão...';
+        if (qrLoading) {
+          qrLoading.classList.remove('hidden');
+          qrLoading.innerHTML = `
+            <div class="w-8 h-8 border-4 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-xs text-slate-700 font-medium">Limpando conexão antiga e recriando instância...</span>
+          `;
         }
-      } catch (e) {
-        qrLoading.classList.add('hidden');
-        qrStatusMessage.innerHTML = `<span class="text-rose-400">Erro de conexão ao carregar QR Code.</span><br><button onclick="refreshQRCode()" class="mt-2 text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium px-3 py-1.5 rounded-lg transition">Tentar Novamente</button>`;
+        if (qrImg) {
+          qrImg.classList.add('hidden');
+          qrImg.removeAttribute('src');
+        }
+        if (qrStatusMessage) qrStatusMessage.textContent = 'Reiniciando instância WhatsApp na nuvem...';
+
+        const res = await apiFetch('/api/v2/whatsapp/restart', { method: 'POST' });
+
+        if (res.ok && res.data?.qrcode) {
+          const qrSrc = res.data.qrcode.startsWith('data:') ? res.data.qrcode : `data:image/png;base64,${res.data.qrcode}`;
+          if (qrImg) {
+            qrImg.src = qrSrc;
+            qrImg.classList.remove('hidden');
+          }
+          if (qrLoading) qrLoading.classList.add('hidden');
+          if (qrStatusMessage) {
+            if (res.data.pairingCode) {
+              qrStatusMessage.innerHTML = `
+                <p class="text-sm font-medium text-emerald-400">Instância reiniciada! Escaneie o QR Code:</p>
+                <div class="mt-2 p-2 bg-slate-800/80 border border-brand-500/30 rounded-xl">
+                  <span class="text-[11px] text-slate-400 block font-medium">Código de Pareamento</span>
+                  <span class="text-lg font-mono font-bold tracking-widest text-brand-400 block select-all">${res.data.pairingCode}</span>
+                </div>
+              `;
+            } else {
+              qrStatusMessage.innerHTML = '<span class="text-emerald-400 font-medium">Instância reiniciada! Escaneie o novo QR Code abaixo:</span>';
+            }
+          }
+          if (typeof showToast === 'function') showToast('Sessão WhatsApp reiniciada com sucesso!', 'success');
+        } else {
+          // Tenta atualizar via refreshQRCode
+          await refreshQRCode(true);
+        }
+      } catch (err) {
+        alert('Erro ao reiniciar instância: ' + err.message);
+      } finally {
+        isRestartingInstance = false;
+        if (btnText) btnText.textContent = 'Reiniciar Sessão WhatsApp';
       }
     }
 

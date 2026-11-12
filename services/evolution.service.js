@@ -48,10 +48,13 @@ class EvolutionApiService {
     const headers = {
       'apikey': this.apiKey,
       'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
       ...(options.headers || {})
     };
 
-    const signal = options.signal || (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(options.timeout || 15000) : undefined);
+    const timeoutMs = options.timeout || 45000;
+    const signal = options.signal || (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined);
 
     try {
       const response = await fetch(url, {
@@ -78,8 +81,10 @@ class EvolutionApiService {
       if (this.baseUrl !== this.fallbackUrl) {
         console.warn(`[EvolutionAPI] Falha em ${this.baseUrl} (${fetchErr.message}). Tentando fallback em ${this.fallbackUrl}...`);
         try {
+          const fallbackSignal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined;
           const fallbackRes = await fetch(`${this.fallbackUrl}${endpoint}`, {
             ...options,
+            signal: fallbackSignal,
             headers
           });
           const text = await fallbackRes.text();
@@ -158,14 +163,77 @@ class EvolutionApiService {
   }
 
   /**
-   * Obtém o QR Code ou status de pareamento da instância com auto-provisionamento
+   * Reinicia a instância do WhatsApp (fecha sockets e reabre conexão Baileys)
+   * @param {string} instanceName
+   */
+  async restartInstance(instanceName) {
+    if (!instanceName) throw new Error('Nome da instância é obrigatório.');
+    try {
+      const res = await this.request(`/instance/restart/${instanceName}`, {
+        method: 'PUT',
+        timeout: 30000
+      });
+      return { success: res.ok, data: res.data };
+    } catch (e) {
+      console.warn(`[EvolutionAPI] Erro ao reiniciar instância ${instanceName}:`, e.message);
+      return { success: false, error: e.message };
+    }
+  }
+
+  /**
+   * Recria a instância do WhatsApp do zero (útil quando Baileys trava com count: 0)
+   * @param {string} instanceName
+   */
+  async recreateInstance(instanceName) {
+    if (!instanceName) throw new Error('Nome da instância é obrigatório.');
+    try {
+      // 1. Deleta instância antiga com socket corrompido
+      await this.request(`/instance/delete/${instanceName}`, {
+        method: 'DELETE',
+        timeout: 20000
+      }).catch(() => {});
+
+      // Pequena pausa para garantir que o processo Baileys liberou a porta/socket
+      await new Promise(r => setTimeout(r, 1500));
+
+      // 2. Cria instância nova limpa com QR Code ativado
+      const createRes = await this.createInstance(instanceName, { qrcode: true });
+      return { success: true, data: createRes.data };
+    } catch (e) {
+      console.warn(`[EvolutionAPI] Erro ao recriar instância ${instanceName}:`, e.message);
+      return { success: false, error: e.message };
+    }
+  }
+
+  /**
+   * Obtém o QR Code ou status de pareamento da instância com auto-provisionamento e auto-recuperação
    * @param {string} instanceName
    */
   async getQRCode(instanceName) {
     if (!instanceName) throw new Error('Nome da instância é obrigatório.');
 
+    // 1. Verifica se a instância já está com conexão 'open' (já conectada)
+    try {
+      const statusCheck = await this.getInstanceStatus(instanceName);
+      if (statusCheck && statusCheck.state === 'open') {
+        return {
+          success: true,
+          instanceName,
+          state: 'open',
+          qrcode: null,
+          base64: null,
+          code: null,
+          pairingCode: null
+        };
+      }
+    } catch (stErr) {
+      // Continua para tentativa de connect
+    }
+
+    // 2. Tenta conectar na instância
     let res = await this.request(`/instance/connect/${instanceName}`, {
-      method: 'GET'
+      method: 'GET',
+      timeout: 35000
     });
 
     // Se a instância não existe na Evolution API, cria automaticamente
@@ -188,6 +256,7 @@ class EvolutionApiService {
           return {
             success: true,
             instanceName,
+            state: 'connecting',
             pairingCode: createQr?.pairingCode || null,
             code: createQr?.code || null,
             base64: formattedBase64,
@@ -197,19 +266,52 @@ class EvolutionApiService {
       } catch (crErr) {
         console.warn(`[EvolutionAPI] Erro ao auto-criar ${instanceName}:`, crErr.message);
       }
-      res = await this.request(`/instance/connect/${instanceName}`, { method: 'GET' });
+      res = await this.request(`/instance/connect/${instanceName}`, { method: 'GET', timeout: 35000 });
     }
 
-    if (!res.ok) {
-      throw new Error(`Falha ao obter QR Code: ${JSON.stringify(res.data)}`);
+    // 3. Verifica se a instância já está conectada (state === 'open')
+    let qrRaw = res.data;
+    const isAlreadyOpen = qrRaw?.instance?.state === 'open' || qrRaw?.state === 'open' || qrRaw?.connectionStatus === 'open';
+    if (isAlreadyOpen) {
+      return {
+        success: true,
+        instanceName,
+        state: 'open',
+        qrcode: null,
+        base64: null,
+        code: null,
+        pairingCode: null
+      };
     }
 
-    // Evolution API v2 retorna { base64, code, pairingCode } ou status
-    const qrRaw = res.data;
-    const base64Raw = qrRaw?.base64 || qrRaw?.qrcode?.base64 || null;
+    // 4. Verifica se veio QR Code ou se Baileys ainda está inicializando (ex: { count: 0 })
+    let base64Raw = qrRaw?.base64 || qrRaw?.qrcode?.base64 || null;
+    let code = qrRaw?.code || qrRaw?.qrcode?.code || null;
+    let pairingCode = qrRaw?.pairingCode || qrRaw?.qrcode?.pairingCode || null;
+
+    // Se Baileys retornou { count: 0 }, dá uma pausa de 2.5s para o socket emitir o primeiro QR code e tenta novamente
+    if (!base64Raw && !code) {
+      await new Promise(r => setTimeout(r, 2500));
+      res = await this.request(`/instance/connect/${instanceName}`, { method: 'GET', timeout: 35000 });
+      qrRaw = res.data;
+      base64Raw = qrRaw?.base64 || qrRaw?.qrcode?.base64 || null;
+      code = qrRaw?.code || qrRaw?.qrcode?.code || null;
+      pairingCode = qrRaw?.pairingCode || qrRaw?.qrcode?.pairingCode || null;
+    }
+
+    // Se persistir sem QR code, tenta reiniciar o socket Baileys da instância
+    if (!base64Raw && !code) {
+      console.log(`[EvolutionAPI] Instância ${instanceName} sem QR Code (${JSON.stringify(qrRaw)}). Reiniciando socket Baileys...`);
+      await this.restartInstance(instanceName);
+      await new Promise(r => setTimeout(r, 2500));
+      res = await this.request(`/instance/connect/${instanceName}`, { method: 'GET', timeout: 35000 });
+      qrRaw = res.data;
+      base64Raw = qrRaw?.base64 || qrRaw?.qrcode?.base64 || null;
+      code = qrRaw?.code || qrRaw?.qrcode?.code || null;
+      pairingCode = qrRaw?.pairingCode || qrRaw?.qrcode?.pairingCode || null;
+    }
+
     const formattedBase64 = base64Raw ? (base64Raw.startsWith('data:') ? base64Raw : `data:image/png;base64,${base64Raw}`) : null;
-    const code = qrRaw?.code || qrRaw?.qrcode?.code || null;
-    const pairingCode = qrRaw?.pairingCode || qrRaw?.qrcode?.pairingCode || null;
     const state = qrRaw?.instance?.state || (formattedBase64 ? 'connecting' : 'close');
 
     // Garante que o webhook está configurado para esta instância
@@ -223,7 +325,7 @@ class EvolutionApiService {
       pairingCode,
       code,
       base64: formattedBase64,
-      raw: res.data
+      raw: qrRaw
     };
   }
 
@@ -238,7 +340,18 @@ class EvolutionApiService {
       method: 'GET'
     });
 
-    const state = res.data?.instance?.state || res.data?.state || (res.ok ? 'open' : 'disconnected');
+    const rawState = res.data?.instance?.state || res.data?.state || res.data?.connectionStatus || null;
+    let state = 'disconnected';
+    if (rawState === 'open') {
+      state = 'open';
+    } else if (rawState === 'connecting') {
+      state = 'connecting';
+    } else if (rawState === 'close' || rawState === 'closed') {
+      state = 'close';
+    } else if (!res.ok) {
+      state = 'disconnected';
+    }
+
     return {
       success: res.ok,
       instanceName,

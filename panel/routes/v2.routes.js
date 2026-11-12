@@ -435,6 +435,40 @@ async function handleV2Routes(req, res, pathname, method, body) {
           state: qrData.state || 'connecting'
         });
       } catch (err) {
+        console.warn(`[WhatsAppQRCode] Erro ao obter QR Code (${instanceName}):`, err.message);
+        return sendJson(200, {
+          success: false,
+          instanceName,
+          error: err.message || 'Falha temporária ao comunicar com o serviço WhatsApp.',
+          retryable: true
+        });
+      }
+    }
+
+    if (pathname === '/api/v2/whatsapp/restart' && method === 'POST') {
+      let instRes = await query(
+        `SELECT instance_name FROM tenant_whatsapp_instances WHERE tenant_id = $1 LIMIT 1`,
+        [tenantId]
+      );
+      if (instRes.rowCount === 0) {
+        return sendJson(404, { success: false, error: 'Nenhuma instância configurada para este tenant.' });
+      }
+      const instanceName = instRes.rows[0].instance_name;
+      try {
+        console.log(`[WhatsAppRestart] Solicitado reinício da instância ${instanceName} pelo tenant ${tenantId}`);
+        await evolutionService.recreateInstance(instanceName);
+        await new Promise(r => setTimeout(r, 2000));
+        const qrRes = await evolutionService.getQRCode(instanceName);
+        return sendJson(200, {
+          success: true,
+          instanceName,
+          message: 'Instância WhatsApp reiniciada com sucesso. Novo QR Code gerado.',
+          qrcode: qrRes.base64 || qrRes.code,
+          pairingCode: qrRes.pairingCode,
+          state: qrRes.state || 'connecting'
+        });
+      } catch (err) {
+        console.warn(`[WhatsAppRestart] Erro ao reiniciar instância (${instanceName}):`, err.message);
         return sendJson(500, { success: false, error: err.message });
       }
     }
