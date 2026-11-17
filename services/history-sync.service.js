@@ -154,8 +154,9 @@ class HistorySyncService {
         for (const c of contactsResult.value) {
           if (!c.remoteJid || c.remoteJid.includes('@g.us')) continue;
           const cleanPhone = c.remoteJid.replace(/@.*$/, '').replace(/\D/g, '');
+          const rawName = (c.pushName || '').trim();
           const info = {
-            pushName: (c.pushName || '').trim() || null,
+            pushName: (rawName && !['você', 'voce', 'eu'].includes(rawName.toLowerCase())) ? rawName : null,
             profilePicUrl: c.profilePicUrl || null
           };
           contactMap.set(c.remoteJid, info);
@@ -173,11 +174,14 @@ class HistorySyncService {
             lidToPhoneMap.set(rawJid, altJid);
           }
 
+          const rawPush = (ch.pushName || ch.lastMessage?.pushName || '').trim();
+          const safePush = (rawPush && !['você', 'voce', 'eu', 'null'].includes(rawPush.toLowerCase()) && !rawPush.includes('@lid') && !/^\d{10,}$/.test(rawPush)) ? rawPush : null;
+
           const effectiveJid = (rawJid.includes('@lid') && altJid) ? altJid : rawJid;
           chatSummaryMap.set(effectiveJid, {
             rawJid,
             updatedAt: ch.updatedAt ? new Date(ch.updatedAt) : new Date(),
-            pushName: ch.pushName || ch.lastMessage?.pushName || null,
+            pushName: safePush,
             unreadCount: ch.unreadCount || 0
           });
         }
@@ -189,7 +193,7 @@ class HistorySyncService {
       const firstPageRes = await evolutionService.findMessages(instanceName, { page: 1, limit: 100 });
       const firstRecords = firstPageRes.messages?.records || firstPageRes.records || [];
       const totalMessagesFound = firstPageRes.messages?.total || firstRecords.length;
-      const totalPages = Math.min(options.limitPages || 30, firstPageRes.messages?.pages || Math.ceil(totalMessagesFound / 100) || 1);
+      const totalPages = Math.min(options.limitPages || 95, firstPageRes.messages?.pages || Math.ceil(totalMessagesFound / 50) || 1);
 
       const allRecords = [...firstRecords];
       for (const r of firstRecords) {
@@ -200,12 +204,12 @@ class HistorySyncService {
         }
       }
 
-      // Se houver mais páginas, busca em pequenos lotes concorrentes (3 por vez)
+      // Se houver mais páginas, busca em lotes concorrentes (4 páginas por vez)
       if (totalPages > 1) {
         const remainingPages = [];
         for (let p = 2; p <= totalPages; p++) remainingPages.push(p);
 
-        const concurrency = 3;
+        const concurrency = 4;
         for (let i = 0; i < remainingPages.length; i += concurrency) {
           const pageBatch = remainingPages.slice(i, i + concurrency);
           const pageResults = await Promise.allSettled(
@@ -257,15 +261,35 @@ class HistorySyncService {
       );
       const existingMsgSet = new Set(existingMsgIdsRes.rows.map(r => r.message_id));
 
+      // Funções auxiliares para nomes limpos e seguros
+      const isValidClientName = (name) => {
+        if (!name || typeof name !== 'string') return false;
+        const s = name.trim().toLowerCase();
+        if (!s || s === 'você' || s === 'voce' || s === 'eu' || s === 'null' || s === 'undefined') return false;
+        if (s.includes('@lid') || /^\d{10,}$/.test(s)) return false;
+        return true;
+      };
+
+      const resolveClientName = (pushFromMsg, contactInfo, chatInfo, effectiveJid, cleanPhone) => {
+        if (isValidClientName(pushFromMsg)) return pushFromMsg.trim();
+        if (isValidClientName(contactInfo?.pushName)) return contactInfo.pushName.trim();
+        if (isValidClientName(chatInfo?.pushName)) return chatInfo.pushName.trim();
+        if (cleanPhone) return `+${cleanPhone}`;
+        const shortId = effectiveJid.replace(/@.*$/, '').slice(-6);
+        return `Cliente (${shortId})`;
+      };
+
       // 9. Agrupa e garante que todas as sessões necessárias existam no banco
       const farFuture = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000);
 
-      // Função auxiliar para resolver nome e criar sessão se não existir
       const ensureSession = async (effectiveJid, pushNameFromMsg, interactionDate) => {
         if (sessionCache.has(effectiveJid)) {
           const cached = sessionCache.get(effectiveJid);
           if (interactionDate > cached.lastInteraction) {
             cached.lastInteraction = interactionDate;
+          }
+          if (isValidClientName(pushNameFromMsg) && (!isValidClientName(cached.clientName) || cached.clientName === 'Você' || cached.clientName.startsWith('Cliente'))) {
+            cached.clientName = pushNameFromMsg.trim();
           }
           return cached.id;
         }
@@ -274,19 +298,14 @@ class HistorySyncService {
         const contactInfo = contactMap.get(effectiveJid) || contactMap.get(cleanPhone);
         const chatInfo = chatSummaryMap.get(effectiveJid);
 
-        const resolvedName = (
-          pushNameFromMsg ||
-          contactInfo?.pushName ||
-          chatInfo?.pushName ||
-          (cleanPhone ? `+${cleanPhone}` : 'Cliente')
-        ).trim();
+        const resolvedName = resolveClientName(pushNameFromMsg, contactInfo, chatInfo, effectiveJid, cleanPhone);
 
         // Insere profile
         await query(
           `INSERT INTO customer_profiles (tenant_id, remote_jid, nome, telefone)
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (tenant_id, remote_jid)
-           DO UPDATE SET nome = COALESCE(customer_profiles.nome, EXCLUDED.nome), updated_at = now()`,
+           DO UPDATE SET nome = COALESCE(NULLIF(customer_profiles.nome, 'Você'), EXCLUDED.nome), updated_at = now()`,
           [tenantId, effectiveJid, resolvedName, cleanPhone]
         ).catch(() => {});
 
@@ -303,7 +322,7 @@ class HistorySyncService {
            ) VALUES ($1, $2, $3, 'manual', 'manual', $4, $5, $6, $6)
            ON CONFLICT (tenant_id, remote_jid)
            DO UPDATE SET 
-             client_name = COALESCE(chat_sessions.client_name, EXCLUDED.client_name),
+             client_name = COALESCE(NULLIF(chat_sessions.client_name, 'Você'), EXCLUDED.client_name),
              status_atendimento = 'manual',
              etapa_funil = 'manual',
              paused_until = $4,
@@ -345,14 +364,17 @@ class HistorySyncService {
 
         if (effectiveJid.includes('@g.us') || effectiveJid === 'status@broadcast') continue;
 
+        // Se a mensagem veio do cliente e traz pushName legítimo, aprimora o nome do contato
+        const pushFromMsg = (!key.fromMe && isValidClientName(record.pushName)) ? record.pushName.trim() : null;
+
         const messageId = key.id || record.id || `hist_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const msgDate = record.messageTimestamp ? new Date(record.messageTimestamp * 1000) : new Date();
+        const sessionId = await ensureSession(effectiveJid, pushFromMsg, msgDate);
+
         if (existingMsgSet.has(messageId)) continue; // Já gravada, pula com zero custo
 
         const parsed = this.extractMessageContent(record);
         if (!parsed) continue;
-
-        const msgDate = record.messageTimestamp ? new Date(record.messageTimestamp * 1000) : new Date();
-        const sessionId = await ensureSession(effectiveJid, record.pushName, msgDate);
 
         messagesToInsert.push({
           sessionId,
@@ -405,15 +427,32 @@ class HistorySyncService {
         }
       }
 
-      // 12. Atualiza timestamps de última interação e garante status manual
+      // 12. Atualiza timestamps de última interação e garante status manual e nomes corrigidos
       for (const [jid, sessionData] of sessionCache.entries()) {
+        const updateNameClause = isValidClientName(sessionData.clientName) ? sessionData.clientName : null;
         await query(
           `UPDATE chat_sessions 
-           SET last_interaction = $1, status_atendimento = 'manual', etapa_funil = 'manual', paused_until = $2
+           SET last_interaction = $1, status_atendimento = 'manual', etapa_funil = 'manual', paused_until = $2,
+               client_name = COALESCE($5, NULLIF(client_name, 'Você'), 'Cliente ' || RIGHT(remote_jid, 6))
            WHERE id = $3 AND tenant_id = $4`,
-          [sessionData.lastInteraction, farFuture, sessionData.id, tenantId]
+          [sessionData.lastInteraction, farFuture, sessionData.id, tenantId, updateNameClause]
         ).catch(() => {});
       }
+
+      // Limpeza de qualquer 'Você' remanescente nas tabelas
+      await query(
+        `UPDATE chat_sessions 
+         SET client_name = 'Cliente ' || RIGHT(remote_jid, 6)
+         WHERE tenant_id = $1 AND (client_name = 'Você' OR client_name = 'voce' OR client_name IS NULL)`,
+        [tenantId]
+      ).catch(() => {});
+
+      await query(
+        `UPDATE customer_profiles 
+         SET nome = 'Cliente ' || RIGHT(remote_jid, 6)
+         WHERE tenant_id = $1 AND (nome = 'Você' OR nome = 'voce' OR nome IS NULL)`,
+        [tenantId]
+      ).catch(() => {});
 
       console.log(`[HistorySync] Concluído! ${sessionCache.size} conversas mapeadas, ${importedMessagesCount} novas mensagens importadas.`);
 
