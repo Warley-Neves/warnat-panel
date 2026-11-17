@@ -501,11 +501,18 @@ class HistorySyncService {
 
     console.log(`[LeadEnrich] Iniciando enriquecimento inteligente de leads para tenant ${tenantId}...`);
 
-    // 1. Limpa qualquer LID gravado erroneamente como telefone no banco
+    // 1. Limpa qualquer LID ou telefone institucional gravado erroneamente como telefone de lead no banco
     await query(
       `UPDATE customer_profiles 
        SET telefone = NULL 
-       WHERE tenant_id = $1 AND (telefone LIKE '%@lid%' OR LENGTH(REGEXP_REPLACE(telefone, '\\D', '', 'g')) >= 14)`,
+       WHERE tenant_id = $1 AND (telefone LIKE '%@lid%' OR LENGTH(REGEXP_REPLACE(telefone, '\\D', '', 'g')) >= 14 OR telefone LIKE '%988000023%' OR telefone LIKE '%99435307%')`,
+      [tenantId]
+    ).catch(() => {});
+
+    await query(
+      `UPDATE chat_sessions 
+       SET dados_lead = dados_lead - 'telefone' 
+       WHERE tenant_id = $1 AND (dados_lead->>'telefone' LIKE '%@lid%' OR dados_lead->>'telefone' LIKE '%988000023%' OR dados_lead->>'telefone' LIKE '%99435307%')`,
       [tenantId]
     ).catch(() => {});
 
