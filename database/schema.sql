@@ -187,9 +187,14 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_flow ON chat_messages(session_id, c
 CREATE INDEX IF NOT EXISTS idx_chat_messages_tenant ON chat_messages(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_msg_id ON chat_messages(message_id);
 
--- Migrações seguras idempotentes para chat_messages
+-- Migrações seguras idempotentes para chat_messages e chat_sessions (Leitura & Bolinha Verde)
 ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS media_type VARCHAR(30) DEFAULT 'text';
 ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS media_url TEXT;
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT false;
+ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS unread_count INT DEFAULT 0;
+ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_unread ON chat_sessions(tenant_id, unread_count);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_unread ON chat_messages(session_id, role, is_read);
 
 -- ------------------------------------------------------------------------------
 -- ADAPTAÇÃO IDEMPOTENTE PARA TABELAS PRÉ-EXISTENTES

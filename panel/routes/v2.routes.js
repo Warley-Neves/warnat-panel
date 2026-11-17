@@ -815,6 +815,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
              ELSE false 
            END as is_paused,
            (SELECT content FROM chat_messages m WHERE m.session_id = s.id ORDER BY m.created_at DESC LIMIT 1) as ultima_mensagem,
+           (SELECT role FROM chat_messages m WHERE m.session_id = s.id ORDER BY m.created_at DESC LIMIT 1) as ultima_mensagem_role,
+           (SELECT created_at FROM chat_messages m WHERE m.session_id = s.id ORDER BY m.created_at DESC LIMIT 1) as ultima_mensagem_time,
+           COALESCE(s.unread_count, 0) as unread_count,
+           s.last_read_at,
            (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id)::int as total_mensagens,
            (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id AND (m.media_type LIKE 'call_%' OR m.content LIKE '%[Chamada%'))::int as total_chamadas,
            (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id AND (m.media_type = 'audio' OR m.content LIKE '[audio]%'))::int as total_audios,
@@ -862,6 +866,13 @@ async function handleV2Routes(req, res, pathname, method, body) {
           clientName = `Cliente (${l.remote_jid.replace(/@.*$/, '').slice(-6)})`;
         }
 
+        // Lógica precisa de Mensagens Não Lidas (Bolinha Verde)
+        // Não lida se a última mensagem foi enviada pelo cliente (role = 'user') e ainda não foi aberta/respondida
+        const isLastFromUser = l.ultima_mensagem_role === 'user';
+        const isNewerThanRead = !l.last_read_at || (l.ultima_mensagem_time && new Date(l.ultima_mensagem_time) > new Date(l.last_read_at));
+        const has_unread = (isLastFromUser && isNewerThanRead) || (parseInt(l.unread_count, 10) || 0) > 0;
+        const unread_count = has_unread ? Math.max(parseInt(l.unread_count, 10) || 0, 1) : 0;
+
         return {
           ...l,
           client_name: clientName,
@@ -869,12 +880,18 @@ async function handleV2Routes(req, res, pathname, method, body) {
           telefone: realPhone,
           is_lid,
           is_manual,
+          has_unread,
+          unread_count,
+          ultima_mensagem_role: l.ultima_mensagem_role,
+          ultima_mensagem_time: l.ultima_mensagem_time,
+          last_read_at: l.last_read_at,
           modo_atendimento: is_manual ? 'manual' : 'automacao'
         };
       });
 
       const stats = {
         total: leads.length,
+        nao_lidos: leads.filter(l => l.has_unread).length,
         ia_ativa: leads.filter(l => !l.is_manual).length,
         manual: leads.filter(l => l.is_manual).length,
         chamadas: leads.filter(l => (parseInt(l.total_chamadas, 10) || 0) > 0).length,
@@ -1053,12 +1070,28 @@ async function handleV2Routes(req, res, pathname, method, body) {
       });
     }
 
-    // Histórico de mensagens de uma conversa específica
+    // Histórico de mensagens de uma conversa específica (marca automaticamente como lida)
     const messagesMatch = pathname.match(/^\/api\/v2\/tenant\/leads\/([^/]+)\/messages$/);
     if (messagesMatch && method === 'GET') {
       const sessionId = messagesMatch[1];
+
+      // Marca a conversa e mensagens como lidas
+      await query(
+        `UPDATE chat_sessions 
+         SET last_read_at = now(), unread_count = 0 
+         WHERE id = $1 AND tenant_id = $2`,
+        [sessionId, tenantId]
+      ).catch(() => {});
+
+      await query(
+        `UPDATE chat_messages 
+         SET is_read = true 
+         WHERE session_id = $1 AND tenant_id = $2 AND (is_read = false OR is_read IS NULL)`,
+        [sessionId, tenantId]
+      ).catch(() => {});
+
       const msgsRes = await query(
-        `SELECT id, role, content, media_type, media_url, message_id, created_at 
+        `SELECT id, role, content, media_type, media_url, message_id, created_at, COALESCE(is_read, true) as is_read 
          FROM chat_messages 
          WHERE session_id = $1 AND tenant_id = $2 
          ORDER BY created_at ASC`,
@@ -1069,6 +1102,58 @@ async function handleV2Routes(req, res, pathname, method, body) {
         success: true,
         sessionId,
         messages: msgsRes.rows
+      });
+    }
+
+    // Marcar conversa explicitamente como lida
+    const readMatch = pathname.match(/^\/api\/v2\/tenant\/leads\/([^/]+)\/read$/);
+    if (readMatch && method === 'POST') {
+      const sessionId = readMatch[1];
+      await query(
+        `UPDATE chat_sessions 
+         SET last_read_at = now(), unread_count = 0 
+         WHERE id = $1 AND tenant_id = $2`,
+        [sessionId, tenantId]
+      ).catch(() => {});
+
+      await query(
+        `UPDATE chat_messages 
+         SET is_read = true 
+         WHERE session_id = $1 AND tenant_id = $2 AND (is_read = false OR is_read IS NULL)`,
+        [sessionId, tenantId]
+      ).catch(() => {});
+
+      return sendJson(200, {
+        success: true,
+        message: 'Conversa marcada como lida.',
+        sessionId,
+        has_unread: false
+      });
+    }
+
+    // Marcar conversa explicitamente como não lida (para responder mais tarde)
+    const unreadMatch = pathname.match(/^\/api\/v2\/tenant\/leads\/([^/]+)\/unread$/);
+    if (unreadMatch && method === 'POST') {
+      const sessionId = unreadMatch[1];
+      await query(
+        `UPDATE chat_sessions 
+         SET last_read_at = NULL, unread_count = GREATEST(COALESCE(unread_count, 0), 1) 
+         WHERE id = $1 AND tenant_id = $2`,
+        [sessionId, tenantId]
+      ).catch(() => {});
+
+      await query(
+        `UPDATE chat_messages 
+         SET is_read = false 
+         WHERE session_id = $1 AND tenant_id = $2 AND role = 'user'`,
+        [sessionId, tenantId]
+      ).catch(() => {});
+
+      return sendJson(200, {
+        success: true,
+        message: 'Conversa marcada como não lida.',
+        sessionId,
+        has_unread: true
       });
     }
 

@@ -472,17 +472,19 @@ class WebhookController {
     else if (data.message?.contactMessage || data.message?.contactsArrayMessage) detectedMediaType = 'contact';
     else if (data.message?.stickerMessage) detectedMediaType = 'sticker';
 
-    // Salva a mensagem recebida no histórico do banco de dados
+    // Salva a mensagem recebida no histórico do banco de dados (não lida)
     await query(
-      `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, message_id)
-       VALUES ($1, $2, 'user', $3, $4, $5)`,
+      `INSERT INTO chat_messages (session_id, tenant_id, role, content, media_type, message_id, is_read)
+       VALUES ($1, $2, 'user', $3, $4, $5, false)`,
       [session.id, tenantId, text.trim(), detectedMediaType, messageId]
     );
 
-    // Atualiza queued_at para cálculo preciso de TME quando cliente aguarda
+    // Atualiza queued_at para cálculo preciso de TME e incrementa mensagens não lidas
     await query(
       `UPDATE chat_sessions 
-       SET queued_at = COALESCE(queued_at, now()), last_interaction = now()
+       SET queued_at = COALESCE(queued_at, now()), 
+           last_interaction = now(),
+           unread_count = COALESCE(unread_count, 0) + 1
        WHERE id = $1 AND tenant_id = $2`,
       [session.id, tenantId]
     );

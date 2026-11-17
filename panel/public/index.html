@@ -406,6 +406,7 @@
           
           <select id="crmStatusFilter" onchange="filterCrmLeads()" class="bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
             <option value="all">Todas as Etapas</option>
+            <option value="nao_lidas">🟢 Mensagens Não Lidas</option>
             <option value="novo">Novos & Sondagem</option>
             <option value="qualificacao">Em Atendimento IA</option>
             <option value="manual">Atendimento Manual</option>
@@ -588,11 +589,18 @@
           </div>
         </div>
 
-        <!-- KPI CARDS DA CENTRAL (COM SLA / TMA / TME) -->
-        <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
+        <!-- KPI CARDS DA CENTRAL (COM SLA / TMA / TME / NÃO LIDAS) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           <div class="bg-dark-900/60 border border-slate-800 p-3.5 rounded-xl">
             <span class="text-xs text-slate-400 font-medium">Total de Conversas</span>
             <div id="atendKpiTotal" class="text-lg font-bold text-white mt-1">0</div>
+          </div>
+          <div class="bg-dark-900/60 border border-emerald-500/30 hover:border-emerald-500/60 p-3.5 rounded-xl cursor-pointer transition" onclick="filterAtendimentos('nao_lidas')" title="Clique para filtrar apenas mensagens não lidas">
+            <span class="text-xs text-emerald-400 font-medium flex items-center space-x-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Não Lidas</span>
+            </span>
+            <div id="atendKpiUnread" class="text-lg font-bold text-emerald-400 mt-1">0</div>
           </div>
           <div class="bg-dark-900/60 border border-emerald-500/20 p-3.5 rounded-xl">
             <span class="text-xs text-emerald-400 font-medium flex items-center space-x-1">
@@ -635,6 +643,11 @@
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
           <div class="flex flex-wrap items-center gap-2">
             <button onclick="filterAtendimentos('todos')" id="filterBtn-todos" class="atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 text-white transition">Todos</button>
+            <button onclick="filterAtendimentos('nao_lidas')" id="filterBtn-nao_lidas" class="atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-slate-400 hover:text-white border border-slate-700 transition flex items-center space-x-1.5" title="Filtrar conversas com mensagens novas não lidas">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Não Lidas</span>
+              <span id="atendUnreadBadgeCount" class="hidden ml-1 px-1.5 py-0.2 text-[10px] bg-emerald-500/20 text-emerald-400 rounded-full font-bold">0</span>
+            </button>
             <button onclick="filterAtendimentos('manual')" id="filterBtn-manual" class="atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-slate-400 hover:text-white border border-slate-700 transition">👤 Atendimento Manual</button>
             <button onclick="filterAtendimentos('ia')" id="filterBtn-ia" class="atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-slate-400 hover:text-white border border-slate-700 transition">🤖 Automação (IA)</button>
             <button onclick="filterAtendimentos('chamadas')" id="filterBtn-chamadas" class="atend-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-dark-800 text-slate-400 hover:text-white border border-slate-700 transition">📞 Chamadas</button>
@@ -731,6 +744,12 @@
                 <button onclick="handleDeskToggleAi()" id="btnDeskToggleAi" class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center space-x-1.5 bg-amber-600/20 text-amber-300 border-amber-500/30 hover:bg-amber-600/30">
                   <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
                   <span>Manual</span>
+                </button>
+
+                <!-- BOTÃO MARCAR NÃO LIDA -->
+                <button onclick="toggleDeskLeadReadStatus()" id="btnDeskToggleRead" class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-dark-800 hover:bg-dark-750 text-slate-300 border border-slate-700 transition flex items-center space-x-1.5 shadow-sm" title="Marcar como não lida para responder depois">
+                  <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+                  <span class="hidden sm:inline">Não Lida</span>
                 </button>
 
                 <!-- VER DOSSIÊ -->
@@ -1982,6 +2001,12 @@
           <button id="modalToggleAiBtn" onclick="toggleAiFromModal()" class="px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center space-x-1.5 bg-amber-600/20 text-amber-300 border-amber-500/30 hover:bg-amber-600/30 shadow-sm">
             <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
             <span>Atender Manualmente</span>
+          </button>
+
+          <!-- BOTÃO MARCAR NÃO LIDA -->
+          <button id="modalToggleReadBtn" onclick="toggleModalLeadReadStatus()" title="Marcar como não lida para responder depois" class="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-dark-800 hover:bg-dark-750 text-slate-300 border border-slate-700 transition flex items-center space-x-1.5 shadow-sm">
+            <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+            <span class="hidden sm:inline">Não Lida</span>
           </button>
 
           <!-- ABRIR DOSSIÊ -->
@@ -4857,6 +4882,7 @@
         document.getElementById('statAgendadosCount').textContent = stats.agendados || 0;
         document.getElementById('statConcluidosCount').textContent = stats.concluidos || 0;
 
+        updateUnreadBadges();
         renderCrmLeads();
       } catch (e) {
         console.error('Erro ao carregar leads:', e);
@@ -4879,7 +4905,12 @@
         const etapa = (lead.etapa_funil || 'novo').toLowerCase();
 
         const matchesSearch = !search || name.includes(search) || phone.includes(search) || servico.includes(search) || endereco.includes(search);
-        const matchesStatus = statusFilter === 'all' || etapa === statusFilter;
+        let matchesStatus = true;
+        if (statusFilter === 'nao_lidas') {
+          matchesStatus = !!lead.has_unread;
+        } else if (statusFilter !== 'all') {
+          matchesStatus = etapa === statusFilter;
+        }
 
         return matchesSearch && matchesStatus;
       });
@@ -4934,10 +4965,14 @@
           const urgClass = urgClasses[urgencia] || urgClasses['media'];
 
           return `
-            <div class="bg-dark-800 border border-slate-700/80 rounded-xl p-3.5 space-y-2.5 shadow-md hover:border-slate-600 transition">
+            <div class="bg-dark-800 border ${lead.has_unread ? 'border-l-4 border-l-emerald-500 bg-emerald-950/15 border-slate-700/80' : 'border-slate-700/80'} rounded-xl p-3.5 space-y-2.5 shadow-md hover:border-slate-600 transition">
               <div class="flex items-start justify-between">
                 <div>
-                  <h5 class="font-bold text-white text-xs leading-tight">${escapeHtml(lead.client_name)}</h5>
+                  <div class="flex items-center space-x-1.5">
+                    ${lead.has_unread ? '<span class="relative flex h-2.5 w-2.5 shrink-0" title="Mensagem nova não lida"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span></span>' : ''}
+                    <h5 class="font-bold text-white text-xs leading-tight">${escapeHtml(lead.client_name)}</h5>
+                    ${lead.has_unread ? '<span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">Não lida</span>' : ''}
+                  </div>
                   <p class="text-[11px] text-slate-400 font-mono mt-0.5">${formatLeadPhone(lead)}</p>
                 </div>
                 <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${urgClass}">
@@ -4996,9 +5031,13 @@
           const isManual = lead.is_manual || lead.is_paused || lead.status_atendimento === 'manual' || lead.status_atendimento === 'pausa_humana';
 
           return `
-            <tr class="hover:bg-dark-800/50 transition">
+            <tr class="hover:bg-dark-800/50 transition ${lead.has_unread ? 'bg-emerald-950/10' : ''}">
               <td class="px-6 py-4">
-                <div class="font-medium text-white">${escapeHtml(lead.client_name)}</div>
+                <div class="font-medium text-white flex items-center space-x-2">
+                  ${lead.has_unread ? '<span class="relative flex h-2.5 w-2.5 shrink-0" title="Mensagem nova não lida"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span></span>' : ''}
+                  <span>${escapeHtml(lead.client_name)}</span>
+                  ${lead.has_unread ? '<span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Nova</span>' : ''}
+                </div>
                 <div class="text-xs text-slate-400 font-mono mt-0.5">${formatLeadPhone(lead)}</div>
               </td>
               <td class="px-6 py-4">
@@ -5085,12 +5124,67 @@
     // --------------------------------------------------------------------------
     // 2. CHAT EM TEMPO REAL & ENVIO MANUAL
     // --------------------------------------------------------------------------
+    function updateModalToggleReadBtn(hasUnread) {
+      const btn = document.getElementById('modalToggleReadBtn');
+      if (!btn) return;
+      if (hasUnread) {
+        btn.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span class="hidden sm:inline">Não Lida</span>';
+        btn.className = 'px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-950/40 text-emerald-300 border border-emerald-500/40 transition flex items-center space-x-1.5 shadow-sm';
+      } else {
+        btn.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span><span class="hidden sm:inline">Marcar Não Lida</span>';
+        btn.className = 'px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-dark-800 hover:bg-dark-750 text-slate-300 border border-slate-700 transition flex items-center space-x-1.5 shadow-sm';
+      }
+    }
+
+    async function toggleModalLeadReadStatus() {
+      if (!activeChatSession) return;
+      const sessionId = activeChatSession.id;
+      const crmLead = allLeadsCache.find(l => l.id === sessionId);
+      const deskLead = rawAtendimentosList.find(l => l.id === sessionId);
+
+      const currentUnread = !!(crmLead?.has_unread || deskLead?.has_unread);
+      const newUnread = !currentUnread;
+
+      if (crmLead) {
+        crmLead.has_unread = newUnread;
+        crmLead.unread_count = newUnread ? 1 : 0;
+      }
+      if (deskLead) {
+        deskLead.has_unread = newUnread;
+        deskLead.unread_count = newUnread ? 1 : 0;
+      }
+
+      updateModalToggleReadBtn(newUnread);
+      updateUnreadBadges();
+      renderCrmLeads();
+      renderAtendimentosList();
+
+      const endpoint = newUnread ? 'unread' : 'read';
+      await apiFetch(`/api/v2/tenant/leads/${sessionId}/${endpoint}`, { method: 'POST' }).catch(() => {});
+    }
+
     async function openChatModal(sessionId, clientName, phone, remoteJid, isManual) {
       activeChatSession = { id: sessionId, clientName, phone, remoteJid, isPaused: isManual };
       
       document.getElementById('modalClientTitle').textContent = clientName;
       document.getElementById('modalClientPhone').innerHTML = formatLeadPhone(phone, (remoteJid || '').includes('@lid'));
       updateChatModalAiBadge(isManual);
+      updateModalToggleReadBtn(false);
+
+      // Marca visualmente como lida de imediato
+      const leadInList = rawAtendimentosList.find(l => l.id === sessionId);
+      if (leadInList && leadInList.has_unread) {
+        leadInList.has_unread = false;
+        leadInList.unread_count = 0;
+      }
+      const crmLead = allLeadsCache.find(l => l.id === sessionId);
+      if (crmLead && crmLead.has_unread) {
+        crmLead.has_unread = false;
+        crmLead.unread_count = 0;
+      }
+      updateUnreadBadges();
+      renderCrmLeads();
+      renderAtendimentosList();
 
       const container = document.getElementById('modalMessagesContainer');
       container.innerHTML = '<div class="text-center text-slate-500 text-sm py-8">Carregando conversa...</div>';
@@ -5218,6 +5312,7 @@
           updateChatModalAiBadge(true);
           await refreshChatMessages();
           await loadLeads(); // Atualiza kanban/tabela
+          if (typeof loadAtendimentos === 'function') await loadAtendimentos();
         } else {
           alert('Falha ao enviar mensagem: ' + (res.data?.error || 'Erro'));
         }
@@ -5368,6 +5463,54 @@
     let deskRecordingInterval = null;
     let deskRecordingSeconds = 0;
 
+    function updateUnreadBadges() {
+      const unreadDesk = (rawAtendimentosList || []).filter(l => l.has_unread).length;
+      const unreadCrm = (allLeadsCache || []).filter(l => l.has_unread).length;
+      const unreadCount = Math.max(unreadDesk, unreadCrm);
+
+      const deskFilterBadge = document.getElementById('atendUnreadBadgeCount');
+      if (deskFilterBadge) {
+        if (unreadCount > 0) {
+          deskFilterBadge.textContent = unreadCount;
+          deskFilterBadge.classList.remove('hidden');
+        } else {
+          deskFilterBadge.classList.add('hidden');
+        }
+      }
+
+      const deskKpi = document.getElementById('atendKpiUnread');
+      if (deskKpi) {
+        deskKpi.textContent = unreadCount;
+      }
+    }
+
+    async function toggleDeskLeadReadStatus() {
+      if (!activeDeskSession) return;
+      const leadId = activeDeskSession.id;
+      const deskLead = rawAtendimentosList.find(l => l.id === leadId);
+      const crmLead = allLeadsCache.find(l => l.id === leadId);
+
+      const currentUnread = !!(deskLead?.has_unread || crmLead?.has_unread);
+      const newUnread = !currentUnread;
+
+      if (deskLead) {
+        deskLead.has_unread = newUnread;
+        deskLead.unread_count = newUnread ? 1 : 0;
+      }
+      if (crmLead) {
+        crmLead.has_unread = newUnread;
+        crmLead.unread_count = newUnread ? 1 : 0;
+      }
+
+      updateUnreadBadges();
+      renderAtendimentosList();
+      renderCrmLeads();
+      if (deskLead) updateDeskHeaderUi(deskLead);
+
+      const endpoint = newUnread ? 'unread' : 'read';
+      await apiFetch(`/api/v2/tenant/leads/${leadId}/${endpoint}`, { method: 'POST' }).catch(() => {});
+    }
+
     function openNewAtendimentoModal() {
       openNewLeadModal();
     }
@@ -5391,13 +5534,18 @@
         const kpiAi = document.getElementById('atendKpiAi');
         const kpiManual = document.getElementById('atendKpiManual');
         const kpiCalls = document.getElementById('atendKpiCalls');
+        const kpiUnread = document.getElementById('atendKpiUnread');
         const queueBadge = document.getElementById('atendQueueBadge');
 
         if (kpiTotal) kpiTotal.textContent = stats.total || rawAtendimentosList.length;
         if (kpiAi) kpiAi.textContent = stats.ia_ativa || 0;
         if (kpiManual) kpiManual.textContent = stats.manual || 0;
         if (kpiCalls) kpiCalls.textContent = stats.chamadas || rawAtendimentosList.filter(l => (parseInt(l.total_chamadas, 10) || 0) > 0).length;
+        if (kpiUnread) kpiUnread.textContent = stats.nao_lidos || rawAtendimentosList.filter(l => l.has_unread).length;
         if (queueBadge) queueBadge.textContent = `${rawAtendimentosList.length} contatos`;
+
+        // Atualiza badge do filtro Não Lidas
+        updateUnreadBadges();
 
         // Carrega Analytics de Helpdesk (TMA e TME) e dados auxiliares
         loadHelpdeskAnalytics();
@@ -5451,6 +5599,7 @@
         const matchesSearch = !search || name.includes(search) || phone.includes(search) || servico.includes(search) || lastMsg.includes(search);
         if (!matchesSearch) return false;
 
+        if (currentAtendFilter === 'nao_lidas') return !!lead.has_unread;
         if (currentAtendFilter === 'manual') return !!lead.is_manual;
         if (currentAtendFilter === 'ia') return !lead.is_manual;
         if (currentAtendFilter === 'chamadas') return (parseInt(lead.total_chamadas, 10) || 0) > 0;
@@ -5467,12 +5616,29 @@
         const phone = lead.telefone_real || (lead.remote_jid.includes('@lid') ? '' : lead.remote_jid.replace(/@.*$/, ''));
         const isManual = !!lead.is_manual;
         const isSelected = activeDeskSession && activeDeskSession.id === lead.id;
+        const hasUnread = !!lead.has_unread;
         const hasCalls = (parseInt(lead.total_chamadas, 10) || 0) > 0;
         const hasAudios = (parseInt(lead.total_audios, 10) || 0) > 0;
         const dados = lead.dados_lead || {};
         const servico = dados.servico || 'Sondagem / Geral';
 
         const lastInteraction = lead.last_interaction ? new Date(lead.last_interaction).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+        const unreadDotHtml = hasUnread ? `
+          <span class="relative flex h-2.5 w-2.5 shrink-0" title="Mensagem nova não lida">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+        ` : '';
+
+        const unreadBadgeHtml = hasUnread ? `
+          <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center space-x-1 shrink-0 animate-pulse" title="Mensagem nova não lida">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span>Nova</span>
+          </span>
+        ` : '';
+
+        const unreadCardBorder = (hasUnread && !isSelected) ? 'border-l-4 border-l-emerald-500 bg-emerald-950/20' : '';
 
         const isLocked = !!lead.is_locked;
         const lockText = isLocked ? (lead.locked_by_nome || 'Ocupado') : 'Livre';
@@ -5493,7 +5659,7 @@
         ` : '';
 
         return `
-          <div onclick="selectDeskAtendimento('${lead.id}')" class="p-3.5 rounded-xl border transition cursor-pointer ${isSelected ? 'bg-brand-950/40 border-brand-500/70 shadow-md ring-1 ring-brand-500/30' : 'bg-dark-900/60 hover:bg-dark-800/80 border-slate-800 hover:border-slate-700'}">
+          <div onclick="selectDeskAtendimento('${lead.id}')" class="p-3.5 rounded-xl border transition cursor-pointer ${isSelected ? 'bg-brand-950/40 border-brand-500/70 shadow-md ring-1 ring-brand-500/30' : 'bg-dark-900/60 hover:bg-dark-800/80 border-slate-800 hover:border-slate-700 ' + unreadCardBorder}">
             <div class="flex items-start justify-between gap-2">
               <div class="flex items-center space-x-2.5 min-w-0">
                 <div class="w-8 h-8 rounded-full ${isManual ? 'bg-amber-600/20 text-amber-300 border-amber-500/30' : 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30'} border flex items-center justify-center font-bold text-xs shrink-0">
@@ -5501,7 +5667,9 @@
                 </div>
                 <div class="min-w-0">
                   <div class="flex items-center space-x-1.5">
+                    ${unreadDotHtml}
                     <h5 class="text-xs font-bold text-white truncate">${escapeHtml(lead.client_name)}</h5>
+                    ${unreadBadgeHtml}
                     ${priorityBadgeHtml}
                   </div>
                   <div class="flex items-center space-x-1 mt-0.5">
@@ -5526,8 +5694,9 @@
             </div>
 
             ${lead.ultima_mensagem ? `
-              <div class="mt-1 text-[11px] text-slate-400 truncate bg-dark-800/40 px-2 py-1 rounded-lg border border-slate-800/60 font-sans">
-                ${lead.ultima_mensagem}
+              <div class="mt-1 text-[11px] ${hasUnread ? 'text-emerald-300 font-medium bg-emerald-950/30 border-emerald-500/30' : 'text-slate-400 bg-dark-800/40 border-slate-800/60'} truncate px-2 py-1 rounded-lg border font-sans flex items-center space-x-1">
+                ${hasUnread ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>' : ''}
+                <span class="truncate">${escapeHtml(lead.ultima_mensagem)}</span>
               </div>
             ` : ''}
 
@@ -5620,12 +5789,36 @@
         }
       }
 
+      const btnDeskToggleRead = document.getElementById('btnDeskToggleRead');
+      if (btnDeskToggleRead) {
+        if (lead.has_unread) {
+          btnDeskToggleRead.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span class="hidden sm:inline">Não Lida</span>';
+          btnDeskToggleRead.className = 'px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-950/40 text-emerald-300 border border-emerald-500/40 transition flex items-center space-x-1.5 shadow-sm';
+        } else {
+          btnDeskToggleRead.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span><span class="hidden sm:inline">Marcar Não Lida</span>';
+          btnDeskToggleRead.className = 'px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-dark-800 hover:bg-dark-750 text-slate-300 border border-slate-700 transition flex items-center space-x-1.5 shadow-sm';
+        }
+      }
+
       lucide.createIcons();
     }
 
     async function selectDeskAtendimento(leadId) {
       const lead = rawAtendimentosList.find(l => l.id === leadId);
       if (!lead) return;
+
+      // Se a conversa tinha mensagem não lida, marca como lida imediatamente na UI e no banco
+      if (lead.has_unread) {
+        lead.has_unread = false;
+        lead.unread_count = 0;
+        const crmLead = (allLeadsCache || []).find(l => l.id === leadId);
+        if (crmLead) {
+          crmLead.has_unread = false;
+          crmLead.unread_count = 0;
+        }
+        updateUnreadBadges();
+        apiFetch(`/api/v2/tenant/leads/${leadId}/read`, { method: 'POST' }).catch(() => {});
+      }
 
       const phone = lead.telefone_real || (lead.remote_jid.includes('@lid') ? '' : lead.remote_jid.replace(/@.*$/, ''));
       activeDeskSession = {
