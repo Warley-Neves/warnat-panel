@@ -341,11 +341,20 @@ class WebhookController {
 
     let session;
     if (sessionRes.rowCount === 0) {
+      // Verifica o modo de atendimento do tenant para inicializar a sessão corretamente
+      const aiConfigRes = await query(
+        `SELECT modo_atendimento FROM tenant_ai_configs WHERE tenant_id = $1`,
+        [tenantId]
+      );
+      const isManualTenant = aiConfigRes.rows[0]?.modo_atendimento === 'manual';
+      const initialStatus = isManualTenant ? 'manual' : 'ia_ativa';
+      const initialPausedUntil = isManualTenant ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000) : null;
+
       const newSession = await query(
-        `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, last_interaction)
-         VALUES ($1, $2, $3, 'ia_ativa', now())
+        `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, etapa_funil, paused_until, last_interaction)
+         VALUES ($1, $2, $3, $4, $5, $6, now())
          RETURNING id, status_atendimento, paused_until, dados_lead`,
-        [tenantId, effectiveJid, pushName]
+        [tenantId, effectiveJid, pushName, initialStatus, isManualTenant ? 'manual' : 'novo', initialPausedUntil]
       );
       session = newSession.rows[0];
     } else {

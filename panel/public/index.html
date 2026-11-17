@@ -431,6 +431,12 @@
             <span>Novo Atendimento</span>
           </button>
 
+          <!-- BOTÃO SINCRONIZAR HISTÓRICO WHATSAPP -->
+          <button onclick="syncWhatsAppHistory()" id="btnSyncHistoryCrm" title="Sincronizar histórico completo de conversas do WhatsApp (Modo Manual)" class="bg-dark-800 hover:bg-dark-750 text-slate-300 border border-slate-700 font-medium px-3 py-2 rounded-xl text-xs flex items-center space-x-1.5 transition whitespace-nowrap">
+            <i data-lucide="history" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span class="hidden sm:inline">Sincronizar Histórico</span>
+          </button>
+
           <!-- RECARREGAR -->
           <button onclick="loadLeads()" title="Atualizar dados" class="p-2 rounded-xl bg-dark-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
             <i data-lucide="rotate-cw" class="w-4 h-4"></i>
@@ -570,6 +576,10 @@
             <button onclick="openNewAtendimentoModal()" class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2 rounded-xl text-xs flex items-center space-x-2 shadow-lg shadow-brand-600/25 transition">
               <i data-lucide="plus-circle" class="w-4 h-4"></i>
               <span>Novo Atendimento</span>
+            </button>
+            <button onclick="syncWhatsAppHistory()" id="btnSyncHistoryAtend" class="bg-emerald-600/90 hover:bg-emerald-500 text-white font-medium px-3.5 py-2 rounded-xl text-xs border border-emerald-500/30 flex items-center space-x-1.5 shadow-lg shadow-emerald-600/20 transition" title="Sincronizar histórico completo de conversas do WhatsApp (Modo Manual)">
+              <i data-lucide="history" class="w-3.5 h-3.5"></i>
+              <span id="btnSyncHistoryAtendText" class="hidden sm:inline">Sincronizar WhatsApp</span>
             </button>
             <button onclick="loadAtendimentos()" class="bg-dark-800 hover:bg-dark-750 text-slate-300 font-medium px-3.5 py-2 rounded-xl text-xs border border-slate-700 flex items-center space-x-1.5 transition">
               <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
@@ -1458,6 +1468,10 @@
           </div>
 
           <div class="pt-4 flex flex-col space-y-2">
+            <button onclick="syncWhatsAppHistory()" id="btnSyncHistory" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-xl text-xs transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/20">
+              <i data-lucide="history" class="w-3.5 h-3.5"></i>
+              <span id="btnSyncHistoryText">Sincronizar Histórico Completo</span>
+            </button>
             <button onclick="refreshQRCode(true)" id="btnRefreshQr" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-medium py-2.5 rounded-xl text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-brand-500/20">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i>
               <span id="btnRefreshQrText">Gerar Novo QR Code</span>
@@ -7262,6 +7276,58 @@
       } finally {
         isRestartingInstance = false;
         if (btnText) btnText.textContent = 'Reiniciar Sessão WhatsApp';
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 6.1 SINCRONIZAÇÃO COMPLETA DE HISTÓRICO WHATSAPP (MODO 100% MANUAL)
+    // --------------------------------------------------------------------------
+    let isSyncingHistory = false;
+    async function syncWhatsAppHistory() {
+      if (isSyncingHistory) return;
+      const proceed = confirm(
+        'Sincronizar histórico completo de conversas do WhatsApp?\n\n' +
+        '• Todas as mensagens anteriores (mesmo antes da conexão) serão importadas.\n' +
+        '• O atendimento permanecerá no modo 100% MANUAL (nenhuma resposta automática será enviada).\n' +
+        '• Todas as conversas ficarão visíveis para atendimento humano.'
+      );
+      if (!proceed) return;
+
+      isSyncingHistory = true;
+      const btnSync = document.getElementById('btnSyncHistory');
+      const btnSyncText = document.getElementById('btnSyncHistoryText');
+      const btnAtendText = document.getElementById('btnSyncHistoryAtendText');
+      const btnCrm = document.getElementById('btnSyncHistoryCrm');
+
+      if (btnSyncText) btnSyncText.textContent = 'Sincronizando histórico...';
+      if (btnAtendText) btnAtendText.textContent = 'Sincronizando...';
+      if (btnSync) btnSync.disabled = true;
+      if (btnCrm) btnCrm.disabled = true;
+
+      try {
+        const res = await apiFetch('/api/v2/whatsapp/sync-history', { method: 'POST' });
+        if (res.ok && res.data?.success) {
+          const totalChats = res.data.totalConversas || 0;
+          const totalMsgs = res.data.mensagensImportadas || 0;
+          alert(`Histórico sincronizado com sucesso!\n\n${totalChats} conversas identificadas.\n${totalMsgs} novas mensagens importadas.\n\nModo 100% MANUAL garantido.`);
+
+          if (typeof loadLeads === 'function') await loadLeads();
+          if (typeof loadAtendimentos === 'function') await loadAtendimentos();
+          if (typeof refreshDeskMessages === 'function' && typeof activeDeskSession !== 'undefined' && activeDeskSession) {
+            await refreshDeskMessages();
+          }
+        } else {
+          alert('Aviso na sincronização: ' + (res.data?.error || 'Não foi possível sincronizar o histórico completo.'));
+        }
+      } catch (err) {
+        alert('Erro ao sincronizar histórico: ' + err.message);
+      } finally {
+        isSyncingHistory = false;
+        if (btnSyncText) btnSyncText.textContent = 'Sincronizar Histórico Completo';
+        if (btnAtendText) btnAtendText.textContent = 'Sincronizar WhatsApp';
+        if (btnSync) btnSync.disabled = false;
+        if (btnCrm) btnCrm.disabled = false;
+        if (window.lucide) lucide.createIcons();
       }
     }
 

@@ -626,6 +626,81 @@ class EvolutionApiService {
       // Ignora falha de rejeição
     }
   }
+
+  /**
+   * Busca lista de conversas/chats da instância na Evolution API
+   * @param {string} instanceName
+   * @param {object} where
+   */
+  async findChats(instanceName, where = {}) {
+    if (!instanceName) throw new Error('Nome da instância é obrigatório.');
+    const res = await this.request(`/chat/findChats/${instanceName}`, {
+      method: 'POST',
+      body: JSON.stringify({ where }),
+      timeout: 35000
+    });
+    return res.ok && Array.isArray(res.data) ? res.data : [];
+  }
+
+  /**
+   * Busca contatos salvos no WhatsApp da instância
+   * @param {string} instanceName
+   * @param {object} where
+   */
+  async findContacts(instanceName, where = {}) {
+    if (!instanceName) throw new Error('Nome da instância é obrigatório.');
+    const res = await this.request(`/chat/findContacts/${instanceName}`, {
+      method: 'POST',
+      body: JSON.stringify({ where }),
+      timeout: 35000
+    });
+    return res.ok && Array.isArray(res.data) ? res.data : [];
+  }
+
+  /**
+   * Busca mensagens históricas paginadas da instância
+   * @param {string} instanceName
+   * @param {object} options { page, limit, where }
+   */
+  async findMessages(instanceName, options = {}) {
+    if (!instanceName) throw new Error('Nome da instância é obrigatório.');
+    const payload = {
+      page: options.page || 1,
+      limit: options.limit || 100,
+      where: options.where || {}
+    };
+    const res = await this.request(`/chat/findMessages/${instanceName}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      timeout: 35000
+    });
+    return res.ok ? res.data : { messages: { total: 0, pages: 0, records: [] } };
+  }
+
+  /**
+   * Atualiza configurações da instância (ex: syncFullHistory)
+   * @param {string} instanceName
+   * @param {object} settings
+   */
+  async updateSettings(instanceName, settings = {}) {
+    if (!instanceName) throw new Error('Nome da instância é obrigatório.');
+    const payload = {
+      rejectCall: settings.rejectCall !== undefined ? settings.rejectCall : false,
+      msgCall: settings.msgCall || '',
+      groupsIgnore: settings.groupsIgnore !== undefined ? settings.groupsIgnore : true,
+      alwaysOnline: settings.alwaysOnline !== undefined ? settings.alwaysOnline : false,
+      readMessages: settings.readMessages || false,
+      readStatus: settings.readStatus || false,
+      syncFullHistory: settings.syncFullHistory !== undefined ? settings.syncFullHistory : true,
+      wavoipToken: settings.wavoipToken || ''
+    };
+    const res = await this.request(`/settings/set/${instanceName}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      timeout: 20000
+    });
+    return { success: res.ok, data: res.data };
+  }
 }
 
 module.exports = new EvolutionApiService();

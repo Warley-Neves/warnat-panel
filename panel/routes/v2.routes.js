@@ -12,6 +12,7 @@ const pagarmeService = require('../../services/pagarme.service');
 const entitlementsService = require('../../services/entitlements.service');
 const rateLimiterService = require('../../services/rate-limiter.service');
 const passwordRecoveryService = require('../../services/password-recovery.service');
+const historySyncService = require('../../services/history-sync.service');
 const url = require('url');
 
 async function handleV2Routes(req, res, pathname, method, body) {
@@ -373,6 +374,19 @@ async function handleV2Routes(req, res, pathname, method, body) {
         if (liveStatus === 'open') {
           const defaultWebhook = evolutionService.getDefaultWebhookUrl ? evolutionService.getDefaultWebhookUrl() : 'https://warnat-panel.onrender.com/api/webhook/whatsapp';
           evolutionService.setWebhook(instance.instance_name, defaultWebhook).catch(() => {});
+
+          // Auto-sincronização de histórico em background caso o tenant ainda não tenha mensagens no banco
+          query(`SELECT COUNT(*) as cnt FROM chat_messages WHERE tenant_id = $1`, [tenantId])
+            .then(cntRes => {
+              const msgCount = parseInt(cntRes.rows[0]?.cnt || 0, 10);
+              if (msgCount === 0) {
+                console.log(`[WhatsAppStatus] Tenant ${tenantId} conectado sem histórico salvo. Disparando sync inicial de histórico em background...`);
+                historySyncService.syncTenantHistory(tenantId).catch(err => {
+                  console.warn(`[WhatsAppStatus] Erro no sync automático inicial de histórico (${tenantId}):`, err.message);
+                });
+              }
+            })
+            .catch(() => {});
         }
       } catch (e) {
         // Fallback para status salvo no banco se a Evolution API não responder
@@ -469,6 +483,20 @@ async function handleV2Routes(req, res, pathname, method, body) {
         });
       } catch (err) {
         console.warn(`[WhatsAppRestart] Erro ao reiniciar instância (${instanceName}):`, err.message);
+        return sendJson(500, { success: false, error: err.message });
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // 3.1 SINCRONIZAÇÃO COMPLETA DE HISTÓRICO WHATSAPP (MODO 100% MANUAL)
+    // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/whatsapp/sync-history' && method === 'POST') {
+      try {
+        console.log(`[WhatsAppSync] Sincronização manual de histórico solicitada para tenant ${tenantId}`);
+        const result = await historySyncService.syncTenantHistory(tenantId);
+        return sendJson(200, result);
+      } catch (err) {
+        console.error(`[WhatsAppSync] Erro ao sincronizar histórico (${tenantId}):`, err.message);
         return sendJson(500, { success: false, error: err.message });
       }
     }
