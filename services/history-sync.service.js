@@ -454,6 +454,14 @@ class HistorySyncService {
         [tenantId]
       ).catch(() => {});
 
+      // 13. Enriquece os leads automaticamente mapeando números reais e nomes da agenda
+      let enrichedInfo = null;
+      try {
+        enrichedInfo = await this.enrichTenantConversations(tenantId);
+      } catch (enrichErr) {
+        console.warn(`[HistorySync] Aviso ao enriquecer leads pós-sincronização:`, enrichErr.message);
+      }
+
       console.log(`[HistorySync] Concluído! ${sessionCache.size} conversas mapeadas, ${importedMessagesCount} novas mensagens importadas.`);
 
       const result = {
@@ -463,7 +471,8 @@ class HistorySyncService {
         modoAtendimento: 'manual',
         totalConversas: sessionCache.size,
         mensagensImportadas: importedMessagesCount,
-        totalMensagensEvolution: totalMessagesFound
+        totalMensagensEvolution: totalMessagesFound,
+        enriquecidos: enrichedInfo?.enriched || 0
       };
 
       job.status = 'completed';
@@ -478,6 +487,316 @@ class HistorySyncService {
       job.error = err.message;
       throw err;
     }
+  }
+
+  /**
+   * Enriquece dados dos leads de um tenant:
+   * - Mapeia telefones reais e nomes completos a partir da agenda do WhatsApp (findContacts)
+   * - Extrai dados dos formulários de contrato/mensagens (nome completo, telefone, endereço, tipo de evento)
+   * - Limpa referências inválidas de LID gravadas como telefone
+   * - Atualiza chat_sessions e customer_profiles
+   */
+  async enrichTenantConversations(tenantId) {
+    if (!tenantId) throw new Error('tenantId é obrigatório para enriquecimento de leads.');
+
+    console.log(`[LeadEnrich] Iniciando enriquecimento inteligente de leads para tenant ${tenantId}...`);
+
+    // 1. Limpa qualquer LID gravado erroneamente como telefone no banco
+    await query(
+      `UPDATE customer_profiles 
+       SET telefone = NULL 
+       WHERE tenant_id = $1 AND (telefone LIKE '%@lid%' OR LENGTH(REGEXP_REPLACE(telefone, '\\D', '', 'g')) >= 14)`,
+      [tenantId]
+    ).catch(() => {});
+
+    // 2. Busca instância do WhatsApp
+    const instRes = await query(
+      `SELECT instance_name, numero_telefone 
+       FROM tenant_whatsapp_instances 
+       WHERE tenant_id = $1 LIMIT 1`,
+      [tenantId]
+    );
+
+    const instanceName = instRes.rows[0]?.instance_name;
+    const ownNumber = (instRes.rows[0]?.numero_telefone || '').replace(/\D/g, '');
+
+    // 3. Busca agenda de contatos da Evolution API se houver instância
+    const phonebookByName = new Map();
+    const phonebookByFirstName = new Map();
+
+    if (instanceName) {
+      try {
+        const cRes = await evolutionService.findContacts(instanceName);
+        const contacts = Array.isArray(cRes) ? cRes : (cRes?.contacts || []);
+        for (const c of contacts) {
+          const remoteJid = c.remoteJid || c.id || '';
+          if (!remoteJid || remoteJid.includes('@g.us') || remoteJid.includes('@lid')) continue;
+
+          const cleanPhone = remoteJid.replace(/@.*$/, '').replace(/\D/g, '');
+          const rawName = (c.pushName || c.name || c.verifiedName || '').trim();
+
+          if (rawName && cleanPhone && cleanPhone !== ownNumber) {
+            const lower = rawName.toLowerCase();
+            phonebookByName.set(lower, { phone: cleanPhone, name: rawName, pic: c.profilePicUrl || null });
+
+            // Indexa por primeiro nome (apenas palavras com >= 3 caracteres e ignorando termos genéricos)
+            const parts = lower.split(/\s+/).filter(p => p.length >= 3 && !['cerimonial', 'buffet', 'decor', 'festas', 'espaco', 'eventos'].includes(p));
+            if (parts.length > 0) {
+              const first = parts[0];
+              if (!phonebookByFirstName.has(first)) {
+                phonebookByFirstName.set(first, []);
+              }
+              phonebookByFirstName.get(first).push({ phone: cleanPhone, name: rawName, pic: c.profilePicUrl || null });
+            }
+          }
+        }
+        console.log(`[LeadEnrich] Agenda mapeada: ${phonebookByName.size} nomes e ${phonebookByFirstName.size} primeiros nomes indexados.`);
+      } catch (err) {
+        console.warn(`[LeadEnrich] Aviso ao buscar agenda de contatos:`, err.message);
+      }
+    }
+
+    // 4. Busca todas as sessões do tenant
+    const sessionsRes = await query(
+      `SELECT s.id, s.remote_jid, s.client_name, s.dados_lead,
+              c.nome as profile_nome, c.telefone as profile_telefone, c.endereco_completo as profile_endereco
+       FROM chat_sessions s
+       LEFT JOIN customer_profiles c ON c.tenant_id = s.tenant_id AND c.remote_jid = s.remote_jid
+       WHERE s.tenant_id = $1`,
+      [tenantId]
+    );
+
+    const sessions = sessionsRes.rows;
+    if (sessions.length === 0) {
+      return { success: true, enriched: 0, total: 0 };
+    }
+
+    // 5. Busca todas as mensagens do tenant agrupadas por session_id
+    const msgsRes = await query(
+      `SELECT session_id, role, content, media_type, created_at 
+       FROM chat_messages 
+       WHERE tenant_id = $1 
+       ORDER BY session_id, created_at ASC`,
+      [tenantId]
+    );
+
+    const msgsBySession = new Map();
+    for (const m of msgsRes.rows) {
+      if (!msgsBySession.has(m.session_id)) {
+        msgsBySession.set(m.session_id, []);
+      }
+      msgsBySession.get(m.session_id).push(m);
+    }
+
+    let enrichedCount = 0;
+
+    for (const s of sessions) {
+      const isLid = s.remote_jid.includes('@lid');
+      let currentData = typeof s.dados_lead === 'string' ? JSON.parse(s.dados_lead) : (s.dados_lead || {});
+      const msgs = msgsBySession.get(s.id) || [];
+
+      let extractedName = null;
+      let extractedPhone = null;
+      let extractedService = currentData.servico || null;
+      let extractedAddress = currentData.bairro_cidade || s.profile_endereco || null;
+      let extractedDate = currentData.data_evento || null;
+
+      // Se o remote_jid for direto (@s.whatsapp.net), já temos o telefone real garantido!
+      if (!isLid && s.remote_jid.includes('@s.whatsapp.net')) {
+        extractedPhone = s.remote_jid.replace(/@.*$/, '').replace(/\D/g, '');
+      }
+
+      // Se já existia um telefone real salvo no profile ou dados_lead (não LID)
+      if (!extractedPhone) {
+        const cand = s.profile_telefone || currentData.telefone;
+        if (cand && !cand.includes('@lid')) {
+          const digits = cand.replace(/\D/g, '');
+          if (digits.length >= 10 && digits.length <= 13 && digits !== ownNumber) {
+            extractedPhone = digits;
+          }
+        }
+      }
+
+      // Varredura de mensagens
+      for (const m of msgs) {
+        const text = m.content || '';
+        if (!text || text.length < 3) continue;
+
+        // 1. Extração de Nome
+        if (!extractedName) {
+          // Nome em ficha/contrato
+          const nMatch = text.match(/(?:Nome(?:\s+completo)?|Cliente|Contratante)\s*[:=-]\s*([A-Za-zÀ-ÿ\s]{3,40})/i);
+          if (nMatch) {
+            const cand = nMatch[1].trim();
+            if (!['tudo bem', 'bom dia', 'boa tarde', 'boa noite'].includes(cand.toLowerCase())) {
+              extractedName = cand;
+            }
+          }
+
+          // Auto-apresentação: Sou a/o... / Me chamo...
+          if (!extractedName) {
+            const sMatch = text.match(/(?:Sou a|Sou o|Me chamo|Aqui é a|Aqui é o)\s+([A-Za-zÀ-ÿ]{3,25})/i);
+            if (sMatch) extractedName = sMatch[1].trim();
+          }
+
+          // Saudação do operador: Oi, Maria! / Bom dia Luiza!
+          if (!extractedName && m.role === 'assistant') {
+            const saudMatch = text.match(/(?:Oi|Olá|Ola|Bom dia|Boa tarde|Boa noite)[,! ]+([A-ZÀ-ÿ][a-zà-ÿ]{2,20})(?:!|\?|\s+tudo bem|\s+como vai|\s+querida)/i);
+            if (saudMatch) {
+              const cand = saudMatch[1].trim();
+              const candLower = cand.toLowerCase();
+              const stopWords = ['tudo', 'como', 'amigo', 'amiga', 'cliente', 'voce', 'você', 'pessoal', 'querida', 'querido', 'linda', 'lindo', 'flor', 'meninas'];
+              if (!stopWords.includes(candLower)) {
+                extractedName = cand;
+              }
+            }
+          }
+        }
+
+        // 2. Extração de Telefone (em mensagens de usuário ou campos de contrato)
+        if (!extractedPhone && (m.role === 'user' || text.match(/(?:Telefone|Celular|Tel|Whats|Contato)\s*[:=-]/i))) {
+          const pMatch = text.match(/(?:Telefone|Celular|Tel|Whats|Contato)?\s*(?:[:=-]\s*)?(?:\+?55\s?)?(?:\(?([1-9]{2})\)?\s?)?(?:9\s?[6-9]\d{3}[-\s]?\d{4}|[2-8]\d{3}[-\s]?\d{4})\b/i);
+          if (pMatch && !text.toUpperCase().includes('CEP') && !text.includes('28351146242073')) {
+            const digits = pMatch[0].replace(/\D/g, '');
+            if (digits.length >= 8 && digits.length <= 13 && digits !== ownNumber) {
+              extractedPhone = digits.startsWith('55') ? digits : (digits.length >= 10 ? `55${digits}` : digits);
+            }
+          }
+        }
+
+        // 3. Extração de Endereço / Local
+        if (!extractedAddress) {
+          const eMatch = text.match(/(?:Endereço(?:\s+completo)?|Local(?:\s+do\s+evento)?|Espaço)\s*[:=-]\s*([^\n\r]{8,90})/i);
+          if (eMatch) {
+            extractedAddress = eMatch[1].trim();
+          } else {
+            const ruaMatch = text.match(/(?:Rua|Avenida|Av\.|Alameda|Bairro)\s+[A-Za-zÀ-ÿ0-9\s,.-]{8,70}/i);
+            if (ruaMatch) extractedAddress = ruaMatch[0].trim();
+          }
+        }
+
+        // 4. Extração de Data do Evento
+        if (!extractedDate) {
+          const dMatch = text.match(/(?:Data(?:\s+do\s+evento)?|Dia(?:\s+da\s+festa)?)\s*[:=-]?\s*(\d{1,2}[\/\.-]\d{1,2}(?:[\/\.-]\d{2,4})?)/i);
+          if (dMatch) extractedDate = dMatch[1].trim();
+        }
+
+        // 5. Extração de Serviços / Tipo de Festa
+        if (!extractedService) {
+          if (/lustre/i.test(text)) extractedService = 'Locação de Lustre';
+          else if (/pergolado/i.test(text)) extractedService = 'Decoração de Pergolado';
+          else if (/painel/i.test(text)) extractedService = 'Decoração com Painel';
+          else if (/casamento/i.test(text)) extractedService = 'Decoração de Casamento';
+          else if (/15 anos|debutante/i.test(text)) extractedService = 'Festa de 15 Anos';
+          else if (/aniversário|aniversario|infantil/i.test(text)) extractedService = 'Aniversário Infantil';
+          else if (/formatura|colação/i.test(text)) extractedService = 'Formatura / Evento';
+          else if (/batizado/i.test(text)) extractedService = 'Decoração de Batizado';
+          else if (/chá revelação|cha revelacao|chá de bebê/i.test(text)) extractedService = 'Chá Revelação / Bebê';
+        }
+      }
+
+      // Cruzamento do Nome com a Agenda de Contatos da Evolution API
+      const candidateNameForPhonebook = extractedName || (!s.client_name?.startsWith('Cliente ') && s.client_name !== 'Você' ? s.client_name : null);
+      if (candidateNameForPhonebook) {
+        const cleanCand = candidateNameForPhonebook.trim().toLowerCase();
+        
+        // Tentativa 1: Match exato de nome completo na agenda
+        if (phonebookByName.has(cleanCand)) {
+          const match = phonebookByName.get(cleanCand);
+          extractedPhone = extractedPhone || match.phone;
+          extractedName = match.name;
+        } else {
+          // Tentativa 2: Match por primeiro nome
+          const firstPart = cleanCand.split(/\s+/)[0];
+          if (firstPart.length >= 3 && phonebookByFirstName.has(firstPart)) {
+            const matches = phonebookByFirstName.get(firstPart);
+            if (matches.length === 1) {
+              // Apenas 1 pessoa com esse primeiro nome na agenda -> match perfeito
+              extractedPhone = extractedPhone || matches[0].phone;
+              extractedName = matches[0].name;
+            } else if (matches.length > 1) {
+              // Se há mais de uma, verifica se alguma tem o sobrenome
+              const fullMatch = matches.find(m => m.name.toLowerCase().includes(cleanCand) || cleanCand.includes(m.name.toLowerCase()));
+              if (fullMatch) {
+                extractedPhone = extractedPhone || fullMatch.phone;
+                extractedName = fullMatch.name;
+              } else {
+                extractedPhone = extractedPhone || matches[0].phone;
+                extractedName = matches[0].name;
+              }
+            }
+          }
+        }
+      }
+
+      // Define nome final limpo
+      let finalName = s.client_name;
+      if (extractedName) {
+        finalName = extractedName;
+      } else if (!finalName || finalName === 'Você' || finalName.startsWith('Cliente ') || finalName.includes('@lid')) {
+        finalName = `Cliente (${s.remote_jid.replace(/@.*$/, '').slice(-6)})`;
+      }
+
+      // Normaliza telefone real final (garante que nunca seja LID)
+      let finalPhone = extractedPhone || null;
+      if (finalPhone) {
+        finalPhone = finalPhone.replace(/\D/g, '');
+        if (finalPhone.length >= 14 || finalPhone.startsWith('28351') || finalPhone === ownNumber) {
+          finalPhone = null;
+        }
+      }
+
+      // Atualiza dados_lead do chat_sessions
+      const updatedLeadData = {
+        ...currentData,
+        nome: finalName,
+        telefone: finalPhone,
+        servico: extractedService || currentData.servico || 'Decoração de Festas & Eventos',
+        bairro_cidade: extractedAddress || currentData.bairro_cidade || null,
+        data_evento: extractedDate || currentData.data_evento || null,
+        is_lid: isLid
+      };
+
+      // Atualiza chat_sessions
+      await query(
+        `UPDATE chat_sessions 
+         SET client_name = $1, dados_lead = $2
+         WHERE id = $3 AND tenant_id = $4`,
+        [finalName, JSON.stringify(updatedLeadData), s.id, tenantId]
+      ).catch(() => {});
+
+      // Atualiza customer_profiles
+      await query(
+        `INSERT INTO customer_profiles (tenant_id, remote_jid, nome, telefone, endereco_completo, metadados)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (tenant_id, remote_jid)
+         DO UPDATE SET
+           nome = COALESCE(NULLIF(customer_profiles.nome, 'Você'), EXCLUDED.nome),
+           telefone = COALESCE(EXCLUDED.telefone, NULLIF(customer_profiles.telefone, '')) ,
+           endereco_completo = COALESCE(EXCLUDED.endereco_completo, customer_profiles.endereco_completo),
+           metadados = customer_profiles.metadados || EXCLUDED.metadados,
+           updated_at = now()`,
+        [
+          tenantId,
+          s.remote_jid,
+          finalName,
+          finalPhone,
+          extractedAddress || null,
+          JSON.stringify({ servico: updatedLeadData.servico, data_evento: updatedLeadData.data_evento })
+        ]
+      ).catch(() => {});
+
+      if (extractedName || finalPhone || extractedAddress || extractedService) {
+        enrichedCount++;
+      }
+    }
+
+    console.log(`[LeadEnrich] Concluído! ${enrichedCount} de ${sessions.length} leads enriquecidos com sucesso.`);
+    return {
+      success: true,
+      total: sessions.length,
+      enriched: enrichedCount
+    };
   }
 
   /**

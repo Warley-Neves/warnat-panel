@@ -3898,6 +3898,76 @@
         .replace(/\n/g, '\\n')
         .replace(/\r/g, '');
     }
+
+    function formatLeadPhone(leadOrPhone, isLid = false) {
+      let phone = '';
+      let lid = isLid;
+
+      if (typeof leadOrPhone === 'object' && leadOrPhone !== null) {
+        phone = leadOrPhone.telefone_real || leadOrPhone.telefone || leadOrPhone.dados_lead?.telefone || '';
+        if (!phone && leadOrPhone.remote_jid && !leadOrPhone.remote_jid.includes('@lid')) {
+          phone = leadOrPhone.remote_jid.replace(/@.*$/, '').replace(/\D/g, '');
+        }
+        lid = leadOrPhone.is_lid || (leadOrPhone.remote_jid && leadOrPhone.remote_jid.includes('@lid'));
+      } else if (typeof leadOrPhone === 'string') {
+        phone = leadOrPhone.replace(/@.*$/, '').replace(/\D/g, '');
+        lid = isLid || leadOrPhone.includes('@lid');
+      }
+
+      if (phone) {
+        const digits = phone.replace(/\D/g, '');
+        if (digits.length >= 10 && digits.length <= 13 && !digits.startsWith('28351')) {
+          const clean = digits.startsWith('55') ? digits.slice(2) : digits;
+          if (clean.length === 11) {
+            return `+55 (${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`;
+          } else if (clean.length === 10) {
+            return `+55 (${clean.slice(0, 2)}) ${clean.slice(2, 6)}-${clean.slice(6)}`;
+          }
+          return `+${digits}`;
+        }
+      }
+
+      if (lid) {
+        return `<span class="inline-flex items-center gap-1 text-[11px] text-slate-400 font-sans" title="Identificador temporário WhatsApp Web"><i data-lucide="shield-check" class="w-3 h-3 text-brand-400"></i>WhatsApp Web</span>`;
+      }
+
+      return phone ? `+${phone}` : `<span class="text-slate-500 text-[11px]">Sem telefone</span>`;
+    }
+
+    function getLeadPhoneText(leadOrPhone, isLid = false) {
+      let phone = '';
+      let lid = isLid;
+
+      if (typeof leadOrPhone === 'object' && leadOrPhone !== null) {
+        phone = leadOrPhone.telefone_real || leadOrPhone.telefone || leadOrPhone.dados_lead?.telefone || '';
+        if (!phone && leadOrPhone.remote_jid && !leadOrPhone.remote_jid.includes('@lid')) {
+          phone = leadOrPhone.remote_jid.replace(/@.*$/, '').replace(/\D/g, '');
+        }
+        lid = leadOrPhone.is_lid || (leadOrPhone.remote_jid && leadOrPhone.remote_jid.includes('@lid'));
+      } else if (typeof leadOrPhone === 'string') {
+        phone = leadOrPhone.replace(/@.*$/, '').replace(/\D/g, '');
+        lid = isLid || leadOrPhone.includes('@lid');
+      }
+
+      if (phone) {
+        const digits = phone.replace(/\D/g, '');
+        if (digits.length >= 10 && digits.length <= 13 && !digits.startsWith('28351')) {
+          const clean = digits.startsWith('55') ? digits.slice(2) : digits;
+          if (clean.length === 11) {
+            return `+55 (${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`;
+          } else if (clean.length === 10) {
+            return `+55 (${clean.slice(0, 2)}) ${clean.slice(2, 6)}-${clean.slice(6)}`;
+          }
+          return `+${digits}`;
+        }
+      }
+
+      if (lid) {
+        return 'WhatsApp Web';
+      }
+
+      return phone ? `+${phone}` : 'Não informado';
+    }
     let qrPollingInterval = null;
     let currentUserProfile = null;
     let allLeadsCache = [];
@@ -4803,11 +4873,12 @@
 
       return allLeadsCache.filter(lead => {
         const name = (lead.client_name || '').toLowerCase();
-        const phone = (lead.remote_jid || '').replace(/\D/g, '');
+        const phone = (lead.telefone_real || lead.telefone || lead.remote_jid || '').replace(/\D/g, '');
         const servico = (lead.dados_lead?.servico || '').toLowerCase();
+        const endereco = (lead.dados_lead?.bairro_cidade || lead.customer_endereco || '').toLowerCase();
         const etapa = (lead.etapa_funil || 'novo').toLowerCase();
 
-        const matchesSearch = !search || name.includes(search) || phone.includes(search) || servico.includes(search);
+        const matchesSearch = !search || name.includes(search) || phone.includes(search) || servico.includes(search) || endereco.includes(search);
         const matchesStatus = statusFilter === 'all' || etapa === statusFilter;
 
         return matchesSearch && matchesStatus;
@@ -4850,7 +4921,7 @@
 
         colEl.innerHTML = cols[k].map(lead => {
           const dados = lead.dados_lead || {};
-          const phone = lead.remote_jid.replace(/@.*$/, '');
+          const phone = lead.telefone_real || (lead.remote_jid.includes('@lid') ? '' : lead.remote_jid.replace(/@.*$/, ''));
           const isManual = lead.is_manual || lead.is_paused || lead.status_atendimento === 'manual' || lead.status_atendimento === 'pausa_humana';
           const urgencia = dados.urgencia || 'normal';
 
@@ -4867,7 +4938,7 @@
               <div class="flex items-start justify-between">
                 <div>
                   <h5 class="font-bold text-white text-xs leading-tight">${escapeHtml(lead.client_name)}</h5>
-                  <p class="text-[11px] text-slate-400 font-mono mt-0.5">+${phone}</p>
+                  <p class="text-[11px] text-slate-400 font-mono mt-0.5">${formatLeadPhone(lead)}</p>
                 </div>
                 <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${urgClass}">
                   ${urgencia}
@@ -4921,14 +4992,14 @@
       } else {
         tbody.innerHTML = leads.map(lead => {
           const dados = lead.dados_lead || {};
-          const phone = lead.remote_jid.replace(/@.*$/, '');
+          const phone = lead.telefone_real || (lead.remote_jid.includes('@lid') ? '' : lead.remote_jid.replace(/@.*$/, ''));
           const isManual = lead.is_manual || lead.is_paused || lead.status_atendimento === 'manual' || lead.status_atendimento === 'pausa_humana';
 
           return `
             <tr class="hover:bg-dark-800/50 transition">
               <td class="px-6 py-4">
                 <div class="font-medium text-white">${escapeHtml(lead.client_name)}</div>
-                <div class="text-xs text-slate-400 font-mono">+${phone}</div>
+                <div class="text-xs text-slate-400 font-mono mt-0.5">${formatLeadPhone(lead)}</div>
               </td>
               <td class="px-6 py-4">
                 <span class="text-slate-200">${dados.servico ? escapeHtml(dados.servico) : '<span class="text-slate-500 italic">Em sondagem</span>'}</span>
@@ -5018,7 +5089,7 @@
       activeChatSession = { id: sessionId, clientName, phone, remoteJid, isPaused: isManual };
       
       document.getElementById('modalClientTitle').textContent = clientName;
-      document.getElementById('modalClientPhone').textContent = `+${phone}`;
+      document.getElementById('modalClientPhone').innerHTML = formatLeadPhone(phone, (remoteJid || '').includes('@lid'));
       updateChatModalAiBadge(isManual);
 
       const container = document.getElementById('modalMessagesContainer');
@@ -5373,7 +5444,7 @@
 
       const filtered = rawAtendimentosList.filter(lead => {
         const name = (lead.client_name || '').toLowerCase();
-        const phone = (lead.remote_jid || '').replace(/\D/g, '');
+        const phone = (lead.telefone_real || lead.telefone || lead.remote_jid || '').replace(/\D/g, '');
         const servico = (lead.dados_lead?.servico || '').toLowerCase();
         const lastMsg = (lead.ultima_mensagem || '').toLowerCase();
 
@@ -5393,7 +5464,7 @@
       }
 
       container.innerHTML = filtered.map(lead => {
-        const phone = lead.remote_jid.replace(/@.*$/, '');
+        const phone = lead.telefone_real || (lead.remote_jid.includes('@lid') ? '' : lead.remote_jid.replace(/@.*$/, ''));
         const isManual = !!lead.is_manual;
         const isSelected = activeDeskSession && activeDeskSession.id === lead.id;
         const hasCalls = (parseInt(lead.total_chamadas, 10) || 0) > 0;
@@ -5434,7 +5505,7 @@
                     ${priorityBadgeHtml}
                   </div>
                   <div class="flex items-center space-x-1 mt-0.5">
-                    <p class="text-[11px] text-slate-400 font-mono">+${phone}</p>
+                    <p class="text-[11px] text-slate-400 font-mono">${formatLeadPhone(lead)}</p>
                     ${deptBadgeHtml}
                   </div>
                 </div>
@@ -5556,7 +5627,7 @@
       const lead = rawAtendimentosList.find(l => l.id === leadId);
       if (!lead) return;
 
-      const phone = lead.remote_jid.replace(/@.*$/, '');
+      const phone = lead.telefone_real || (lead.remote_jid.includes('@lid') ? '' : lead.remote_jid.replace(/@.*$/, ''));
       activeDeskSession = {
         id: lead.id,
         clientName: lead.client_name,
@@ -5572,7 +5643,7 @@
       const activePhoneEl = document.getElementById('atendActivePhone');
       const activeAvatarEl = document.getElementById('atendActiveAvatar');
       if (activeNameEl) activeNameEl.textContent = lead.client_name;
-      if (activePhoneEl) activePhoneEl.textContent = `+${phone}`;
+      if (activePhoneEl) activePhoneEl.innerHTML = formatLeadPhone(lead);
       if (activeAvatarEl) activeAvatarEl.textContent = (lead.client_name || 'C').charAt(0).toUpperCase();
 
       updateDeskHeaderUi(lead);
@@ -6300,7 +6371,7 @@
                 </div>
                 <p class="text-xs text-slate-300 mt-0.5">${escapeHtml(a.servico)} <span class="text-slate-500">(${escapeHtml(a.tipo_agendamento || 'Visita Técnica')})</span></p>
                 <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 mt-1 font-mono">
-                  <span><i data-lucide="phone" class="w-3 h-3 inline mr-1 text-slate-500"></i>+${a.telefone || a.remote_jid.replace(/@.*$/, '')}</span>
+                  <span><i data-lucide="phone" class="w-3 h-3 inline mr-1 text-slate-500"></i>${formatLeadPhone(a.telefone || a.remote_jid)}</span>
                   ${a.endereco_completo && a.endereco_completo !== 'A confirmar' ? `<span><i data-lucide="map-pin" class="w-3 h-3 inline mr-1 text-slate-500"></i>${escapeHtml(a.endereco_completo)}</span>` : ''}
                   ${parseFloat(a.valor_estimado) > 0 ? `<span class="text-emerald-400 font-bold">R$ ${parseFloat(a.valor_estimado).toFixed(2).replace('.', ',')}</span>` : '<span class="text-slate-400">Gratuito</span>'}
                 </div>
@@ -6388,7 +6459,7 @@
               <td class="px-6 py-4 font-mono font-bold text-brand-400 text-xs whitespace-nowrap">${dateStr}</td>
               <td class="px-6 py-4">
                 <div class="font-medium text-white">${escapeHtml(a.client_name)}</div>
-                <div class="text-xs text-slate-400 font-mono">+${a.telefone || a.remote_jid.replace(/@.*$/, '')}</div>
+                <div class="text-xs text-slate-400 font-mono mt-0.5">${formatLeadPhone(a.telefone || a.remote_jid)}</div>
               </td>
               <td class="px-6 py-4 text-slate-200">
                 <div class="font-medium">${a.servico}</div>
@@ -6435,7 +6506,7 @@
       document.getElementById('apptModalSubTitle').textContent = `Agendamento #${a.id.substring(0, 8)}`;
       document.getElementById('apptModalDateTime').textContent = dateStr;
       document.getElementById('apptModalClientName').textContent = a.client_name || 'Cliente';
-      document.getElementById('apptModalClientPhone').textContent = `+${a.telefone || a.remote_jid.replace(/@.*$/, '')}`;
+      document.getElementById('apptModalClientPhone').innerHTML = formatLeadPhone(a.telefone || a.remote_jid);
       document.getElementById('apptModalService').textContent = a.servico || 'Visita Técnica';
       document.getElementById('apptModalType').textContent = a.tipo_agendamento || 'Visita Técnica';
 
@@ -6500,8 +6571,8 @@
 
     function openChatFromApptModal() {
       if (!currentApptModalItem) return;
-      const phone = currentApptModalItem.telefone || currentApptModalItem.remote_jid.replace(/@.*$/, '');
       const lead = allLeadsCache.find(l => l.remote_jid === currentApptModalItem.remote_jid);
+      const phone = lead?.telefone_real || currentApptModalItem.telefone || (currentApptModalItem.remote_jid.includes('@lid') ? '' : currentApptModalItem.remote_jid.replace(/@.*$/, ''));
       closeAppointmentModal();
       if (lead) {
         const isManual = lead.is_manual || lead.is_paused || lead.status_atendimento === 'manual' || lead.status_atendimento === 'pausa_humana';
@@ -7515,7 +7586,7 @@
     // --------------------------------------------------------------------------
     async function openDossierModal(remoteJid, clientName, phone) {
       document.getElementById('dossierClientTitle').textContent = `Dossiê: ${clientName}`;
-      document.getElementById('dossierClientPhone').textContent = `+${phone}`;
+      document.getElementById('dossierClientPhone').innerHTML = formatLeadPhone(phone, (remoteJid || '').includes('@lid'));
       document.getElementById('dossierAddress').textContent = 'Carregando endereço...';
       document.getElementById('dossierSummary').textContent = 'Carregando dossiê cumulativo...';
       document.getElementById('dossierAppointments').innerHTML = '<div class="text-xs text-slate-500">Buscando histórico...</div>';
@@ -7526,6 +7597,9 @@
         if (res.ok && Array.isArray(res.data?.customers)) {
           const customer = res.data.customers.find(c => c.remote_jid === remoteJid);
           if (customer) {
+            if (customer.telefone) {
+              document.getElementById('dossierClientPhone').innerHTML = formatLeadPhone(customer.telefone);
+            }
             document.getElementById('dossierAddress').textContent = customer.endereco_completo || 'Nenhum endereço cadastrado.';
             document.getElementById('dossierSummary').textContent = customer.perfil_resumo || 'Nenhuma nota cumulativa no dossiê até o momento.';
 

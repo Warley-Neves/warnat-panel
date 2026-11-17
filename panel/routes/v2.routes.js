@@ -533,6 +533,21 @@ async function handleV2Routes(req, res, pathname, method, body) {
       }
     }
 
+    if (pathname === '/api/v2/whatsapp/enrich-leads' && method === 'POST') {
+      try {
+        console.log(`[WhatsAppEnrich] Enriquecimento manual solicitado para tenant ${tenantId}`);
+        const result = await historySyncService.enrichTenantConversations(tenantId);
+        return sendJson(200, {
+          success: true,
+          message: 'Leads enriquecidos com sucesso!',
+          ...result
+        });
+      } catch (err) {
+        console.error(`[WhatsAppEnrich] Erro ao enriquecer leads (${tenantId}):`, err.message);
+        return sendJson(500, { success: false, error: err.message });
+      }
+    }
+
     // --------------------------------------------------------------------------
     // 4. REGRAS DA IA (tenant_ai_configs) & MODO DE ATENDIMENTO DO TENANT
     // --------------------------------------------------------------------------
@@ -802,7 +817,9 @@ async function handleV2Routes(req, res, pathname, method, body) {
            (SELECT content FROM chat_messages m WHERE m.session_id = s.id ORDER BY m.created_at DESC LIMIT 1) as ultima_mensagem,
            (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id)::int as total_mensagens,
            (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id AND (m.media_type LIKE 'call_%' OR m.content LIKE '%[Chamada%'))::int as total_chamadas,
-           (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id AND (m.media_type = 'audio' OR m.content LIKE '[audio]%'))::int as total_audios
+           (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id AND (m.media_type = 'audio' OR m.content LIKE '[audio]%'))::int as total_audios,
+           c.telefone as customer_phone,
+           c.endereco_completo as customer_endereco
          FROM chat_sessions s
          LEFT JOIN customer_profiles c ON c.tenant_id = s.tenant_id AND c.remote_jid = s.remote_jid
          LEFT JOIN users u ON u.id = s.atendente_id
@@ -818,8 +835,30 @@ async function handleV2Routes(req, res, pathname, method, body) {
 
       const leads = leadsRes.rows.map(l => {
         const is_manual = l.is_paused || l.status_atendimento === 'manual' || l.status_atendimento === 'pausa_humana' || l.etapa_funil === 'manual';
+        const is_lid = l.remote_jid ? l.remote_jid.includes('@lid') : false;
+
+        let realPhone = null;
+        const candPhone = l.customer_phone || l.dados_lead?.telefone || l.dados_lead?.whatsapp;
+        if (candPhone && !candPhone.includes('@lid')) {
+          const digits = candPhone.replace(/\D/g, '');
+          if (digits.length >= 10 && digits.length <= 13 && !digits.startsWith('28351')) {
+            realPhone = digits;
+          }
+        } else if (!is_lid && l.remote_jid) {
+          realPhone = l.remote_jid.replace(/@.*$/, '').replace(/\D/g, '');
+        }
+
+        let clientName = l.client_name;
+        if ((!clientName || clientName === 'Cliente' || clientName.startsWith('Cliente ') || clientName === 'Você' || clientName.includes('@lid')) && l.dados_lead?.nome) {
+          clientName = l.dados_lead.nome;
+        }
+
         return {
           ...l,
+          client_name: clientName,
+          telefone_real: realPhone,
+          telefone: realPhone,
+          is_lid,
           is_manual,
           modo_atendimento: is_manual ? 'manual' : 'automacao'
         };
