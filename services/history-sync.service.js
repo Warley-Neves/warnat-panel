@@ -518,7 +518,27 @@ class HistorySyncService {
     );
 
     const instanceName = instRes.rows[0]?.instance_name;
-    const ownNumber = (instRes.rows[0]?.numero_telefone || '').replace(/\D/g, '');
+    const ownNumbers = new Set();
+    if (instRes.rows[0]?.numero_telefone) {
+      ownNumbers.add(instRes.rows[0].numero_telefone.replace(/\D/g, ''));
+    }
+
+    if (instanceName) {
+      try {
+        const instInfo = await evolutionService.fetchInstances();
+        const myInst = Array.isArray(instInfo) ? instInfo.find(i => i.name === instanceName) : null;
+        if (myInst?.ownerJid) {
+          const ownerNum = myInst.ownerJid.replace(/@.*$/, '').replace(/\D/g, '');
+          if (ownerNum) {
+            ownNumbers.add(ownerNum);
+            await query(
+              `UPDATE tenant_whatsapp_instances SET numero_telefone = $1 WHERE tenant_id = $2 AND (numero_telefone IS NULL OR numero_telefone = '')`,
+              [ownerNum, tenantId]
+            ).catch(() => {});
+          }
+        }
+      } catch (e) {}
+    }
 
     // 3. Busca agenda de contatos da Evolution API se houver instância
     const phonebookByName = new Map();
@@ -535,7 +555,7 @@ class HistorySyncService {
           const cleanPhone = remoteJid.replace(/@.*$/, '').replace(/\D/g, '');
           const rawName = (c.pushName || c.name || c.verifiedName || '').trim();
 
-          if (rawName && cleanPhone && cleanPhone !== ownNumber) {
+          if (rawName && cleanPhone && !ownNumbers.has(cleanPhone)) {
             const lower = rawName.toLowerCase();
             phonebookByName.set(lower, { phone: cleanPhone, name: rawName, pic: c.profilePicUrl || null });
 
@@ -730,18 +750,22 @@ class HistorySyncService {
       }
 
       // Define nome final limpo
+      const stopWords = ['tudo', 'como', 'amigo', 'amiga', 'cliente', 'voce', 'você', 'pessoal', 'querida', 'querido', 'linda', 'lindo', 'flor', 'meninas', 'moça', 'moca', 'moço', 'moco', 'ola', 'olá', 'oi', 'bom dia', 'boa tarde', 'boa noite', 'sim', 'não', 'obrigado', 'obrigada'];
+
       let finalName = s.client_name;
-      if (extractedName) {
+      const isCurrentNameInvalid = !finalName || finalName === 'Você' || finalName.startsWith('Cliente ') || finalName.includes('@lid') || /^\d{6,}$/.test(finalName) || stopWords.includes(finalName.toLowerCase());
+
+      if (extractedName && !stopWords.includes(extractedName.toLowerCase()) && !/^\d+$/.test(extractedName)) {
         finalName = extractedName;
-      } else if (!finalName || finalName === 'Você' || finalName.startsWith('Cliente ') || finalName.includes('@lid')) {
+      } else if (isCurrentNameInvalid) {
         finalName = `Cliente (${s.remote_jid.replace(/@.*$/, '').slice(-6)})`;
       }
 
-      // Normaliza telefone real final (garante que nunca seja LID)
+      // Normaliza telefone real final (garante que nunca seja LID nem telefone próprio da empresa)
       let finalPhone = extractedPhone || null;
       if (finalPhone) {
         finalPhone = finalPhone.replace(/\D/g, '');
-        if (finalPhone.length >= 14 || finalPhone.startsWith('28351') || finalPhone === ownNumber) {
+        if (finalPhone.length >= 14 || finalPhone.startsWith('28351') || ownNumbers.has(finalPhone) || ownNumbers.has(finalPhone.slice(2))) {
           finalPhone = null;
         }
       }

@@ -848,9 +848,14 @@ async function handleV2Routes(req, res, pathname, method, body) {
           realPhone = l.remote_jid.replace(/@.*$/, '').replace(/\D/g, '');
         }
 
+        const stopWords = ['tudo', 'como', 'amigo', 'amiga', 'cliente', 'voce', 'você', 'pessoal', 'querida', 'querido', 'linda', 'lindo', 'flor', 'meninas', 'moça', 'moca', 'moço', 'moco', 'ola', 'olá', 'oi', 'null', 'undefined'];
         let clientName = l.client_name;
-        if ((!clientName || clientName === 'Cliente' || clientName.startsWith('Cliente ') || clientName === 'Você' || clientName.includes('@lid')) && l.dados_lead?.nome) {
+        const isBad = !clientName || clientName === 'Cliente' || clientName.startsWith('Cliente ') || clientName.includes('@lid') || /^\d{6,}$/.test(clientName) || stopWords.includes(clientName.toLowerCase());
+
+        if (isBad && l.dados_lead?.nome && !/^\d{6,}$/.test(l.dados_lead.nome) && !stopWords.includes(l.dados_lead.nome.toLowerCase())) {
           clientName = l.dados_lead.nome;
+        } else if (isBad) {
+          clientName = `Cliente (${l.remote_jid.replace(/@.*$/, '').slice(-6)})`;
         }
 
         return {
