@@ -540,6 +540,16 @@ class HistorySyncService {
       } catch (e) {}
     }
 
+    const ownNumber = Array.from(ownNumbers)[0] || '';
+    const isOwnNumber = (num) => {
+      if (!num) return false;
+      const d = String(num).replace(/\D/g, '');
+      if (ownNumbers.has(d) || ownNumbers.has(d.slice(2)) || (ownNumber && (d === ownNumber || d === ownNumber.slice(2)))) return true;
+      // Números conhecidos de atendimento da própria WN Decor / WarNat
+      if (d.endsWith('988000023') || d.endsWith('99435307')) return true;
+      return false;
+    };
+
     // 3. Busca agenda de contatos da Evolution API se houver instância
     const phonebookByName = new Map();
     const phonebookByFirstName = new Map();
@@ -631,7 +641,7 @@ class HistorySyncService {
         const cand = s.profile_telefone || currentData.telefone;
         if (cand && !cand.includes('@lid')) {
           const digits = cand.replace(/\D/g, '');
-          if (digits.length >= 10 && digits.length <= 13 && digits !== ownNumber) {
+          if (digits.length >= 10 && digits.length <= 13 && !isOwnNumber(digits)) {
             extractedPhone = digits;
           }
         }
@@ -678,7 +688,7 @@ class HistorySyncService {
           const pMatch = text.match(/(?:Telefone|Celular|Tel|Whats|Contato)?\s*(?:[:=-]\s*)?(?:\+?55\s?)?(?:\(?([1-9]{2})\)?\s?)?(?:9\s?[6-9]\d{3}[-\s]?\d{4}|[2-8]\d{3}[-\s]?\d{4})\b/i);
           if (pMatch && !text.toUpperCase().includes('CEP') && !text.includes('28351146242073')) {
             const digits = pMatch[0].replace(/\D/g, '');
-            if (digits.length >= 8 && digits.length <= 13 && digits !== ownNumber) {
+            if (digits.length >= 8 && digits.length <= 13 && !isOwnNumber(digits)) {
               extractedPhone = digits.startsWith('55') ? digits : (digits.length >= 10 ? `55${digits}` : digits);
             }
           }
@@ -765,7 +775,7 @@ class HistorySyncService {
       let finalPhone = extractedPhone || null;
       if (finalPhone) {
         finalPhone = finalPhone.replace(/\D/g, '');
-        if (finalPhone.length >= 14 || finalPhone.startsWith('28351') || ownNumbers.has(finalPhone) || ownNumbers.has(finalPhone.slice(2))) {
+        if (finalPhone.length >= 14 || finalPhone.startsWith('28351') || isOwnNumber(finalPhone)) {
           finalPhone = null;
         }
       }
