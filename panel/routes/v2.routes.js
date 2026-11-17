@@ -490,11 +490,43 @@ async function handleV2Routes(req, res, pathname, method, body) {
     // --------------------------------------------------------------------------
     // 3.1 SINCRONIZAÇÃO COMPLETA DE HISTÓRICO WHATSAPP (MODO 100% MANUAL)
     // --------------------------------------------------------------------------
+    if (pathname === '/api/v2/whatsapp/sync-status' && method === 'GET') {
+      const job = historySyncService.getJob(tenantId);
+      return sendJson(200, { success: true, job });
+    }
+
     if (pathname === '/api/v2/whatsapp/sync-history' && method === 'POST') {
       try {
         console.log(`[WhatsAppSync] Sincronização manual de histórico solicitada para tenant ${tenantId}`);
-        const result = await historySyncService.syncTenantHistory(tenantId);
-        return sendJson(200, result);
+        const currentJob = historySyncService.getJob(tenantId);
+        if (currentJob.status === 'running') {
+          return sendJson(200, {
+            success: true,
+            status: 'running',
+            message: 'Sincronização já em andamento em segundo plano.'
+          });
+        }
+
+        // Inicia em background
+        const syncPromise = historySyncService.syncTenantHistory(tenantId);
+
+        // Aguarda até 4 segundos: se terminar rápido responde logo, senão avisa que continua em background
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve('timeout'), 4000));
+        const raceResult = await Promise.race([syncPromise, timeoutPromise]);
+
+        if (raceResult !== 'timeout') {
+          return sendJson(200, {
+            success: true,
+            status: 'completed',
+            ...raceResult
+          });
+        } else {
+          return sendJson(200, {
+            success: true,
+            status: 'started',
+            message: 'Sincronização iniciada com sucesso em segundo plano.'
+          });
+        }
       } catch (err) {
         console.error(`[WhatsAppSync] Erro ao sincronizar histórico (${tenantId}):`, err.message);
         return sendJson(500, { success: false, error: err.message });

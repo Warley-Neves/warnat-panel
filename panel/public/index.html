@@ -7299,35 +7299,72 @@
       const btnAtendText = document.getElementById('btnSyncHistoryAtendText');
       const btnCrm = document.getElementById('btnSyncHistoryCrm');
 
-      if (btnSyncText) btnSyncText.textContent = 'Sincronizando histórico...';
-      if (btnAtendText) btnAtendText.textContent = 'Sincronizando...';
-      if (btnSync) btnSync.disabled = true;
-      if (btnCrm) btnCrm.disabled = true;
-
-      try {
-        const res = await apiFetch('/api/v2/whatsapp/sync-history', { method: 'POST' });
-        if (res.ok && res.data?.success) {
-          const totalChats = res.data.totalConversas || 0;
-          const totalMsgs = res.data.mensagensImportadas || 0;
-          alert(`Histórico sincronizado com sucesso!\n\n${totalChats} conversas identificadas.\n${totalMsgs} novas mensagens importadas.\n\nModo 100% MANUAL garantido.`);
-
-          if (typeof loadLeads === 'function') await loadLeads();
-          if (typeof loadAtendimentos === 'function') await loadAtendimentos();
-          if (typeof refreshDeskMessages === 'function' && typeof activeDeskSession !== 'undefined' && activeDeskSession) {
-            await refreshDeskMessages();
-          }
-        } else {
-          alert('Aviso na sincronização: ' + (res.data?.error || 'Não foi possível sincronizar o histórico completo.'));
-        }
-      } catch (err) {
-        alert('Erro ao sincronizar histórico: ' + err.message);
-      } finally {
+      const resetButtons = () => {
         isSyncingHistory = false;
         if (btnSyncText) btnSyncText.textContent = 'Sincronizar Histórico Completo';
         if (btnAtendText) btnAtendText.textContent = 'Sincronizar WhatsApp';
         if (btnSync) btnSync.disabled = false;
         if (btnCrm) btnCrm.disabled = false;
         if (window.lucide) lucide.createIcons();
+      };
+
+      const handleSuccess = async (data) => {
+        const totalChats = data?.totalConversas || data?.result?.totalConversas || 0;
+        const totalMsgs = data?.mensagensImportadas || data?.result?.mensagensImportadas || 0;
+        resetButtons();
+        alert(`Histórico sincronizado com sucesso!\n\n${totalChats} conversas identificadas.\n${totalMsgs} novas mensagens importadas.\n\nModo 100% MANUAL garantido.`);
+
+        if (typeof loadLeads === 'function') await loadLeads();
+        if (typeof loadAtendimentos === 'function') await loadAtendimentos();
+        if (typeof refreshDeskMessages === 'function' && typeof activeDeskSession !== 'undefined' && activeDeskSession) {
+          await refreshDeskMessages();
+        }
+      };
+
+      if (btnSyncText) btnSyncText.textContent = 'Sincronizando...';
+      if (btnAtendText) btnAtendText.textContent = 'Sincronizando...';
+      if (btnSync) btnSync.disabled = true;
+      if (btnCrm) btnCrm.disabled = true;
+
+      try {
+        const res = await apiFetch('/api/v2/whatsapp/sync-history', { method: 'POST' });
+
+        if (res.ok && (res.data?.status === 'completed' || res.data?.totalConversas !== undefined)) {
+          await handleSuccess(res.data);
+          return;
+        }
+
+        // Se está processando em background, faz polling a cada 2 segundos
+        let attempts = 0;
+        const maxAttempts = 25; // 50 segundos
+        const timer = setInterval(async () => {
+          attempts++;
+          try {
+            const stRes = await apiFetch('/api/v2/whatsapp/sync-status');
+            const job = stRes.data?.job;
+
+            if (job && job.status === 'completed') {
+              clearInterval(timer);
+              await handleSuccess(job.result);
+            } else if (job && job.status === 'error') {
+              clearInterval(timer);
+              resetButtons();
+              alert('Aviso na sincronização: ' + (job.error || 'Falha ao sincronizar.'));
+            } else if (attempts >= maxAttempts) {
+              clearInterval(timer);
+              resetButtons();
+              alert('A sincronização está sendo concluída em segundo plano. Atualizando lista de conversas...');
+              if (typeof loadLeads === 'function') await loadLeads();
+              if (typeof loadAtendimentos === 'function') await loadAtendimentos();
+            }
+          } catch (e) {
+            // Continua polling
+          }
+        }, 2000);
+
+      } catch (err) {
+        resetButtons();
+        alert('Erro ao sincronizar histórico: ' + err.message);
       }
     }
 
