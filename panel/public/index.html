@@ -1384,6 +1384,10 @@
                   <label class="block text-[11px] text-slate-400 mb-1.5">Texto da Mensagem de Fora do Expediente:</label>
                   <textarea id="aiMsgForaExpediente" rows="2" placeholder="Ex: Olá! Nosso atendimento no momento está fora do nosso horário de funcionamento. Registramos sua mensagem e retornaremos assim que iniciarmos nosso expediente!" class="w-full bg-dark-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-brand-500"></textarea>
                   <p class="text-[11px] text-slate-500 mt-1">Essa mensagem possui proteção contra repetição: é enviada no máximo 1 vez a cada 2 horas por contato para não sobrecarregar o cliente.</p>
+                  <div class="mt-2.5 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-start space-x-2">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+                    <p class="text-[11px] text-emerald-300 leading-relaxed"><strong>Retomada Automática no Início do Expediente:</strong> Quando o horário de atendimento começar, a automação enviará automaticamente uma mensagem para iniciar o atendimento <em>somente</em> com os clientes que enviaram mensagem fora do horário e receberam este aviso acima.</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -5054,6 +5058,7 @@
                     ${lead.has_unread ? '<span class="relative flex h-2.5 w-2.5 shrink-0" title="Mensagem nova não lida"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span></span>' : ''}
                     <h5 class="font-bold text-white text-xs leading-tight">${escapeHtml(lead.client_name)}</h5>
                     ${lead.has_unread ? '<span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">Não lida</span>' : ''}
+                    ${lead.pending_after_hours_followup && !isManual ? '<span title="A automação iniciará o atendimento assim que abrir o expediente" class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 shrink-0">🕒 Expediente</span>' : ''}
                   </div>
                   <p class="text-[11px] text-slate-400 font-mono mt-0.5">${formatLeadPhone(lead)}</p>
                 </div>
@@ -5119,6 +5124,7 @@
                   ${lead.has_unread ? '<span class="relative flex h-2.5 w-2.5 shrink-0" title="Mensagem nova não lida"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span></span>' : ''}
                   <span>${escapeHtml(lead.client_name)}</span>
                   ${lead.has_unread ? '<span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Nova</span>' : ''}
+                  ${lead.pending_after_hours_followup && !isManual ? '<span title="A automação iniciará o atendimento assim que abrir o expediente" class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">🕒 Retomada no expediente</span>' : ''}
                 </div>
                 <div class="text-xs text-slate-400 font-mono mt-0.5">${formatLeadPhone(lead)}</div>
               </td>

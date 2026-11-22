@@ -1567,17 +1567,42 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
       ...historyMessages
     ];
 
+    const isAfterHoursResume = Boolean((turn as any).isAfterHoursResume);
     const isFirstAssistantTurn = !historyMessages.some(m => m.role === 'assistant');
-    if (isFirstAssistantTurn) {
+    if (isFirstAssistantTurn && !isAfterHoursResume) {
       messagesToSend.push({
         role: 'system',
-        content: `LEMBRETE OBRIGATÓRIO (PRIMEIRA MENSAGEM): Esta é a sua primeira mensagem neste atendimento. Você DEVE se apresentar como a Nat, assistente virtual da ${tenant.nome_empresa || 'WarNat Tech'}, e avisar com simpatia que se o cliente preferir pode solicitar o atendimento por um atendente/especialista humano a qualquer momento.`
+        content: `LEMBRETE OBRIGATÓRIO (PRIMEIRA MENSAGEM): Esta é a sua primeira mensagem neste atendimento. Você DEVE se apresentar como a ${aiConfig.nome_assistente || 'Nat'}, assistente virtual da ${tenant.nome_empresa || 'WarNat Tech'}, e avisar com simpatia que se o cliente preferir pode solicitar o atendimento por um atendente/especialista humano a qualquer momento.`
       });
     }
 
-    const lastMsg = messagesToSend[messagesToSend.length - 1];
-    if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== userMessage) {
-      messagesToSend.push({ role: 'user', content: userMessage });
+    if (isAfterHoursResume) {
+      const brDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const brHour = brDate.getHours();
+      const saudacao = brHour < 12 ? 'Bom dia' : (brHour < 18 ? 'Boa tarde' : 'Boa noite');
+      const assistenteNome = aiConfig.nome_assistente || 'Nat';
+      const empresaNome = tenant.nome_empresa || 'nossa empresa';
+      const cleanName = (pushName && !/^\d+$/.test(String(pushName).trim())) ? String(pushName).trim() : '';
+
+      messagesToSend.push({
+        role: 'system',
+        content: `RETOMADA AUTOMÁTICA NO INÍCIO DO HORÁRIO DE ATENDIMENTO:
+Este cliente${cleanName ? ` (${cleanName})` : ''} enviou mensagem fora do horário de atendimento e recebeu nosso aviso automático de ausência.
+Agora nosso horário de atendimento acabou de iniciar (${saudacao}) e você está entrando em contato para iniciar o atendimento imediatamente!
+
+REGRAS OBRIGATÓRIAS PARA ESTA MENSAGEM DE RETOMADA:
+1. Cumprimente o cliente com simpatia usando "${saudacao}", apresente-se como ${assistenteNome} da ${empresaNome} e diga que já estamos em horário de atendimento retornando a mensagem que ele enviou fora do expediente.
+2. Analise a(s) mensagem(ns) que o cliente deixou fora do horário no histórico acima:
+   - Se ele já informou o que precisa (orçamento, serviço, produto, dúvida, agendamento), responda diretamente ao assunto e já inicie a condução do atendimento sem fazê-lo repetir o que já disse.
+   - Se ele mandou apenas uma saudação genérica (ex: "Oi", "Olá"), pergunte gentilmente como pode ajudá-lo agora.
+3. NUNCA diga que está fora do expediente — agora o expediente está ABERTO e funcionando normalmente!
+4. Seja natural, cordial, humano e objetivo.`
+      });
+    } else {
+      const lastMsg = messagesToSend[messagesToSend.length - 1];
+      if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== userMessage) {
+        messagesToSend.push({ role: 'user', content: userMessage });
+      }
     }
 
     console.log(`🤖 [AIEngine] Invocando OpenAI gpt-4o-mini para ${remoteJid} (${historyMessages.length} msgs histórico)...`);

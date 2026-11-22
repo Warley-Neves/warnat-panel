@@ -208,6 +208,14 @@ ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_unread ON chat_sessions(tenant_id, unread_count);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_unread ON chat_messages(session_id, role, is_read);
 
+-- Migrações seguras idempotentes para retomada automática no início do expediente (fora do horário)
+ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_after_hours_followup BOOLEAN DEFAULT false;
+ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS after_hours_notice_sent_at TIMESTAMPTZ;
+ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS after_hours_notice_msg_id VARCHAR(150);
+ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS after_hours_last_user_msg TEXT;
+ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS after_hours_followup_sent_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_after_hours_pending ON chat_sessions(pending_after_hours_followup) WHERE pending_after_hours_followup = true;
+
 -- ------------------------------------------------------------------------------
 -- ADAPTAÇÃO IDEMPOTENTE PARA TABELAS PRÉ-EXISTENTES
 -- ------------------------------------------------------------------------------

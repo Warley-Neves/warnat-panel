@@ -588,7 +588,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
         // Descongela todos os contatos que estavam com trava de modo manual global apenas se solicitado
         await query(
           `UPDATE chat_sessions 
-           SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
+           SET status_atendimento = 'ia_ativa', 
+               paused_until = NULL, 
+               etapa_funil = (CASE WHEN etapa_funil = 'manual' THEN 'qualificacao' ELSE etapa_funil END),
+               last_interaction = now()
            WHERE tenant_id = $1 AND (status_atendimento = 'manual' OR paused_until > now() + INTERVAL '1 day')`,
           [tenantId]
         );
@@ -821,7 +824,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
       if (reactivate_leads === true) {
         await query(
           `UPDATE chat_sessions 
-           SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
+           SET status_atendimento = 'ia_ativa', 
+               paused_until = NULL, 
+               etapa_funil = (CASE WHEN etapa_funil = 'manual' THEN 'qualificacao' ELSE etapa_funil END),
+               last_interaction = now()
            WHERE tenant_id = $1 AND (status_atendimento = 'manual' OR paused_until > now() + INTERVAL '1 day')`,
           [tenantId]
         );
@@ -873,6 +879,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
            (SELECT created_at FROM chat_messages m WHERE m.session_id = s.id ORDER BY m.created_at DESC LIMIT 1) as ultima_mensagem_time,
            COALESCE(s.unread_count, 0) as unread_count,
            s.last_read_at,
+           COALESCE(s.pending_after_hours_followup, false) as pending_after_hours_followup,
+           s.after_hours_notice_sent_at,
            (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id)::int as total_mensagens,
            (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id AND (m.media_type LIKE 'call_%' OR m.content LIKE '%[Chamada%'))::int as total_chamadas,
            (SELECT count(*) FROM chat_messages m WHERE m.session_id = s.id AND (m.media_type = 'audio' OR m.content LIKE '[audio]%'))::int as total_audios,
@@ -1057,10 +1065,13 @@ async function handleV2Routes(req, res, pathname, method, body) {
           });
         }
 
-        // Reativa a automação (IA) imediatamente: zera paused_until e seta ia_ativa
+        // Reativa a automação (IA) imediatamente: zera paused_until, seta ia_ativa e sai da coluna manual
         await query(
           `UPDATE chat_sessions 
-           SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
+           SET status_atendimento = 'ia_ativa', 
+               paused_until = NULL, 
+               etapa_funil = (CASE WHEN etapa_funil = 'manual' THEN 'qualificacao' ELSE etapa_funil END),
+               last_interaction = now()
            WHERE id = $1 AND tenant_id = $2`,
           [sessionId, tenantId]
         );
@@ -1071,11 +1082,17 @@ async function handleV2Routes(req, res, pathname, method, body) {
           message: 'Automação (IA) ativada para este contato! O assistente voltará a responder automaticamente.'
         });
       } else {
-        // Coloca o contato em Atendimento Manual (silencia a IA para este contato)
+        // Coloca o contato em Atendimento Manual (silencia a IA e cancela retomada automática fora do expediente)
         const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // Fixo em manual até operador reativar
         await query(
           `UPDATE chat_sessions 
-           SET status_atendimento = 'manual', paused_until = $1, etapa_funil = 'manual', atendente_id = $2, last_interaction = now()
+           SET status_atendimento = 'manual', 
+               paused_until = $1, 
+               etapa_funil = 'manual', 
+               atendente_id = $2, 
+               pending_after_hours_followup = false,
+               after_hours_last_user_msg = NULL,
+               last_interaction = now()
            WHERE id = $3 AND tenant_id = $4`,
           [farFuture, decodedUser.userId, sessionId, tenantId]
         );
@@ -1109,7 +1126,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
 
       const resUpdate = await query(
         `UPDATE chat_sessions 
-         SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
+         SET status_atendimento = 'ia_ativa', 
+             paused_until = NULL, 
+             etapa_funil = (CASE WHEN etapa_funil = 'manual' THEN 'qualificacao' ELSE etapa_funil END),
+             last_interaction = now()
          WHERE tenant_id = $1`,
         [tenantId]
       );
@@ -1130,17 +1150,34 @@ async function handleV2Routes(req, res, pathname, method, body) {
         return sendJson(400, { success: false, error: 'etapa_funil é obrigatória.' });
       }
 
+      const isManualStage = (etapa_funil === 'manual');
+      const isAutoStage = (etapa_funil === 'novo' || etapa_funil === 'qualificacao');
       const isClosing = (etapa_funil === 'concluido');
+      const shouldCancelFollowup = isManualStage || isClosing;
+      const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
       await query(
         `UPDATE chat_sessions
          SET etapa_funil = $1, 
-             atendente_id = COALESCE($2::uuid, atendente_id), 
-             closed_at = (CASE WHEN $3::boolean THEN now() ELSE NULL END),
-             locked_by = (CASE WHEN $3::boolean THEN NULL ELSE locked_by END),
-             locked_at = (CASE WHEN $3::boolean THEN NULL ELSE locked_at END),
+             status_atendimento = (CASE 
+               WHEN $2::boolean THEN 'manual'
+               WHEN $3::boolean THEN 'ia_ativa'
+               ELSE status_atendimento
+             END),
+             paused_until = (CASE
+               WHEN $2::boolean THEN $4::timestamptz
+               WHEN $3::boolean THEN NULL
+               ELSE paused_until
+             END),
+             pending_after_hours_followup = (CASE WHEN $5::boolean THEN false ELSE pending_after_hours_followup END),
+             after_hours_last_user_msg = (CASE WHEN $5::boolean THEN NULL ELSE after_hours_last_user_msg END),
+             atendente_id = COALESCE($6::uuid, atendente_id), 
+             closed_at = (CASE WHEN $7::boolean THEN now() ELSE NULL END),
+             locked_by = (CASE WHEN $7::boolean THEN NULL ELSE locked_by END),
+             locked_at = (CASE WHEN $7::boolean THEN NULL ELSE locked_at END),
              last_interaction = now()
-         WHERE id = $4 AND tenant_id = $5`,
-        [etapa_funil, atendente_id || null, isClosing, sessionId, tenantId]
+         WHERE id = $8 AND tenant_id = $9`,
+        [etapa_funil, isManualStage, isAutoStage, farFuture, shouldCancelFollowup, atendente_id || null, isClosing, sessionId, tenantId]
       );
 
       // Registra trilha de auditoria
@@ -1320,6 +1357,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
       await query(
         `UPDATE chat_sessions 
          SET status_atendimento = 'manual', paused_until = $1, etapa_funil = 'manual', atendente_id = $2,
+             pending_after_hours_followup = false, after_hours_last_user_msg = NULL,
              locked_by = $2, locked_at = now(), first_human_reply_at = COALESCE(first_human_reply_at, now()), last_interaction = now()
          WHERE id = $3 AND tenant_id = $4`,
         [farFuture, decodedUser.userId, sessionId, tenantId]
@@ -1363,7 +1401,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
       const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
       await query(
         `UPDATE chat_sessions
-         SET locked_by = $1, locked_at = now(), atendente_id = $1, status_atendimento = 'manual', paused_until = $2, last_interaction = now()
+         SET locked_by = $1, locked_at = now(), atendente_id = $1, status_atendimento = 'manual', paused_until = $2,
+             pending_after_hours_followup = false, after_hours_last_user_msg = NULL, last_interaction = now()
          WHERE id = $3 AND tenant_id = $4`,
         [decodedUser.userId, farFuture, sessionId, tenantId]
       );
@@ -1436,7 +1475,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
       await query(
         `UPDATE chat_sessions
          SET atendente_id = $1::uuid, department_id = $2::uuid, locked_by = $1::uuid, locked_at = CASE WHEN $1::uuid IS NOT NULL THEN now() ELSE NULL END,
-             status_atendimento = 'manual', paused_until = $3, last_interaction = now()
+             status_atendimento = 'manual', paused_until = $3, pending_after_hours_followup = false, after_hours_last_user_msg = NULL, last_interaction = now()
          WHERE id = $4 AND tenant_id = $5`,
         [targetUserId || null, targetDepartmentId || null, farFuture, sessionId, tenantId]
       );
@@ -1740,6 +1779,7 @@ async function handleV2Routes(req, res, pathname, method, body) {
       await query(
         `UPDATE chat_sessions 
          SET status_atendimento = 'manual', paused_until = $1, etapa_funil = 'manual', atendente_id = $2,
+             pending_after_hours_followup = false, after_hours_last_user_msg = NULL,
              locked_by = $2, locked_at = now(), first_human_reply_at = COALESCE(first_human_reply_at, now()), last_interaction = now()
          WHERE id = $3 AND tenant_id = $4`,
         [farFuture, decodedUser.userId, sessionId, tenantId]

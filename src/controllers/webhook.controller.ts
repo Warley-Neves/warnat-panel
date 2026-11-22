@@ -37,14 +37,15 @@ export class WebhookController {
   /**
    * Valida se a automação está autorizada a responder com base no dia e horário configurados (Horário de Brasília)
    */
-  public checkAutomationOperatingHours(aiConfig: any): { isOpen: boolean; currentDay?: string; currentTime?: string; [k: string]: any } {
+  public checkAutomationOperatingHours(aiConfig: any, referenceDate: Date | string | null = null): { isOpen: boolean; currentDay?: string; currentTime?: string; [k: string]: any } {
     if (!aiConfig) return { isOpen: true, reason: 'no_config_fallback' };
 
     if (aiConfig.automacao_horario_ativo === false) {
       return { isOpen: true, reason: '24_7_always_active' };
     }
 
-    const brDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const baseDate = referenceDate ? new Date(referenceDate) : new Date();
+    const brDate = new Date(baseDate.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
     const DAYS_MAP = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
     const currentDayName = DAYS_MAP[brDate.getDay()];
     const hours = String(brDate.getHours()).padStart(2, '0');
@@ -69,7 +70,9 @@ export class WebhookController {
     const fim = aiConfig.automacao_horario_fim || aiConfig.regras_agendamento?.horario_fim || '18:00';
 
     const isDayAllowed = activeDays.includes(currentDayName);
-    const isTimeAllowed = currentTime >= inicio && currentTime <= fim;
+    const isTimeAllowed = inicio <= fim
+      ? (currentTime >= inicio && currentTime <= fim)
+      : (currentTime >= inicio || currentTime <= fim);
 
     return {
       isOpen: isDayAllowed && isTimeAllowed,
@@ -375,12 +378,14 @@ export class WebhookController {
       // Atualiza ou cria sessão ativando o modo pausa humana
       const sessionRes = await query<{ id: string }>(
         `INSERT INTO chat_sessions (
-           tenant_id, remote_jid, status_atendimento, paused_until, last_interaction, first_human_reply_at
-         ) VALUES ($1, $2, 'pausa_humana', $3, NOW(), NOW())
+           tenant_id, remote_jid, status_atendimento, paused_until, pending_after_hours_followup, after_hours_last_user_msg, last_interaction, first_human_reply_at
+         ) VALUES ($1, $2, 'pausa_humana', $3, false, NULL, NOW(), NOW())
          ON CONFLICT (tenant_id, remote_jid) 
          DO UPDATE SET 
            status_atendimento = 'pausa_humana',
            paused_until = $3,
+           pending_after_hours_followup = false,
+           after_hours_last_user_msg = NULL,
            last_interaction = NOW(),
            first_human_reply_at = COALESCE(chat_sessions.first_human_reply_at, NOW())
          RETURNING id;`,
@@ -414,20 +419,20 @@ export class WebhookController {
     // ============================================================================
     // 2. RECUPERA OU CRIA A SESSÃO DO CLIENTE NO BANCO DE DADOS
     // ============================================================================
-    let sessionRes = await query<{ id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string }>(
-      `SELECT id, status_atendimento, paused_until, etapa_funil 
+    let sessionRes = await query<{ id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string; pending_after_hours_followup?: boolean; after_hours_notice_sent_at?: Date | null }>(
+      `SELECT id, status_atendimento, paused_until, etapa_funil, pending_after_hours_followup, after_hours_notice_sent_at 
        FROM chat_sessions 
        WHERE tenant_id = $1 AND remote_jid = $2;`,
       [tenantId, effectiveJid]
     );
 
-    let session: { id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string };
+    let session: { id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string; pending_after_hours_followup?: boolean; after_hours_notice_sent_at?: Date | null };
 
     if (sessionRes.rows.length === 0) {
-      const newSession = await query<{ id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string }>(
+      const newSession = await query<{ id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string; pending_after_hours_followup?: boolean; after_hours_notice_sent_at?: Date | null }>(
         `INSERT INTO chat_sessions (tenant_id, remote_jid, status_atendimento, etapa_funil, last_interaction)
          VALUES ($1, $2, 'ia_ativa', 'novo', NOW())
-         RETURNING id, status_atendimento, paused_until, etapa_funil;`,
+         RETURNING id, status_atendimento, paused_until, etapa_funil, pending_after_hours_followup, after_hours_notice_sent_at;`,
         [tenantId, effectiveJid]
       );
       session = newSession.rows[0];
@@ -611,9 +616,17 @@ export class WebhookController {
       console.log(`[Webhook] Fora do expediente da automação para o Tenant ${tenantId} (${scheduleCheck.currentDay} ${scheduleCheck.currentTime}).`);
 
       const shouldSendNotice = aiConfig.automacao_enviar_msg_fora_expediente !== false;
+      let noticeDispatched = false;
+      let followupQueued = false;
+
       if (shouldSendNotice) {
         const cooldownKey = `outside_notice:${tenantId}:${effectiveJid}`;
-        const alreadySent = await (messageCache as any).has(cooldownKey);
+        const recentlyNotifiedInDb = Boolean(
+          session.pending_after_hours_followup &&
+          session.after_hours_notice_sent_at &&
+          (Date.now() - new Date(session.after_hours_notice_sent_at).getTime()) < (2 * 60 * 60 * 1000)
+        );
+        const alreadySent = (await (messageCache as any).has(cooldownKey)) || recentlyNotifiedInDb;
 
         if (!alreadySent) {
           const defaultOutsideMsg = 'Olá! Nosso atendimento no momento está fora do nosso horário de funcionamento. Registramos sua mensagem e responderemos assim que retornarmos!';
@@ -623,18 +636,51 @@ export class WebhookController {
 
           try {
             const sendRes = await evolutionService.sendTextMessage(instanceName, effectiveJid, outsideMsg);
-            if (sendRes?.messageId) {
-              await messageCache.setBotSent(sendRes.messageId, 120);
+            const wasDelivered = Boolean(sendRes && (sendRes as any).success === true && !(sendRes as any).simulated);
+
+            if (wasDelivered) {
+              if (sendRes.messageId) {
+                await messageCache.setBotSent(sendRes.messageId, 120);
+                await query(
+                  `INSERT INTO chat_messages (session_id, tenant_id, role, content, message_id)
+                   VALUES ($1, $2, 'assistant', $3, $4);`,
+                  [session.id, tenantId, outsideMsg, sendRes.messageId]
+                );
+              }
+              await (messageCache as any).set(cooldownKey, 7200);
+
               await query(
-                `INSERT INTO chat_messages (session_id, tenant_id, role, content, message_id)
-                 VALUES ($1, $2, 'assistant', $3, $4);`,
-                [session.id, tenantId, outsideMsg, sendRes.messageId]
+                `UPDATE chat_sessions
+                 SET pending_after_hours_followup = true,
+                     after_hours_notice_sent_at = NOW(),
+                     after_hours_notice_msg_id = $1,
+                     after_hours_last_user_msg = CASE
+                       WHEN pending_after_hours_followup = true AND after_hours_last_user_msg IS NOT NULL AND after_hours_last_user_msg <> ''
+                         THEN after_hours_last_user_msg || E'\n' || $2
+                       ELSE $2
+                     END
+                 WHERE id = $3 AND tenant_id = $4;`,
+                [sendRes.messageId || null, text.trim(), session.id, tenantId]
               );
+
+              noticeDispatched = true;
+              followupQueued = true;
             }
-            await (messageCache as any).set(cooldownKey, 7200);
           } catch (sendErr: any) {
             console.warn('[Webhook] Falha ao enviar mensagem de fora do expediente:', sendErr.message);
           }
+        } else if (session.pending_after_hours_followup) {
+          await query(
+            `UPDATE chat_sessions
+             SET after_hours_last_user_msg = CASE
+               WHEN after_hours_last_user_msg IS NOT NULL AND after_hours_last_user_msg <> ''
+                 THEN after_hours_last_user_msg || E'\n' || $1
+               ELSE $1
+             END
+             WHERE id = $2 AND tenant_id = $3 AND pending_after_hours_followup = true;`,
+            [text.trim(), session.id, tenantId]
+          );
+          followupQueued = true;
         }
       }
 
@@ -645,8 +691,20 @@ export class WebhookController {
         remoteJid: effectiveJid,
         currentDay: scheduleCheck.currentDay,
         currentTime: scheduleCheck.currentTime,
+        noticeDispatched,
+        followupQueued,
         reason: 'outside_business_hours'
       };
+    }
+
+    if (session.pending_after_hours_followup) {
+      await query(
+        `UPDATE chat_sessions
+         SET pending_after_hours_followup = false, after_hours_last_user_msg = NULL
+         WHERE id = $1 AND tenant_id = $2;`,
+        [session.id, tenantId]
+      );
+      session.pending_after_hours_followup = false;
     }
 
     // Se for exclusivamente foto ou áudio sem transcrição, envia o aviso amigável

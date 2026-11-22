@@ -1189,6 +1189,7 @@ const server = http.createServer(async (req, res) => {
 
 const { runMigration } = require('../database/migrator');
 const { seedWarNatTech } = require('../database/seed_warnat');
+const afterHoursFollowupService = require('../services/after-hours-followup.service');
 
 // Tratamento global de exceções para imunidade a interrupção por crashes assíncronos
 process.on('uncaughtException', (err) => {
@@ -1212,9 +1213,15 @@ server.listen(PORT, '0.0.0.0', () => {
 
   // Executa migração idempotente e seed da WarNat Tech em background ao iniciar o servidor
   runMigration()
-    .then(() => {
+    .then(async () => {
       console.log('✅ [Database] Schema multi-tenant (8 tabelas) sincronizado com sucesso.');
-      return seedWarNatTech();
+      try {
+        await seedWarNatTech();
+      } catch (seedErr) {
+        console.warn('⚠️ [Database Warning] Seed:', seedErr.message);
+      }
+      // Inicia monitor de retomada automática no início do horário de atendimento
+      afterHoursFollowupService.start(30000);
     })
     .catch((err) => console.warn('⚠️ [Database Warning] Falha na auto-migração/seed de inicialização:', err.message));
 });
