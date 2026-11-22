@@ -200,10 +200,14 @@ export class WebhookController {
     // 2. ATENDIMENTO E LOG DE CHAMADAS DE VOZ E VÍDEO NO WHATSAPP
     // ============================================================================
     if (eventName === 'call') {
-      const callData = payload.data || {};
+      const callData: any = payload.data || {};
       const callStatus = callData.status;
       const isVideo = !!callData.isVideo;
-      const callerJid = callData.from || callData.id;
+      const rawCallerJid = callData.from || callData.id;
+      const altCallerPn = callData.fromPn || callData.callerPn || callData.remoteJidAlt;
+      const callerJid = (rawCallerJid && String(rawCallerJid).includes('@lid') && altCallerPn && String(altCallerPn).includes('@s.whatsapp.net'))
+        ? altCallerPn
+        : rawCallerJid;
 
       if (!callerJid || callerJid.includes('@g.us')) {
         return { handled: true, action: 'call_ignored' };
@@ -250,7 +254,7 @@ export class WebhookController {
           `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, etapa_funil, paused_until, last_interaction)
            VALUES ($1, $2, $3, $4, $5, $6, NOW())
            RETURNING id, status_atendimento, paused_until, etapa_funil;`,
-          [tenantId, effectiveJid, 'Cliente Chamada', initialStatus, initialStage, initialPausedUntil]
+          [tenantId, effectiveJid, null, initialStatus, initialStage, initialPausedUntil]
         );
         session = newSession.rows[0];
       } else {
@@ -339,7 +343,9 @@ export class WebhookController {
       return { handled: false, reason: 'dados_de_mensagem_ausentes' };
     }
 
-    const { remoteJid, fromMe, id: messageId, remoteJidAlt } = data.key;
+    const keyAny: any = data.key;
+    const { remoteJid, fromMe, id: messageId } = data.key;
+    const remoteJidAlt = keyAny.remoteJidAlt || keyAny.senderPn || keyAny.participantAlt || (keyAny.participant && String(keyAny.participant).includes('@s.whatsapp.net') ? keyAny.participant : null);
 
     // Ignora grupos e transmissões de status
     if (!remoteJid || remoteJid.includes('@g.us') || remoteJid === 'status@broadcast') {
@@ -348,12 +354,21 @@ export class WebhookController {
 
     // Normaliza LID do WhatsApp para JID real quando presente
     let effectiveJid = remoteJid;
-    if (remoteJid.includes('@lid') && remoteJidAlt && remoteJidAlt.includes('@s.whatsapp.net')) {
+    if (remoteJid.includes('@lid') && remoteJidAlt && String(remoteJidAlt).includes('@s.whatsapp.net')) {
       effectiveJid = remoteJidAlt;
     }
 
     const { tenantId, instanceName } = await this.resolveTenantAndSession(payload);
-    const pushName = data.pushName || '';
+    const sanitizePushName = (raw?: string | null): string | null => {
+      if (!raw || typeof raw !== 'string') return null;
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
+      const lower = trimmed.toLowerCase();
+      if (['você', 'voce', 'eu', 'cliente', 'null', 'undefined'].includes(lower)) return null;
+      if (trimmed.includes('@lid') || /^\+?[\d\s().-]+$/.test(trimmed)) return null;
+      return trimmed;
+    };
+    const pushName = fromMe ? null : sanitizePushName(data.pushName);
 
     // ============================================================================
     // 1. TRAVA DE AUTO-LOOP E DETECÇÃO DE OPERADOR HUMANO (fromMe: true)
@@ -453,7 +468,7 @@ export class WebhookController {
       session = sessionRes.rows[0];
       await query(
         `UPDATE chat_sessions 
-         SET last_interaction = NOW(), client_name = COALESCE($1, client_name)
+         SET last_interaction = NOW(), client_name = COALESCE($1, NULLIF(TRIM(client_name), ''))
          WHERE id = $2 AND tenant_id = $3;`,
         [pushName || null, session.id, tenantId]
       );
@@ -751,7 +766,7 @@ export class WebhookController {
         instanceName,
         sessionId: session.id,
         remoteJid: effectiveJid,
-        pushName,
+        pushName: pushName || '',
         messages: [text.trim()],
         isAudio: isAudioMessage,
         timer: null

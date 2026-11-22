@@ -847,7 +847,9 @@ async function handleV2Routes(req, res, pathname, method, body) {
         `SELECT 
            s.id, 
            s.remote_jid, 
-           COALESCE(s.client_name, c.nome, s.dados_lead->>'nome', 'Cliente') as client_name, 
+           COALESCE(NULLIF(TRIM(s.client_name), ''), NULLIF(TRIM(c.nome), ''), NULLIF(TRIM(s.dados_lead->>'nome'), '')) as client_name,
+           s.client_name as raw_client_name,
+           c.nome as customer_name,
            s.status_atendimento, 
            COALESCE(s.etapa_funil, 'novo') as etapa_funil,
            s.atendente_id,
@@ -903,30 +905,82 @@ async function handleV2Routes(req, res, pathname, method, body) {
         const is_manual = l.is_paused || l.status_atendimento === 'manual' || l.status_atendimento === 'pausa_humana' || l.etapa_funil === 'manual';
         const is_lid = l.remote_jid ? l.remote_jid.includes('@lid') : false;
 
-        let realPhone = null;
-        const candPhone = l.customer_phone || l.dados_lead?.telefone || l.dados_lead?.whatsapp;
-        if (candPhone && !candPhone.includes('@lid')) {
-          const digits = candPhone.replace(/\D/g, '');
-          if (digits.length >= 10 && digits.length <= 13 && !digits.startsWith('28351')) {
-            realPhone = digits;
+        const extractValidPhone = (val) => {
+          if (!val) return null;
+          const str = String(val);
+          if (str.includes('@lid')) return null;
+          const digits = str.replace(/@.*$/, '').replace(/\D/g, '');
+          if (
+            digits.length >= 10 &&
+            digits.length <= 15 &&
+            !digits.startsWith('28351') &&
+            !digits.endsWith('988000023') &&
+            !digits.endsWith('99435307') &&
+            !/^0+$/.test(digits)
+          ) {
+            return digits;
           }
-        } else if (!is_lid && l.remote_jid) {
-          realPhone = l.remote_jid.replace(/@.*$/, '').replace(/\D/g, '');
+          return null;
+        };
+
+        const formatPhoneDisplay = (digits) => {
+          if (!digits) return null;
+          if (digits.startsWith('55') && digits.length === 13) {
+            return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+          }
+          if (digits.startsWith('55') && digits.length === 12) {
+            return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`;
+          }
+          if (!digits.startsWith('55') && digits.length === 11 && digits[2] === '9' && Number(digits.slice(0, 2)) >= 11) {
+            return `+55 (${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+          }
+          if (!digits.startsWith('55') && digits.length === 10 && Number(digits.slice(0, 2)) >= 11) {
+            return `+55 (${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+          }
+          return `+${digits}`;
+        };
+
+        // Prioriza o número real do JID WhatsApp quando não for LID; caso contrário usa telefone enriquecido válido
+        let realPhone = null;
+        if (!is_lid && l.remote_jid) {
+          realPhone = extractValidPhone(l.remote_jid);
+        }
+        if (!realPhone) {
+          realPhone =
+            extractValidPhone(l.customer_phone) ||
+            extractValidPhone(l.dados_lead?.telefone) ||
+            extractValidPhone(l.dados_lead?.whatsapp) ||
+            null;
         }
 
-        if (realPhone && (realPhone.endsWith('988000023') || realPhone.endsWith('99435307'))) {
-          realPhone = null;
-        }
+        const stopWords = ['tudo', 'como', 'amigo', 'amiga', 'cliente', 'voce', 'você', 'eu', 'atendente', 'pessoal', 'querida', 'querido', 'linda', 'lindo', 'flor', 'meninas', 'moça', 'moca', 'moço', 'moco', 'ola', 'olá', 'oi', 'null', 'undefined'];
+        const extractRealName = (val) => {
+          if (!val || typeof val !== 'string') return null;
+          const trimmed = val.trim();
+          if (!trimmed) return null;
+          const lower = trimmed.toLowerCase();
+          if (
+            lower === 'cliente' ||
+            lower.startsWith('cliente ') ||
+            lower.startsWith('cliente(') ||
+            trimmed.includes('@lid') ||
+            /^\+?[\d\s().-]+$/.test(trimmed) ||
+            stopWords.includes(lower)
+          ) {
+            return null;
+          }
+          return trimmed;
+        };
 
-        const stopWords = ['tudo', 'como', 'amigo', 'amiga', 'cliente', 'voce', 'você', 'pessoal', 'querida', 'querido', 'linda', 'lindo', 'flor', 'meninas', 'moça', 'moca', 'moço', 'moco', 'ola', 'olá', 'oi', 'null', 'undefined'];
-        let clientName = l.client_name;
-        const isBad = !clientName || clientName === 'Cliente' || clientName.startsWith('Cliente ') || clientName.includes('@lid') || /^\d{6,}$/.test(clientName) || stopWords.includes(clientName.toLowerCase());
+        const resolvedName =
+          extractRealName(l.raw_client_name) ||
+          extractRealName(l.customer_name) ||
+          extractRealName(l.dados_lead?.nome) ||
+          extractRealName(l.client_name) ||
+          null;
 
-        if (isBad && l.dados_lead?.nome && !/^\d{6,}$/.test(l.dados_lead.nome) && !stopWords.includes(l.dados_lead.nome.toLowerCase())) {
-          clientName = l.dados_lead.nome;
-        } else if (isBad) {
-          clientName = `Cliente (${l.remote_jid.replace(/@.*$/, '').slice(-6)})`;
-        }
+        const formattedPhone = formatPhoneDisplay(realPhone);
+        const clientName = resolvedName || formattedPhone || '';
 
         // Lógica precisa de Mensagens Não Lidas (Bolinha Verde)
         // Não lida se a última mensagem foi enviada pelo cliente (role = 'user') e ainda não foi aberta/respondida
@@ -938,8 +992,10 @@ async function handleV2Routes(req, res, pathname, method, body) {
         return {
           ...l,
           client_name: clientName,
+          nome_cliente: resolvedName,
           telefone_real: realPhone,
           telefone: realPhone,
+          telefone_formatado: formattedPhone,
           is_lid,
           is_manual,
           has_unread,
@@ -1973,8 +2029,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
            a.google_event_id,
            a.google_event_link,
            a.created_at,
-           COALESCE(c.nome, s.client_name, 'Cliente') as client_name,
-           COALESCE(c.telefone, REPLACE(REPLACE(a.remote_jid, '@s.whatsapp.net', ''), '@c.us', '')) as telefone
+           COALESCE(NULLIF(TRIM(c.nome), ''), NULLIF(TRIM(s.client_name), ''), NULLIF(TRIM(s.dados_lead->>'nome'), '')) as client_name,
+           COALESCE(NULLIF(TRIM(c.telefone), ''), CASE WHEN a.remote_jid NOT LIKE '%@lid%' THEN REPLACE(REPLACE(a.remote_jid, '@s.whatsapp.net', ''), '@c.us', '') ELSE NULL END) as telefone
          FROM appointments a
          LEFT JOIN customer_profiles c ON c.tenant_id = a.tenant_id AND c.remote_jid = a.remote_jid
          LEFT JOIN chat_sessions s ON s.tenant_id = a.tenant_id AND s.remote_jid = a.remote_jid
