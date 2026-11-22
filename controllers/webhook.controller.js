@@ -237,11 +237,12 @@ class WebhookController {
       }
 
       // Se o contato estiver em pausa humana ou manual
-      const isContactManual = (
+      const isContactManual = Boolean(
         session.status_atendimento === 'manual' ||
         session.status_atendimento === 'pausa_humana' ||
         session.status_atendimento === 'transbordado' ||
-        (session.paused_until && new Date(session.paused_until) > new Date())
+        session.etapa_funil === 'manual' ||
+        (session.paused_until && new Date(session.paused_until).getTime() > Date.now())
       );
       if (isContactManual) {
         console.log(`[Webhook] Contato ${effectiveJid} em atendimento manual. Chamada registrada.`);
@@ -383,7 +384,7 @@ class WebhookController {
     // 2. OBTÉM OU CRIA A SESSÃO DO CLIENTE NO BANCO DE DADOS
     // ============================================================================
     let sessionRes = await query(
-      `SELECT id, status_atendimento, paused_until, dados_lead 
+      `SELECT id, status_atendimento, paused_until, etapa_funil, dados_lead 
        FROM chat_sessions 
        WHERE tenant_id = $1 AND remote_jid = $2`,
       [tenantId, effectiveJid]
@@ -581,28 +582,17 @@ class WebhookController {
       };
     }
 
-    // Se o tenant está em modo automação, descongela automaticamente contatos bloqueados por trava manual antiga de 100 anos
-    const isFarFuturePause = session.paused_until && (new Date(session.paused_until).getTime() > Date.now() + 24 * 60 * 60 * 1000);
-    if (tenantModo === 'automacao' && (isFarFuturePause || session.status_atendimento === 'manual')) {
-      await query(
-        `UPDATE chat_sessions 
-         SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
-         WHERE id = $1`,
-        [session.id]
-      );
-      session.status_atendimento = 'ia_ativa';
-      session.paused_until = null;
-    }
-
-    // B) Checa se este contato específico foi colocado em atendimento manual recente por operador humano (pausa pontual < 24h)
-    const isContactManual = (
+    // B) Checa se este contato específico está em atendimento manual ou com IA pausada
+    const isContactManual = Boolean(
+      session.status_atendimento === 'manual' ||
       session.status_atendimento === 'pausa_humana' ||
       session.status_atendimento === 'transbordado' ||
-      (session.paused_until && new Date(session.paused_until) > new Date())
+      session.etapa_funil === 'manual' ||
+      (session.paused_until && new Date(session.paused_until).getTime() > Date.now())
     );
 
     if (isContactManual) {
-      console.log(`[Webhook] Contato ${effectiveJid} em ATENDIMENTO MANUAL EXCLUSIVO. Automação silenciada (apenas operador humano responde).`);
+      console.log(`[Webhook] Contato ${effectiveJid} em ATENDIMENTO MANUAL EXCLUSIVO (status: ${session.status_atendimento}, etapa: ${session.etapa_funil}, paused_until: ${session.paused_until}). Automação 100% silenciada.`);
       return {
         handled: true,
         action: 'message_saved_human_in_control',

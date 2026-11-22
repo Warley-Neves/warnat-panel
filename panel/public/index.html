@@ -1428,13 +1428,13 @@
             <!-- CHECKBOX REATIVAR CONTATOS EXISTENTES -->
             <div class="p-3.5 bg-brand-500/10 rounded-xl border border-brand-500/20">
               <label class="flex items-start space-x-3 cursor-pointer">
-                <input type="checkbox" id="aiReativarLeads" checked class="mt-0.5 rounded border-slate-700 text-brand-600 focus:ring-0">
+                <input type="checkbox" id="aiReativarLeads" class="mt-0.5 rounded border-slate-700 text-brand-600 focus:ring-0">
                 <div>
                   <span class="text-xs font-bold text-brand-300 flex items-center space-x-1.5">
                     <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
                     <span>Reativar automação para todas as conversas anteriores ao salvar</span>
                   </span>
-                  <p class="text-[11px] text-slate-400 mt-0.5">Se marcado, todos os clientes que estavam parados no modo manual voltarão a ser atendidos pela IA automaticamente dentro dos horários acima.</p>
+                  <p class="text-[11px] text-slate-400 mt-0.5">Opcional: Marque apenas se desejar reativar em massa todos os clientes do CRM para a IA de uma só vez.</p>
                 </div>
               </label>
             </div>
@@ -7898,6 +7898,10 @@
             document.getElementById('aiRegrasAgendamento').value = r.politica_agendamento || r.politica_visita_gratuita || r.descricao || '';
           }
 
+          if (document.getElementById('aiReativarLeads')) {
+            document.getElementById('aiReativarLeads').checked = false;
+          }
+
           toggleAiHorarioFields();
           toggleForaExpedienteTextarea();
           updateOperatingStatusBadge();
@@ -7919,7 +7923,7 @@
       const isProgramado = document.getElementById('aiHorarioTipoProgramado')?.checked ?? true;
       const enviarForaExp = document.getElementById('aiEnviarMsgForaExpediente')?.checked ?? true;
       const msgForaExp = document.getElementById('aiMsgForaExpediente')?.value?.trim() || '';
-      const reativarLeads = document.getElementById('aiReativarLeads')?.checked ?? true;
+      const reativarLeads = document.getElementById('aiReativarLeads')?.checked === true;
 
       const payload = {
         modo_atendimento: selectedModo,

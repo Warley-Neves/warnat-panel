@@ -265,11 +265,12 @@ export class WebhookController {
         return { handled: true, action: 'call_logged_manual_mode', isVideo: isVideo as any, callerJid: effectiveJid } as any;
       }
 
-      const isContactManual = (
+      const isContactManual = Boolean(
         session.status_atendimento === 'manual' ||
         session.status_atendimento === 'pausa_humana' ||
         session.status_atendimento === 'transbordado' ||
-        (session.paused_until && new Date(session.paused_until) > new Date())
+        (session as any).etapa_funil === 'manual' ||
+        (session.paused_until && new Date(session.paused_until).getTime() > Date.now())
       );
       if (isContactManual) {
         console.log(`[Webhook] Contato ${effectiveJid} em atendimento manual. Chamada registrada.`);
@@ -413,20 +414,20 @@ export class WebhookController {
     // ============================================================================
     // 2. RECUPERA OU CRIA A SESSÃO DO CLIENTE NO BANCO DE DADOS
     // ============================================================================
-    let sessionRes = await query<{ id: string; status_atendimento: string; paused_until: Date | null }>(
-      `SELECT id, status_atendimento, paused_until 
+    let sessionRes = await query<{ id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string }>(
+      `SELECT id, status_atendimento, paused_until, etapa_funil 
        FROM chat_sessions 
        WHERE tenant_id = $1 AND remote_jid = $2;`,
       [tenantId, effectiveJid]
     );
 
-    let session: { id: string; status_atendimento: string; paused_until: Date | null };
+    let session: { id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string };
 
     if (sessionRes.rows.length === 0) {
-      const newSession = await query<{ id: string; status_atendimento: string; paused_until: Date | null }>(
-        `INSERT INTO chat_sessions (tenant_id, remote_jid, status_atendimento, last_interaction)
-         VALUES ($1, $2, 'ia_ativa', NOW())
-         RETURNING id, status_atendimento, paused_until;`,
+      const newSession = await query<{ id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string }>(
+        `INSERT INTO chat_sessions (tenant_id, remote_jid, status_atendimento, etapa_funil, last_interaction)
+         VALUES ($1, $2, 'ia_ativa', 'novo', NOW())
+         RETURNING id, status_atendimento, paused_until, etapa_funil;`,
         [tenantId, effectiveJid]
       );
       session = newSession.rows[0];
@@ -584,28 +585,17 @@ export class WebhookController {
       };
     }
 
-    // Se o tenant está em modo automação, descongela automaticamente contatos bloqueados por trava manual de 100 anos
-    const isFarFuturePause = session.paused_until && (new Date(session.paused_until).getTime() > Date.now() + 24 * 60 * 60 * 1000);
-    if (tenantModo === 'automacao' && (isFarFuturePause || session.status_atendimento === 'manual')) {
-      await query(
-        `UPDATE chat_sessions 
-         SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = NOW()
-         WHERE id = $1;`,
-        [session.id]
-      );
-      session.status_atendimento = 'ia_ativa';
-      session.paused_until = null;
-    }
-
-    // B) Checa se este contato específico está em atendimento manual recente por operador humano (pausa pontual < 24h)
-    const isContactManual = (
+    // B) Checa se este contato específico está em atendimento manual ou com IA pausada
+    const isContactManual = Boolean(
+      session.status_atendimento === 'manual' ||
       session.status_atendimento === 'pausa_humana' ||
       session.status_atendimento === 'transbordado' ||
-      (session.paused_until && new Date(session.paused_until) > new Date())
+      session.etapa_funil === 'manual' ||
+      (session.paused_until && new Date(session.paused_until).getTime() > Date.now())
     );
 
     if (isContactManual) {
-      console.log(`🛑 [Webhook] Contato ${effectiveJid} em ATENDIMENTO MANUAL EXCLUSIVO. Automação silenciada.`);
+      console.log(`🛑 [Webhook] Contato ${effectiveJid} em ATENDIMENTO MANUAL EXCLUSIVO (status: ${session.status_atendimento}, etapa: ${session.etapa_funil}, paused_until: ${session.paused_until}). Automação 100% silenciada.`);
       return {
         handled: true,
         action: 'message_saved_human_in_control',

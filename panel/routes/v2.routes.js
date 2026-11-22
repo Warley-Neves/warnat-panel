@@ -584,8 +584,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
         [modo_atendimento, tenantId]
       );
 
-      if (modo_atendimento === 'automacao') {
-        // Descongela todos os contatos que estavam com trava de modo manual global
+      if (modo_atendimento === 'automacao' && body.reactivate_all) {
+        // Descongela todos os contatos que estavam com trava de modo manual global apenas se solicitado
         await query(
           `UPDATE chat_sessions 
            SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
@@ -817,8 +817,8 @@ async function handleV2Routes(req, res, pathname, method, body) {
         ]
       );
 
-      // Se modo automação foi selecionado ou reativação solicitada, descongela contatos que estavam em manual global
-      if (modo_atendimento === 'automacao' || reactivate_leads) {
+      // Apenas descongela contatos em massa se o usuário marcar explicitamente a opção reactivate_leads no formulário
+      if (reactivate_leads === true) {
         await query(
           `UPDATE chat_sessions 
            SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
