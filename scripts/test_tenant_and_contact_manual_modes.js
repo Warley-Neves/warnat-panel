@@ -31,11 +31,11 @@ async function runTenantModeValidation() {
 
   try {
     // --------------------------------------------------------------------------
-    // CENÁRIO 1: Tenant em modo "automacao" (Padrão)
+    // CENÁRIO 1: Tenant em modo "automacao" (Padrão 24h para teste)
     // --------------------------------------------------------------------------
     console.log('--- CENÁRIO 1: Tenant em Modo Automação IA ---');
     await query(
-      `UPDATE tenant_ai_configs SET modo_atendimento = 'automacao' WHERE tenant_id = $1;`,
+      `UPDATE tenant_ai_configs SET modo_atendimento = 'automacao', automacao_horario_ativo = false WHERE tenant_id = $1;`,
       [tenantId]
     );
 
@@ -159,9 +159,39 @@ async function runTenantModeValidation() {
     assert.strictEqual(resReactivated.action, 'buffered_in_debounce');
     console.log('  ✅ [PASS] Contato reativado para IA com sucesso');
 
+    // --------------------------------------------------------------------------
+    // CENÁRIO 4: Automação com Horário de Expediente Ativo
+    // --------------------------------------------------------------------------
+    console.log('\n--- CENÁRIO 4: Automação com Horário Comercial Configurado ---');
+    // Configura para responder apenas às 03:00 - 04:00 da madrugada (garantindo que agora estará fora do expediente)
+    await query(
+      `UPDATE tenant_ai_configs 
+       SET modo_atendimento = 'automacao', 
+           automacao_horario_ativo = true,
+           automacao_horario_inicio = '03:00',
+           automacao_horario_fim = '04:00',
+           automacao_enviar_msg_fora_expediente = false
+       WHERE tenant_id = $1;`,
+      [tenantId]
+    );
+
+    const msgOutside = {
+      event: 'messages.upsert',
+      instance: instanceName,
+      data: {
+        key: { remoteJid: testJidAuto, fromMe: false, id: `TEST_OUTSIDE_${Date.now()}` },
+        message: { conversation: 'Mensagem enviada fora do expediente' }
+      }
+    };
+
+    const resOutside = await webhook.handleWebhook(msgOutside);
+    assert.strictEqual(resOutside.handled, true);
+    assert.strictEqual(resOutside.action, 'outside_operating_hours');
+    console.log('  ✅ [PASS] Automação pausou e detectou fora do expediente conforme horário configurado');
+
     // Restaura tenant para automacao
     await query(
-      `UPDATE tenant_ai_configs SET modo_atendimento = 'automacao' WHERE tenant_id = $1;`,
+      `UPDATE tenant_ai_configs SET modo_atendimento = 'automacao', automacao_horario_ativo = false WHERE tenant_id = $1;`,
       [tenantId]
     );
 

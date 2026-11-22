@@ -80,6 +80,12 @@ CREATE TABLE IF NOT EXISTS tenant_ai_configs (
     instrucoes_personalizadas TEXT,
     whatsapp_notificacao_humana VARCHAR(25),
     pausa_automatica_minutos INT DEFAULT 45,
+    automacao_horario_ativo BOOLEAN DEFAULT true,
+    automacao_dias_semana JSONB DEFAULT '["segunda","terca","quarta","quinta","sexta","sabado"]'::jsonb,
+    automacao_horario_inicio VARCHAR(10) DEFAULT '08:00',
+    automacao_horario_fim VARCHAR(10) DEFAULT '18:00',
+    automacao_enviar_msg_fora_expediente BOOLEAN DEFAULT true,
+    automacao_fora_expediente_msg TEXT DEFAULT 'Olá! Nosso horário de atendimento é de segunda a sábado das 08:00 às 18:00. Registramos sua mensagem e responderemos assim que retornarmos!',
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -102,6 +108,12 @@ ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS pergunta_inicial_qualific
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS diretrizes_funil TEXT;
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS politicas_comerciais TEXT;
 ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS tempo_resposta_segundos INT DEFAULT 3;
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS automacao_horario_ativo BOOLEAN DEFAULT true;
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS automacao_dias_semana JSONB DEFAULT '["segunda","terca","quarta","quinta","sexta","sabado"]'::jsonb;
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS automacao_horario_inicio VARCHAR(10) DEFAULT '08:00';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS automacao_horario_fim VARCHAR(10) DEFAULT '18:00';
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS automacao_enviar_msg_fora_expediente BOOLEAN DEFAULT true;
+ALTER TABLE tenant_ai_configs ADD COLUMN IF NOT EXISTS automacao_fora_expediente_msg TEXT DEFAULT 'Olá! Nosso horário de atendimento é de segunda a sábado das 08:00 às 18:00. Registramos sua mensagem e responderemos assim que retornarmos!';
 
 -- ------------------------------------------------------------------------------
 -- 5. Dossiê Permanente do Cliente Final (Memória de Longo Prazo)

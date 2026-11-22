@@ -56,26 +56,46 @@ class MessageCacheService {
   }
 
   /**
+   * Grava uma chave genérica no cache com TTL
+   */
+  async set(key, ttlSeconds = 60) {
+    if (!key) return;
+    const expiresAt = Date.now() + (ttlSeconds * 1000);
+    this.memoryCache.set(key, expiresAt);
+    if (this.isRedisReady && this.redisClient) {
+      try {
+        await this.redisClient.set(key, 'true', 'EX', ttlSeconds);
+      } catch (err) {}
+    }
+  }
+
+  /**
+   * Verifica se uma chave genérica está presente e não expirada
+   */
+  async has(key) {
+    if (!key) return false;
+    if (this.isRedisReady && this.redisClient) {
+      try {
+        const val = await this.redisClient.get(key);
+        if (val) return true;
+      } catch (err) {}
+    }
+    const expiresAt = this.memoryCache.get(key);
+    if (expiresAt) {
+      if (Date.now() <= expiresAt) return true;
+      this.memoryCache.delete(key);
+    }
+    return false;
+  }
+
+  /**
    * Registra que uma mensagem foi enviada pelo bot da IA (Anti-Loop)
    * @param {string} messageId ID da mensagem da Evolution API (ex: key.id)
    * @param {number} ttlSeconds Tempo de vida em segundos (padrão: 60s)
    */
   async setBotSent(messageId, ttlSeconds = 60) {
     if (!messageId) return;
-    const key = `bot_sent:${messageId}`;
-
-    // 1. Grava no MemoryCache
-    const expiresAt = Date.now() + (ttlSeconds * 1000);
-    this.memoryCache.set(key, expiresAt);
-
-    // 2. Se Redis estiver ativo, grava com EX
-    if (this.isRedisReady && this.redisClient) {
-      try {
-        await this.redisClient.set(key, 'true', 'EX', ttlSeconds);
-      } catch (err) {
-        // Fallback silencioso para memória
-      }
-    }
+    return this.set(`bot_sent:${messageId}`, ttlSeconds);
   }
 
   /**
@@ -85,28 +105,7 @@ class MessageCacheService {
    */
   async isBotSent(messageId) {
     if (!messageId) return false;
-    const key = `bot_sent:${messageId}`;
-
-    // 1. Checa Redis primeiro se disponível
-    if (this.isRedisReady && this.redisClient) {
-      try {
-        const val = await this.redisClient.get(key);
-        if (val) return true;
-      } catch (err) {
-        // Fallback para memória
-      }
-    }
-
-    // 2. Checa MemoryCache
-    const expiresAt = this.memoryCache.get(key);
-    if (expiresAt) {
-      if (Date.now() <= expiresAt) {
-        return true;
-      }
-      this.memoryCache.delete(key);
-    }
-
-    return false;
+    return this.has(`bot_sent:${messageId}`);
   }
 
   /**

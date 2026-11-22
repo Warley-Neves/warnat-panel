@@ -438,6 +438,12 @@
             <span class="hidden sm:inline">Sincronizar Histórico</span>
           </button>
 
+          <!-- BOTÃO REATIVAR AUTOMAÇÃO EM MASSA -->
+          <button onclick="bulkReactivateAutomation()" id="btnBulkReactivateCrm" title="Reativar Automação IA para todas as conversas do CRM" class="bg-dark-800 hover:bg-dark-750 text-slate-300 border border-slate-700 font-medium px-3 py-2 rounded-xl text-xs flex items-center space-x-1.5 transition whitespace-nowrap">
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span class="hidden sm:inline">Reativar Automação</span>
+          </button>
+
           <!-- RECARREGAR -->
           <button onclick="loadLeads()" title="Atualizar dados" class="p-2 rounded-xl bg-dark-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
             <i data-lucide="rotate-cw" class="w-4 h-4"></i>
@@ -1267,56 +1273,118 @@
             </div>
           </div>
 
-          <!-- BLOCO: HORÁRIO COMERCIAL E REGRAS DE AGENDAMENTO -->
-          <div class="p-6 bg-dark-800/60 rounded-2xl border border-slate-700/80 space-y-5">
-            <div class="flex items-center space-x-2 text-white font-bold text-sm">
-              <i data-lucide="clock" class="w-4 h-4 text-brand-400"></i>
-              <span>Horários de Atendimento & Dias Disponíveis para Agendamento</span>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- BLOCO: DIAS & HORÁRIOS DE ATUAÇÃO DA AUTOMAÇÃO -->
+          <div class="p-6 bg-dark-800/60 rounded-2xl border border-slate-700/80 space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/60 pb-4">
               <div>
-                <label class="block text-xs text-slate-400 mb-1.5 font-medium">Horário de Início do Atendimento Comercial</label>
-                <input type="time" id="aiHorarioInicio" value="08:00" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+                <div class="flex items-center space-x-2 text-white font-bold text-base">
+                  <i data-lucide="clock" class="w-5 h-5 text-brand-400"></i>
+                  <span>Dias & Horários de Resposta da Automação (IA)</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Configure os dias e horários em que a IA responderá aos clientes no WhatsApp automaticamente.</p>
               </div>
-              <div>
-                <label class="block text-xs text-slate-400 mb-1.5 font-medium">Horário de Término do Atendimento Comercial</label>
-                <input type="time" id="aiHorarioFim" value="18:00" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+              <div id="aiOperatingStatusBadge" class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap self-start sm:self-auto">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="aiOperatingStatusText">Verificando status...</span>
               </div>
             </div>
 
-            <!-- DIAS DA SEMANA COM ATENDIMENTO -->
+            <!-- OPÇÃO: 24H OU HORÁRIO PROGRAMADO -->
             <div>
-              <label class="block text-xs text-slate-400 mb-2 font-medium">Dias de Atendimento da Empresa</label>
-              <div class="grid grid-cols-2 sm:grid-cols-7 gap-2 text-xs">
-                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
-                  <input type="checkbox" name="aiDias" value="segunda" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
-                  <span class="text-slate-200">Segunda</span>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2.5">Regime de Funcionamento da IA</label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label class="flex items-start space-x-3 p-3.5 rounded-xl border border-slate-700 bg-dark-850 cursor-pointer hover:border-brand-500 transition">
+                  <input type="radio" name="aiHorarioTipo" id="aiHorarioTipoProgramado" value="programado" checked onchange="toggleAiHorarioFields()" class="mt-1 text-brand-600 focus:ring-0">
+                  <div>
+                    <p class="text-sm font-semibold text-white flex items-center space-x-1.5">
+                      <i data-lucide="calendar-clock" class="w-4 h-4 text-brand-400"></i>
+                      <span>Horário Comercial Programado (Recomendado)</span>
+                    </p>
+                    <p class="text-xs text-slate-400 mt-1">A automação responde automaticamente apenas nos dias da semana e horários marcados abaixo. Fora do expediente, envia mensagem de ausência ou aguarda a equipe.</p>
+                  </div>
                 </label>
-                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
-                  <input type="checkbox" name="aiDias" value="terca" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
-                  <span class="text-slate-200">Terça</span>
+
+                <label class="flex items-start space-x-3 p-3.5 rounded-xl border border-slate-700 bg-dark-850 cursor-pointer hover:border-brand-500 transition">
+                  <input type="radio" name="aiHorarioTipo" id="aiHorarioTipo24h" value="24h" onchange="toggleAiHorarioFields()" class="mt-1 text-brand-600 focus:ring-0">
+                  <div>
+                    <p class="text-sm font-semibold text-white flex items-center space-x-1.5">
+                      <i data-lucide="infinity" class="w-4 h-4 text-emerald-400"></i>
+                      <span>Sempre Ativa (24 Horas por Dia)</span>
+                    </p>
+                    <p class="text-xs text-slate-400 mt-1">A IA responderá ininterruptamente 24 horas por dia, 7 dias por semana, inclusive fins de semana e madrugadas.</p>
+                  </div>
                 </label>
-                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
-                  <input type="checkbox" name="aiDias" value="quarta" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
-                  <span class="text-slate-200">Quarta</span>
+              </div>
+            </div>
+
+            <div id="aiHorarioProgramadoContainer" class="space-y-5">
+              <!-- DIAS DA SEMANA COM ATENDIMENTO -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Dias da Semana que a Automação Responderá</label>
+                  <div class="flex items-center space-x-2 text-[11px]">
+                    <button type="button" onclick="selectAiDays('todos')" class="text-brand-400 hover:text-brand-300 font-medium">Todos</button>
+                    <span class="text-slate-600">|</span>
+                    <button type="button" onclick="selectAiDays('seg-sex')" class="text-brand-400 hover:text-brand-300 font-medium">Seg a Sex</button>
+                    <span class="text-slate-600">|</span>
+                    <button type="button" onclick="selectAiDays('seg-sab')" class="text-brand-400 hover:text-brand-300 font-medium">Seg a Sáb</button>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-7 gap-2 text-xs">
+                  <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500 transition">
+                    <input type="checkbox" name="aiDias" value="segunda" checked onchange="updateOperatingStatusBadge()" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                    <span class="text-slate-200">Segunda</span>
+                  </label>
+                  <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500 transition">
+                    <input type="checkbox" name="aiDias" value="terca" checked onchange="updateOperatingStatusBadge()" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                    <span class="text-slate-200">Terça</span>
+                  </label>
+                  <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500 transition">
+                    <input type="checkbox" name="aiDias" value="quarta" checked onchange="updateOperatingStatusBadge()" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                    <span class="text-slate-200">Quarta</span>
+                  </label>
+                  <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500 transition">
+                    <input type="checkbox" name="aiDias" value="quinta" checked onchange="updateOperatingStatusBadge()" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                    <span class="text-slate-200">Quinta</span>
+                  </label>
+                  <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500 transition">
+                    <input type="checkbox" name="aiDias" value="sexta" checked onchange="updateOperatingStatusBadge()" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                    <span class="text-slate-200">Sexta</span>
+                  </label>
+                  <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500 transition">
+                    <input type="checkbox" name="aiDias" value="sabado" checked onchange="updateOperatingStatusBadge()" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                    <span class="text-slate-200">Sábado</span>
+                  </label>
+                  <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500 transition">
+                    <input type="checkbox" name="aiDias" value="domingo" onchange="updateOperatingStatusBadge()" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                    <span class="text-slate-200">Domingo</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- HORÁRIO DE INÍCIO E TÉRMINO -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1.5 font-medium">Horário de Início das Respostas Automáticas</label>
+                  <input type="time" id="aiHorarioInicio" value="08:00" onchange="updateOperatingStatusBadge()" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1.5 font-medium">Horário de Término das Respostas Automáticas</label>
+                  <input type="time" id="aiHorarioFim" value="18:00" onchange="updateOperatingStatusBadge()" class="w-full bg-dark-850 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+                </div>
+              </div>
+
+              <!-- MENSAGEM DE FORA DO EXPEDIENTE -->
+              <div class="p-4 bg-dark-850 rounded-xl border border-slate-700/60 space-y-3">
+                <label class="flex items-center space-x-2.5 cursor-pointer">
+                  <input type="checkbox" id="aiEnviarMsgForaExpediente" checked onchange="toggleForaExpedienteTextarea()" class="rounded border-slate-700 text-brand-600 focus:ring-0">
+                  <span class="text-xs font-semibold text-slate-200">Enviar mensagem amigável avisando que está fora do expediente quando o cliente mandar mensagem</span>
                 </label>
-                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
-                  <input type="checkbox" name="aiDias" value="quinta" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
-                  <span class="text-slate-200">Quinta</span>
-                </label>
-                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
-                  <input type="checkbox" name="aiDias" value="sexta" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
-                  <span class="text-slate-200">Sexta</span>
-                </label>
-                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
-                  <input type="checkbox" name="aiDias" value="sabado" checked class="rounded border-slate-700 text-brand-600 focus:ring-0">
-                  <span class="text-slate-200">Sábado</span>
-                </label>
-                <label class="flex items-center space-x-2 bg-dark-850 border border-slate-700 p-2.5 rounded-xl cursor-pointer hover:border-slate-500">
-                  <input type="checkbox" name="aiDias" value="domingo" class="rounded border-slate-700 text-brand-600 focus:ring-0">
-                  <span class="text-slate-200">Domingo</span>
-                </label>
+                <div id="aiMsgForaExpedienteContainer">
+                  <label class="block text-[11px] text-slate-400 mb-1.5">Texto da Mensagem de Fora do Expediente:</label>
+                  <textarea id="aiMsgForaExpediente" rows="2" placeholder="Ex: Olá! Nosso atendimento no momento está fora do nosso horário de funcionamento. Registramos sua mensagem e retornaremos assim que iniciarmos nosso expediente!" class="w-full bg-dark-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-brand-500"></textarea>
+                  <p class="text-[11px] text-slate-500 mt-1">Essa mensagem possui proteção contra repetição: é enviada no máximo 1 vez a cada 2 horas por contato para não sobrecarregar o cliente.</p>
+                </div>
               </div>
             </div>
 
@@ -1355,6 +1423,20 @@
             <div>
               <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Políticas Comerciais de Agendamento e Taxas</label>
               <textarea id="aiRegrasAgendamento" rows="3" placeholder="Ex: Visita técnica gratuita exclusivamente para novas instalações. Manutenção possui taxa de R$ 140,00 que é abatida no conserto." class="w-full bg-dark-850 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+            </div>
+
+            <!-- CHECKBOX REATIVAR CONTATOS EXISTENTES -->
+            <div class="p-3.5 bg-brand-500/10 rounded-xl border border-brand-500/20">
+              <label class="flex items-start space-x-3 cursor-pointer">
+                <input type="checkbox" id="aiReativarLeads" checked class="mt-0.5 rounded border-slate-700 text-brand-600 focus:ring-0">
+                <div>
+                  <span class="text-xs font-bold text-brand-300 flex items-center space-x-1.5">
+                    <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>Reativar automação para todas as conversas anteriores ao salvar</span>
+                  </span>
+                  <p class="text-[11px] text-slate-400 mt-0.5">Se marcado, todos os clientes que estavam parados no modo manual voltarão a ser atendidos pela IA automaticamente dentro dos horários acima.</p>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -7635,6 +7717,93 @@
     // --------------------------------------------------------------------------
     // 7. REGRAS DA IA & HORÁRIOS
     // --------------------------------------------------------------------------
+    function toggleAiHorarioFields() {
+      const is24h = document.getElementById('aiHorarioTipo24h')?.checked;
+      const container = document.getElementById('aiHorarioProgramadoContainer');
+      if (container) {
+        if (is24h) {
+          container.classList.add('opacity-40', 'pointer-events-none');
+        } else {
+          container.classList.remove('opacity-40', 'pointer-events-none');
+        }
+      }
+      updateOperatingStatusBadge();
+    }
+
+    function toggleForaExpedienteTextarea() {
+      const checked = document.getElementById('aiEnviarMsgForaExpediente')?.checked;
+      const container = document.getElementById('aiMsgForaExpedienteContainer');
+      if (container) {
+        container.style.display = checked ? 'block' : 'none';
+      }
+    }
+
+    function selectAiDays(type) {
+      const checkboxes = document.querySelectorAll('input[name="aiDias"]');
+      checkboxes.forEach(cb => {
+        if (type === 'todos') {
+          cb.checked = true;
+        } else if (type === 'seg-sex') {
+          cb.checked = ['segunda', 'terca', 'quarta', 'quinta', 'sexta'].includes(cb.value);
+        } else if (type === 'seg-sab') {
+          cb.checked = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'].includes(cb.value);
+        }
+      });
+      updateOperatingStatusBadge();
+    }
+
+    function updateOperatingStatusBadge() {
+      const badge = document.getElementById('aiOperatingStatusBadge');
+      const text = document.getElementById('aiOperatingStatusText');
+      if (!badge || !text) return;
+
+      const is24h = document.getElementById('aiHorarioTipo24h')?.checked;
+      if (is24h) {
+        badge.className = 'inline-flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap self-start sm:self-auto';
+        text.textContent = '🟢 Automação 24h Ativa';
+        return;
+      }
+
+      const brDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const DAYS_MAP = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+      const currentDayName = DAYS_MAP[brDate.getDay()];
+      const hours = String(brDate.getHours()).padStart(2, '0');
+      const minutes = String(brDate.getMinutes()).padStart(2, '0');
+      const currentTime = `${hours}:${minutes}`;
+
+      const selectedDays = Array.from(document.querySelectorAll('input[name="aiDias"]:checked')).map(cb => cb.value);
+      const inicio = document.getElementById('aiHorarioInicio')?.value || '08:00';
+      const fim = document.getElementById('aiHorarioFim')?.value || '18:00';
+
+      const isDay = selectedDays.includes(currentDayName);
+      const isTime = currentTime >= inicio && currentTime <= fim;
+
+      if (isDay && isTime) {
+        badge.className = 'inline-flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap self-start sm:self-auto';
+        text.textContent = `🟢 Aberto Agora (${currentTime} - Atendendo)`;
+      } else {
+        badge.className = 'inline-flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap self-start sm:self-auto';
+        text.textContent = `🟡 Fora do Expediente (${currentTime} - Ausência)`;
+      }
+    }
+
+    async function bulkReactivateAutomation() {
+      if (!confirm('Deseja ativar a automação da IA para todos os clientes do CRM?\nA IA passará a responder automaticamente conforme o horário comercial configurado.')) return;
+      try {
+        const res = await apiFetch('/api/v2/tenant/leads/bulk-activate', { method: 'POST' });
+        if (res.ok) {
+          alert(`✅ ${res.data?.message || 'Automação ativada para todas as conversas!'}`);
+          currentTenantMode = 'automacao';
+          updateTenantModeUI('automacao');
+          await loadLeads();
+        } else {
+          alert('❌ Erro ao ativar automação: ' + (res.data?.error || 'Acesso negado'));
+        }
+      } catch (e) {
+        alert('Erro de conexão ao reativar automação.');
+      }
+    }
+
     async function loadAiConfig() {
       try {
         const res = await apiFetch('/api/v2/tenant/ai-config');
@@ -7679,19 +7848,44 @@
           }
           document.getElementById('aiServicosRecusados').value = c.servicos_recusados || '';
           
-          // Regras e Horários de Agendamento
+          // Regime de Horário da Automação (24h vs Comercial Programado)
+          const isHorarioAtivo = c.automacao_horario_ativo !== false;
+          if (document.getElementById('aiHorarioTipoProgramado')) {
+            document.getElementById('aiHorarioTipoProgramado').checked = isHorarioAtivo;
+            document.getElementById('aiHorarioTipo24h').checked = !isHorarioAtivo;
+          }
+
+          if (c.automacao_horario_inicio) {
+            document.getElementById('aiHorarioInicio').value = c.automacao_horario_inicio;
+          } else if (c.regras_agendamento?.horario_inicio) {
+            document.getElementById('aiHorarioInicio').value = c.regras_agendamento.horario_inicio;
+          }
+
+          if (c.automacao_horario_fim) {
+            document.getElementById('aiHorarioFim').value = c.automacao_horario_fim;
+          } else if (c.regras_agendamento?.horario_fim) {
+            document.getElementById('aiHorarioFim').value = c.regras_agendamento.horario_fim;
+          }
+
+          // Checkboxes de dias
+          const dias = c.automacao_dias_semana || c.regras_agendamento?.dias_atendimento || c.regras_agendamento?.dias || [];
+          if (Array.isArray(dias) && dias.length > 0) {
+            document.querySelectorAll('input[name="aiDias"]').forEach(cb => {
+              cb.checked = dias.includes(cb.value);
+            });
+          }
+
+          // Mensagem de Fora do Expediente
+          if (c.automacao_enviar_msg_fora_expediente !== undefined) {
+            document.getElementById('aiEnviarMsgForaExpediente').checked = !!c.automacao_enviar_msg_fora_expediente;
+          }
+          if (c.automacao_fora_expediente_msg !== undefined) {
+            document.getElementById('aiMsgForaExpediente').value = c.automacao_fora_expediente_msg || '';
+          }
+
+          // Regras e Horários de Agendamento (Slots e Políticas)
           if (c.regras_agendamento && typeof c.regras_agendamento === 'object') {
             const r = c.regras_agendamento;
-            if (r.horario_inicio) document.getElementById('aiHorarioInicio').value = r.horario_inicio;
-            if (r.horario_fim) document.getElementById('aiHorarioFim').value = r.horario_fim;
-
-            // Checkboxes de dias
-            const dias = r.dias_atendimento || r.dias || [];
-            if (Array.isArray(dias) && dias.length > 0) {
-              document.querySelectorAll('input[name="aiDias"]').forEach(cb => {
-                cb.checked = dias.includes(cb.value);
-              });
-            }
 
             // Checkboxes de slots
             const slots = r.slots_agendamento || r.slots_disponiveis || [];
@@ -7703,6 +7897,10 @@
 
             document.getElementById('aiRegrasAgendamento').value = r.politica_agendamento || r.politica_visita_gratuita || r.descricao || '';
           }
+
+          toggleAiHorarioFields();
+          toggleForaExpedienteTextarea();
+          updateOperatingStatusBadge();
         }
       } catch (e) {}
     }
@@ -7718,9 +7916,20 @@
       const diasSelecionados = Array.from(document.querySelectorAll('input[name="aiDias"]:checked')).map(cb => cb.value);
       const slotsSelecionados = Array.from(document.querySelectorAll('input[name="aiSlots"]:checked')).map(cb => cb.value);
       const selectedModo = document.querySelector('input[name="tenantModoAtendimentoRadio"]:checked')?.value || 'automacao';
+      const isProgramado = document.getElementById('aiHorarioTipoProgramado')?.checked ?? true;
+      const enviarForaExp = document.getElementById('aiEnviarMsgForaExpediente')?.checked ?? true;
+      const msgForaExp = document.getElementById('aiMsgForaExpediente')?.value?.trim() || '';
+      const reativarLeads = document.getElementById('aiReativarLeads')?.checked ?? true;
 
       const payload = {
         modo_atendimento: selectedModo,
+        automacao_horario_ativo: isProgramado,
+        automacao_dias_semana: diasSelecionados,
+        automacao_horario_inicio: document.getElementById('aiHorarioInicio').value,
+        automacao_horario_fim: document.getElementById('aiHorarioFim').value,
+        automacao_enviar_msg_fora_expediente: enviarForaExp,
+        automacao_fora_expediente_msg: msgForaExp,
+        reactivate_leads: reativarLeads,
         nicho_atuacao: document.getElementById('aiNichoAtuacao').value.trim(),
         tipo_negocio: document.getElementById('aiTipoNegocio').value,
         objetivo_funil: document.getElementById('aiObjetivoFunil').value,
@@ -7761,7 +7970,8 @@
         if (res.ok) {
           currentTenantMode = selectedModo;
           updateTenantModeUI(selectedModo);
-          alert('✅ Configurações e horários de agendamento salvos com sucesso!');
+          await loadLeads();
+          alert('✅ Configurações, dias e horários da automação salvos com sucesso!');
         } else {
           alert('❌ Falha ao salvar: ' + (res.data?.error || 'Erro'));
         }

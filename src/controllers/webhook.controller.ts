@@ -35,6 +35,55 @@ export class WebhookController {
   }
 
   /**
+   * Valida se a automação está autorizada a responder com base no dia e horário configurados (Horário de Brasília)
+   */
+  public checkAutomationOperatingHours(aiConfig: any): { isOpen: boolean; currentDay?: string; currentTime?: string; [k: string]: any } {
+    if (!aiConfig) return { isOpen: true, reason: 'no_config_fallback' };
+
+    if (aiConfig.automacao_horario_ativo === false) {
+      return { isOpen: true, reason: '24_7_always_active' };
+    }
+
+    const brDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const DAYS_MAP = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+    const currentDayName = DAYS_MAP[brDate.getDay()];
+    const hours = String(brDate.getHours()).padStart(2, '0');
+    const minutes = String(brDate.getMinutes()).padStart(2, '0');
+    const currentTime = `${hours}:${minutes}`;
+
+    const normalizeDay = (d: string) => String(d || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace('-feira', '')
+      .trim();
+
+    const rawDays = aiConfig.automacao_dias_semana ||
+      aiConfig.regras_agendamento?.dias_atendimento ||
+      aiConfig.regras_agendamento?.dias ||
+      ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+
+    const activeDays = (Array.isArray(rawDays) ? rawDays : []).map(normalizeDay);
+
+    const inicio = aiConfig.automacao_horario_inicio || aiConfig.regras_agendamento?.horario_inicio || '08:00';
+    const fim = aiConfig.automacao_horario_fim || aiConfig.regras_agendamento?.horario_fim || '18:00';
+
+    const isDayAllowed = activeDays.includes(currentDayName);
+    const isTimeAllowed = currentTime >= inicio && currentTime <= fim;
+
+    return {
+      isOpen: isDayAllowed && isTimeAllowed,
+      currentDay: currentDayName,
+      currentTime,
+      inicio,
+      fim,
+      activeDays,
+      isDayAllowed,
+      isTimeAllowed
+    };
+  }
+
+  /**
    * Limpa buffers ativos (usado em testes para teardown seguro)
    */
   public clearBuffers(): void {
@@ -114,6 +163,7 @@ export class WebhookController {
     event?: string;
     tenantId?: string;
     status?: string;
+    [key: string]: any;
   }> {
     if (!payload || !payload.event) {
       return { handled: false, reason: 'payload_sem_evento' };
@@ -455,7 +505,7 @@ export class WebhookController {
       }
     } else if (data.message?.documentMessage) {
       const doc = data.message.documentMessage;
-      const fileName = doc.fileName || doc.filename || 'documento';
+      const fileName = doc.fileName || (doc as any).filename || 'documento';
       if (doc.caption && doc.caption.trim()) {
         text = `[Documento: ${fileName}] ${doc.caption.trim()}`;
       } else {
@@ -508,12 +558,22 @@ export class WebhookController {
     // ============================================================================
     // 4. VERIFICAÇÃO DE ATENDIMENTO MANUAL GLOBAL (TENANT) OU POR CONTATO INDIVIDUAL
     // ============================================================================
-    // A) Checa se o tenant inteiro está em atendimento manual global
-    const aiConfigRes = await query<{ modo_atendimento: string }>(
-      `SELECT modo_atendimento FROM tenant_ai_configs WHERE tenant_id = $1;`,
+    // A) Busca configurações de IA e horário comercial do tenant
+    const aiConfigRes = await query<{
+      modo_atendimento: string;
+      automacao_horario_ativo?: boolean;
+      automacao_dias_semana?: any;
+      automacao_horario_inicio?: string;
+      automacao_horario_fim?: string;
+      automacao_enviar_msg_fora_expediente?: boolean;
+      automacao_fora_expediente_msg?: string;
+      regras_agendamento?: any;
+    }>(
+      `SELECT modo_atendimento, automacao_horario_ativo, automacao_dias_semana, automacao_horario_inicio, automacao_horario_fim, automacao_enviar_msg_fora_expediente, automacao_fora_expediente_msg, regras_agendamento FROM tenant_ai_configs WHERE tenant_id = $1;`,
       [tenantId]
     );
-    const tenantModo = aiConfigRes.rows[0]?.modo_atendimento || 'automacao';
+    const aiConfig = aiConfigRes.rows[0] || ({} as any);
+    const tenantModo = aiConfig.modo_atendimento || 'automacao';
 
     if (tenantModo === 'manual') {
       console.log(`🛑 [Webhook] Tenant ${tenantId} configurado em ATENDIMENTO 100% MANUAL GLOBAL. IA silenciada.`);
@@ -524,9 +584,21 @@ export class WebhookController {
       };
     }
 
-    // B) Checa se este contato específico está em atendimento manual individual
+    // Se o tenant está em modo automação, descongela automaticamente contatos bloqueados por trava manual de 100 anos
+    const isFarFuturePause = session.paused_until && (new Date(session.paused_until).getTime() > Date.now() + 24 * 60 * 60 * 1000);
+    if (tenantModo === 'automacao' && (isFarFuturePause || session.status_atendimento === 'manual')) {
+      await query(
+        `UPDATE chat_sessions 
+         SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = NOW()
+         WHERE id = $1;`,
+        [session.id]
+      );
+      session.status_atendimento = 'ia_ativa';
+      session.paused_until = null;
+    }
+
+    // B) Checa se este contato específico está em atendimento manual recente por operador humano (pausa pontual < 24h)
     const isContactManual = (
-      session.status_atendimento === 'manual' ||
       session.status_atendimento === 'pausa_humana' ||
       session.status_atendimento === 'transbordado' ||
       (session.paused_until && new Date(session.paused_until) > new Date())
@@ -540,6 +612,50 @@ export class WebhookController {
         reason: 'contact_manual_mode_active',
         status: session.status_atendimento,
         pausedUntil: session.paused_until || undefined
+      };
+    }
+
+    // C) Validação de Dias da Semana e Horários de Atendimento da Automação (Horário de Brasília)
+    const scheduleCheck = this.checkAutomationOperatingHours(aiConfig);
+    if (!scheduleCheck.isOpen) {
+      console.log(`[Webhook] Fora do expediente da automação para o Tenant ${tenantId} (${scheduleCheck.currentDay} ${scheduleCheck.currentTime}).`);
+
+      const shouldSendNotice = aiConfig.automacao_enviar_msg_fora_expediente !== false;
+      if (shouldSendNotice) {
+        const cooldownKey = `outside_notice:${tenantId}:${effectiveJid}`;
+        const alreadySent = await (messageCache as any).has(cooldownKey);
+
+        if (!alreadySent) {
+          const defaultOutsideMsg = 'Olá! Nosso atendimento no momento está fora do nosso horário de funcionamento. Registramos sua mensagem e responderemos assim que retornarmos!';
+          const outsideMsg = (aiConfig.automacao_fora_expediente_msg && aiConfig.automacao_fora_expediente_msg.trim())
+            ? aiConfig.automacao_fora_expediente_msg.trim()
+            : defaultOutsideMsg;
+
+          try {
+            const sendRes = await evolutionService.sendTextMessage(instanceName, effectiveJid, outsideMsg);
+            if (sendRes?.messageId) {
+              await messageCache.setBotSent(sendRes.messageId, 120);
+              await query(
+                `INSERT INTO chat_messages (session_id, tenant_id, role, content, message_id)
+                 VALUES ($1, $2, 'assistant', $3, $4);`,
+                [session.id, tenantId, outsideMsg, sendRes.messageId]
+              );
+            }
+            await (messageCache as any).set(cooldownKey, 7200);
+          } catch (sendErr: any) {
+            console.warn('[Webhook] Falha ao enviar mensagem de fora do expediente:', sendErr.message);
+          }
+        }
+      }
+
+      return {
+        handled: true,
+        action: 'outside_operating_hours',
+        tenantId,
+        remoteJid: effectiveJid,
+        currentDay: scheduleCheck.currentDay,
+        currentTime: scheduleCheck.currentTime,
+        reason: 'outside_business_hours'
       };
     }
 

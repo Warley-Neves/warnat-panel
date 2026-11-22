@@ -1019,7 +1019,7 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
          ) LIMIT 1`,
         [tenantId, info.isoDate, daySlug, JSON.stringify([daySlug])]
       );
-      hasExplicitDayRelease = relRes.rowCount > 0;
+      hasExplicitDayRelease = (relRes?.rowCount ?? 0) > 0;
     } catch (relErr) {
       // Ignora erro
     }
@@ -1168,7 +1168,7 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
          ) LIMIT 1`,
         [tenantId, cleanDate, daySlug, JSON.stringify([daySlug])]
       );
-      hasExplicitDayRelease = relRes.rowCount > 0;
+      hasExplicitDayRelease = (relRes?.rowCount ?? 0) > 0;
     } catch (relErr) {
       // Ignora erro
     }

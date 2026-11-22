@@ -584,12 +584,22 @@ async function handleV2Routes(req, res, pathname, method, body) {
         [modo_atendimento, tenantId]
       );
 
+      if (modo_atendimento === 'automacao') {
+        // Descongela todos os contatos que estavam com trava de modo manual global
+        await query(
+          `UPDATE chat_sessions 
+           SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
+           WHERE tenant_id = $1 AND (status_atendimento = 'manual' OR paused_until > now() + INTERVAL '1 day')`,
+          [tenantId]
+        );
+      }
+
       return sendJson(200, {
         success: true,
         modo_atendimento,
         message: modo_atendimento === 'manual'
           ? 'Atendimento do tenant alterado para 100% MANUAL. A automação foi desativada para todos os clientes.'
-          : 'Atendimento do tenant alterado para AUTOMAÇÃO (IA). O assistente responderá aos clientes automaticamente.'
+          : 'Atendimento do tenant alterado para AUTOMAÇÃO (IA). O assistente responderá aos clientes automaticamente conforme os dias e horários configurados.'
       });
     }
 
@@ -677,7 +687,14 @@ async function handleV2Routes(req, res, pathname, method, body) {
         pergunta_inicial_qualificacao,
         diretrizes_funil,
         politicas_comerciais,
-        tempo_resposta_segundos
+        tempo_resposta_segundos,
+        automacao_horario_ativo,
+        automacao_dias_semana,
+        automacao_horario_inicio,
+        automacao_horario_fim,
+        automacao_enviar_msg_fora_expediente,
+        automacao_fora_expediente_msg,
+        reactivate_leads
       } = body;
 
       const taxaManutencaoVal = (taxa_manutencao_reais !== undefined && taxa_manutencao_reais !== null && taxa_manutencao_reais !== '')
@@ -687,6 +704,15 @@ async function handleV2Routes(req, res, pathname, method, body) {
       const tempoRespostaVal = (tempo_resposta_segundos !== undefined && tempo_resposta_segundos !== null)
         ? Math.max(0, parseInt(tempo_resposta_segundos, 10) || 0)
         : 3;
+
+      const horarioAtivoVal = automacao_horario_ativo !== undefined ? !!automacao_horario_ativo : true;
+      const diasSemanaVal = Array.isArray(automacao_dias_semana)
+        ? JSON.stringify(automacao_dias_semana)
+        : (regras_agendamento?.dias_atendimento ? JSON.stringify(regras_agendamento.dias_atendimento) : '["segunda","terca","quarta","quinta","sexta","sabado"]');
+      const horarioInicioVal = automacao_horario_inicio || regras_agendamento?.horario_inicio || '08:00';
+      const horarioFimVal = automacao_horario_fim || regras_agendamento?.horario_fim || '18:00';
+      const enviarForaExpVal = automacao_enviar_msg_fora_expediente !== undefined ? !!automacao_enviar_msg_fora_expediente : true;
+      const foraExpMsgVal = automacao_fora_expediente_msg || 'Olá! Nosso horário de atendimento é de segunda a sábado das 08:00 às 18:00. Registramos sua mensagem e responderemos assim que retornarmos!';
 
       await query(
         `INSERT INTO tenant_ai_configs (
@@ -715,8 +741,14 @@ async function handleV2Routes(req, res, pathname, method, body) {
            diretrizes_funil,
            politicas_comerciais,
            tempo_resposta_segundos,
+           automacao_horario_ativo,
+           automacao_dias_semana,
+           automacao_horario_inicio,
+           automacao_horario_fim,
+           automacao_enviar_msg_fora_expediente,
+           automacao_fora_expediente_msg,
            updated_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, now())
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27::jsonb, $28, $29, $30, $31, now())
          ON CONFLICT (tenant_id)
          DO UPDATE SET
            modo_atendimento = COALESCE(EXCLUDED.modo_atendimento, tenant_ai_configs.modo_atendimento),
@@ -743,6 +775,12 @@ async function handleV2Routes(req, res, pathname, method, body) {
            diretrizes_funil = COALESCE(EXCLUDED.diretrizes_funil, tenant_ai_configs.diretrizes_funil),
            politicas_comerciais = COALESCE(EXCLUDED.politicas_comerciais, tenant_ai_configs.politicas_comerciais),
            tempo_resposta_segundos = COALESCE(EXCLUDED.tempo_resposta_segundos, tenant_ai_configs.tempo_resposta_segundos),
+           automacao_horario_ativo = EXCLUDED.automacao_horario_ativo,
+           automacao_dias_semana = EXCLUDED.automacao_dias_semana,
+           automacao_horario_inicio = EXCLUDED.automacao_horario_inicio,
+           automacao_horario_fim = EXCLUDED.automacao_horario_fim,
+           automacao_enviar_msg_fora_expediente = EXCLUDED.automacao_enviar_msg_fora_expediente,
+           automacao_fora_expediente_msg = EXCLUDED.automacao_fora_expediente_msg,
            updated_at = now()`,
         [
           tenantId,
@@ -769,9 +807,25 @@ async function handleV2Routes(req, res, pathname, method, body) {
           pergunta_inicial_qualificacao || null,
           diretrizes_funil || null,
           politicas_comerciais || null,
-          tempoRespostaVal
+          tempoRespostaVal,
+          horarioAtivoVal,
+          diasSemanaVal,
+          horarioInicioVal,
+          horarioFimVal,
+          enviarForaExpVal,
+          foraExpMsgVal
         ]
       );
+
+      // Se modo automação foi selecionado ou reativação solicitada, descongela contatos que estavam em manual global
+      if (modo_atendimento === 'automacao' || reactivate_leads) {
+        await query(
+          `UPDATE chat_sessions 
+           SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
+           WHERE tenant_id = $1 AND (status_atendimento = 'manual' OR paused_until > now() + INTERVAL '1 day')`,
+          [tenantId]
+        );
+      }
 
       return sendJson(200, {
         success: true,
@@ -1033,6 +1087,38 @@ async function handleV2Routes(req, res, pathname, method, body) {
           message: 'Atendimento manual ativado para este contato! A automação foi silenciada.'
         });
       }
+    }
+
+    // Reativação em Massa de Todos os Contatos para Automação
+    if (pathname === '/api/v2/tenant/leads/bulk-activate' && method === 'POST') {
+      const canBots = await entitlementsService.canUseFeature(tenantId, 'automation_bots');
+      if (!canBots) {
+        return sendJson(403, {
+          success: false,
+          error: 'FEATURE_NOT_AVAILABLE_IN_PLAN',
+          required_plan: 'PRO',
+          message: 'Automações e bots inteligentes são exclusivos do Plano Pro. Faça o upgrade para ter acesso.'
+        });
+      }
+
+      // Também garante que o tenant está com modo_atendimento = 'automacao'
+      await query(
+        `UPDATE tenant_ai_configs SET modo_atendimento = 'automacao', updated_at = now() WHERE tenant_id = $1`,
+        [tenantId]
+      );
+
+      const resUpdate = await query(
+        `UPDATE chat_sessions 
+         SET status_atendimento = 'ia_ativa', paused_until = NULL, last_interaction = now()
+         WHERE tenant_id = $1`,
+        [tenantId]
+      );
+
+      return sendJson(200, {
+        success: true,
+        updatedCount: resUpdate.rowCount,
+        message: `${resUpdate.rowCount} contatos foram reativados para atendimento automático pela IA!`
+      });
     }
 
     // Atualizar Etapa do Funil de Atendimento (Kanban / Fluxo)
