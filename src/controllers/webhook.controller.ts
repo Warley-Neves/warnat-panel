@@ -226,20 +226,31 @@ export class WebhookController {
 
       console.log(`[Webhook] Chamada de ${callTypeDesc} recebida de ${effectiveJid} para tenant ${tenantId}`);
 
-      let sessionRes = await query<{ id: string; status_atendimento: string; paused_until: Date | null }>(
-        `SELECT id, status_atendimento, paused_until 
+      let sessionRes = await query<{ id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string }>(
+        `SELECT id, status_atendimento, paused_until, etapa_funil 
          FROM chat_sessions 
          WHERE tenant_id = $1 AND remote_jid = $2;`,
         [tenantId, effectiveJid]
       );
 
-      let session: { id: string; status_atendimento: string; paused_until: Date | null };
+      const aiConfigRes = await query<any>(
+        `SELECT atender_chamadas, mensagem_chamada, responder_com_audio, voz_ia, modo_atendimento 
+         FROM tenant_ai_configs WHERE tenant_id = $1;`,
+        [tenantId]
+      );
+      const aiConfig = aiConfigRes.rows[0] || {};
+      const isManualTenant = aiConfig.modo_atendimento === 'manual';
+      const initialStatus = isManualTenant ? 'manual' : 'ia_ativa';
+      const initialPausedUntil = isManualTenant ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000) : null;
+      const initialStage = isManualTenant ? 'manual' : 'novo';
+
+      let session: { id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string };
       if (sessionRes.rows.length === 0) {
-        const newSession = await query<{ id: string; status_atendimento: string; paused_until: Date | null }>(
-          `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, last_interaction)
-           VALUES ($1, $2, $3, 'ia_ativa', NOW())
-           RETURNING id, status_atendimento, paused_until;`,
-          [tenantId, effectiveJid, 'Cliente Chamada']
+        const newSession = await query<{ id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string }>(
+          `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, etapa_funil, paused_until, last_interaction)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW())
+           RETURNING id, status_atendimento, paused_until, etapa_funil;`,
+          [tenantId, effectiveJid, 'Cliente Chamada', initialStatus, initialStage, initialPausedUntil]
         );
         session = newSession.rows[0];
       } else {
@@ -255,13 +266,6 @@ export class WebhookController {
          VALUES ($1, $2, 'user', $3, $4, $5);`,
         [session.id, tenantId, callText, callMediaType, `call_${Date.now()}`]
       );
-
-      const aiConfigRes = await query<any>(
-        `SELECT atender_chamadas, mensagem_chamada, responder_com_audio, voz_ia, modo_atendimento 
-         FROM tenant_ai_configs WHERE tenant_id = $1;`,
-        [tenantId]
-      );
-      const aiConfig = aiConfigRes.rows[0] || {};
 
       if (aiConfig.modo_atendimento === 'manual') {
         console.log(`[Webhook] Tenant em modo manual. Chamada registrada sem resposta automática.`);
@@ -429,20 +433,29 @@ export class WebhookController {
     let session: { id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string; pending_after_hours_followup?: boolean; after_hours_notice_sent_at?: Date | null };
 
     if (sessionRes.rows.length === 0) {
+      const aiConfigRes = await query<{ modo_atendimento?: string }>(
+        `SELECT modo_atendimento FROM tenant_ai_configs WHERE tenant_id = $1;`,
+        [tenantId]
+      );
+      const isManualTenant = aiConfigRes.rows[0]?.modo_atendimento === 'manual';
+      const initialStatus = isManualTenant ? 'manual' : 'ia_ativa';
+      const initialPausedUntil = isManualTenant ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000) : null;
+      const initialStage = isManualTenant ? 'manual' : 'novo';
+
       const newSession = await query<{ id: string; status_atendimento: string; paused_until: Date | null; etapa_funil?: string; pending_after_hours_followup?: boolean; after_hours_notice_sent_at?: Date | null }>(
-        `INSERT INTO chat_sessions (tenant_id, remote_jid, status_atendimento, etapa_funil, last_interaction)
-         VALUES ($1, $2, 'ia_ativa', 'novo', NOW())
+        `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, etapa_funil, paused_until, last_interaction)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())
          RETURNING id, status_atendimento, paused_until, etapa_funil, pending_after_hours_followup, after_hours_notice_sent_at;`,
-        [tenantId, effectiveJid]
+        [tenantId, effectiveJid, pushName, initialStatus, initialStage, initialPausedUntil]
       );
       session = newSession.rows[0];
     } else {
       session = sessionRes.rows[0];
       await query(
         `UPDATE chat_sessions 
-         SET last_interaction = NOW()
-         WHERE id = $1 AND tenant_id = $2;`,
-        [session.id, tenantId]
+         SET last_interaction = NOW(), client_name = COALESCE($1, client_name)
+         WHERE id = $2 AND tenant_id = $3;`,
+        [pushName || null, session.id, tenantId]
       );
     }
 

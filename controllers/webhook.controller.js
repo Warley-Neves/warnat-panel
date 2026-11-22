@@ -201,13 +201,25 @@ class WebhookController {
         [tenantId, effectiveJid]
       );
 
+      // Busca configurações de chamada e IA do tenant
+      const aiConfigRes = await query(
+        `SELECT atender_chamadas, mensagem_chamada, responder_com_audio, voz_ia, modo_atendimento 
+         FROM tenant_ai_configs WHERE tenant_id = $1`,
+        [tenantId]
+      );
+      const aiConfig = aiConfigRes.rows[0] || {};
+      const isManualTenant = aiConfig.modo_atendimento === 'manual';
+      const initialStatus = isManualTenant ? 'manual' : 'ia_ativa';
+      const initialPausedUntil = isManualTenant ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000) : null;
+      const initialStage = isManualTenant ? 'manual' : 'novo';
+
       let session;
       if (sessionRes.rowCount === 0) {
         const newSession = await query(
-          `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, last_interaction)
-           VALUES ($1, $2, $3, 'ia_ativa', now())
+          `INSERT INTO chat_sessions (tenant_id, remote_jid, client_name, status_atendimento, etapa_funil, paused_until, last_interaction)
+           VALUES ($1, $2, $3, $4, $5, $6, now())
            RETURNING id, status_atendimento, paused_until, dados_lead`,
-          [tenantId, effectiveJid, 'Cliente Chamada']
+          [tenantId, effectiveJid, 'Cliente Chamada', initialStatus, initialStage, initialPausedUntil]
         );
         session = newSession.rows[0];
       } else {
@@ -224,14 +236,6 @@ class WebhookController {
          VALUES ($1, $2, 'user', $3, $4, $5)`,
         [session.id, tenantId, callText, callMediaType, `call_${Date.now()}`]
       );
-
-      // Busca configurações de chamada e IA do tenant
-      const aiConfigRes = await query(
-        `SELECT atender_chamadas, mensagem_chamada, responder_com_audio, voz_ia, modo_atendimento 
-         FROM tenant_ai_configs WHERE tenant_id = $1`,
-        [tenantId]
-      );
-      const aiConfig = aiConfigRes.rows[0] || {};
 
       // Se o tenant estiver em modo 100% manual, não envia resposta automática
       if (aiConfig.modo_atendimento === 'manual') {
