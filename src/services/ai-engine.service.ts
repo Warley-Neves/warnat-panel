@@ -1601,9 +1601,13 @@ _Lead gravado no banco de dados e sincronizado no CRM Multi-Tenant._`;
     const isAfterHoursResume = Boolean((turn as any).isAfterHoursResume);
     const isFirstAssistantTurn = !historyMessages.some(m => m.role === 'assistant');
     if (isFirstAssistantTurn && !isAfterHoursResume) {
+      const isWarNatTechFirst = String((tenant as any)?.nome_empresa || '').toLowerCase().includes('warnat tech');
+      const lembreteConteudo = isWarNatTechFirst
+        ? `LEMBRETE OBRIGATÓRIO (PRIMEIRA MENSAGEM WARNAT TECH): Esta é a sua primeira mensagem neste atendimento. Você DEVE: 1) Apresentar-se como ${(aiConfig as any).nome_assistente || 'Nat'}, assistente virtual da ${tenant.nome_empresa}; 2) Avisar com simpatia que o cliente pode solicitar atendimento humano a qualquer momento; 3) IMEDIATAMENTE já perguntar os 4 dados essenciais de qualificação: (a) bairro e cidade em BH ou RMBH, (b) tipo de imóvel (casa, apartamento ou comércio), (c) principal preocupação com segurança (ex.: prevenção a roubos, visão noturna, acesso pelo celular) e (d) faixa de investimento pretendida. NUNCA ofereça horários de agenda, mencione taxas ou preços antes de receber as respostas dos 4 dados essenciais!`
+        : `LEMBRETE OBRIGATÓRIO (PRIMEIRA MENSAGEM): Esta é a sua primeira mensagem neste atendimento. Você DEVE se apresentar como a ${(aiConfig as any).nome_assistente || 'Nat'}, assistente virtual da ${tenant.nome_empresa || 'WarNat Tech'}, e avisar com simpatia que se o cliente preferir pode solicitar o atendimento por um atendente/especialista humano a qualquer momento.`;
       messagesToSend.push({
         role: 'system',
-        content: `LEMBRETE OBRIGATÓRIO (PRIMEIRA MENSAGEM): Esta é a sua primeira mensagem neste atendimento. Você DEVE se apresentar como a ${aiConfig.nome_assistente || 'Nat'}, assistente virtual da ${tenant.nome_empresa || 'WarNat Tech'}, e avisar com simpatia que se o cliente preferir pode solicitar o atendimento por um atendente/especialista humano a qualquer momento.`
+        content: lembreteConteudo
       });
     }
 
@@ -1743,7 +1747,11 @@ REGRAS OBRIGATÓRIAS PARA ESTA MENSAGEM DE RETOMADA:
 
     const isAppointmentReq = allUserText.includes('agendar visita') || allUserText.includes('marcar visita') || allUserText.includes('horário livre') || allUserText.includes('horario livre') || allUserText.includes('vaga na agenda') || allUserText.includes('outro dia') || allUserText.includes('outra data') || allUserText.includes('outro sábado') || allUserText.includes('outro sabado') || allUserText.includes('mais pra frente') || allUserText.includes('mais para frente');
     const isSchedulingTenant = (aiConfig as any).objetivo_funil === 'agendamento' || (!(aiConfig as any).objetivo_funil && !String(tenant.nome_empresa).toLowerCase().includes('velas') && (aiConfig as any).tipo_negocio !== 'produtos');
-    const needsSlots = isSchedulingTenant && (isClearlyNew || isClearlyMaintenance || isAppointmentReq) && !isCancel && !bookingReq && !isConsultar;
+    // Para WarNat Tech: só dispara slots se a qualificação (4 dados) já tiver sido coletada
+    const isWarNatTechTenant = String((tenant as any)?.nome_empresa || '').toLowerCase().includes('warnat tech');
+    const qualificacaoCompleta = (session as any)?.dados_lead?.tipo_imovel && (session as any)?.dados_lead?.bairro_cidade;
+    const needsSlots = isSchedulingTenant && (isClearlyNew || isClearlyMaintenance || isAppointmentReq) && !isCancel && !bookingReq && !isConsultar
+      && (!isWarNatTechTenant || qualificacaoCompleta);
 
     if (needsSlots) {
       console.log(`[AIEngine] Gatilho proativo: Cliente qualificado para horários. Consultando agenda em tempo real...`);
