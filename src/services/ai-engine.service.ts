@@ -246,7 +246,7 @@ export const AI_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'salvar_lead_qualificado',
-      description: 'Salva os dados de qualificação comercial do lead (nome, serviço de interesse, bairro/cidade, urgência e detalhes) e dispara notificação estruturada para a equipe técnica.',
+      description: 'Salva os dados de qualificação comercial do lead (nome, serviço de interesse, bairro/cidade em BH ou RMBH, tipo de imóvel, principal preocupação, faixa de investimento pretendida, urgência e detalhes) e dispara notificação estruturada para a equipe técnica.',
       parameters: {
         type: 'object',
         properties: {
@@ -260,7 +260,19 @@ export const AI_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           bairro_cidade: {
             type: 'string',
-            description: 'Bairro e cidade onde o serviço será realizado (ex: Barreiro / Belo Horizonte)'
+            description: 'Bairro e cidade onde o serviço será realizado em BH ou RMBH'
+          },
+          tipo_imovel: {
+            type: 'string',
+            description: 'Tipo de imóvel onde será realizado o serviço (ex: casa, apartamento ou comércio)'
+          },
+          principal_preocupacao: {
+            type: 'string',
+            description: 'Principal preocupação ou foco do cliente (ex: prevenção a roubos, visão noturna, acesso pelo celular)'
+          },
+          faixa_investimento: {
+            type: 'string',
+            description: 'Faixa de investimento pretendida (ex: linha econômica, intermediária, avançada, até R$ 1.500, R$ 2.000 a 4.000)'
           },
           urgencia: {
             type: 'string',
@@ -374,6 +386,8 @@ export const AI_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   }
 ];
 
+export const QUALIFICATION_TOOL = AI_TOOLS[0];
+
 export class AiEngineService {
   private openai: OpenAI | null = null;
 
@@ -398,6 +412,9 @@ export class AiEngineService {
       nome,
       servico,
       bairro_cidade,
+      tipo_imovel = '',
+      principal_preocupacao = '',
+      faixa_investimento = '',
       urgencia = 'media',
       detalhes = ''
     } = args;
@@ -405,11 +422,14 @@ export class AiEngineService {
     console.log(`🎯 [AIEngine] Executando tool salvar_lead_qualificado para ${nome} (${remoteJid})...`);
 
     const structuredLead: StructuredLeadData = {
-      nome: nome.trim(),
-      servico: servico.trim(),
-      bairro_cidade: bairro_cidade.trim(),
+      nome: (nome || '').trim(),
+      servico: (servico || '').trim(),
+      bairro_cidade: (bairro_cidade || '').trim(),
+      tipo_imovel: tipo_imovel ? String(tipo_imovel).trim() : '',
+      principal_preocupacao: principal_preocupacao ? String(principal_preocupacao).trim() : '',
+      faixa_investimento: faixa_investimento ? String(faixa_investimento).trim() : '',
       urgencia,
-      detalhes: detalhes ? detalhes.trim() : '',
+      detalhes: detalhes ? String(detalhes).trim() : '',
       qualificado_em: new Date().toISOString()
     };
 
@@ -418,20 +438,26 @@ export class AiEngineService {
       `UPDATE chat_sessions 
        SET dados_lead = $1::jsonb, client_name = $2, etapa_funil = 'qualificacao', last_interaction = NOW()
        WHERE id = $3;`,
-      [JSON.stringify(structuredLead), nome.trim(), sessionId]
+      [JSON.stringify(structuredLead), (nome || '').trim(), sessionId]
     );
 
     // 2. Atualiza dossiê permanente
     await CustomerService.findOrCreateProfile(tenantId, remoteJid, {
-      nome: nome.trim(),
+      nome: (nome || '').trim(),
       telefone: remoteJid.replace(/@.*$/, ''),
-      endereco_completo: bairro_cidade.trim()
+      endereco_completo: (bairro_cidade || '').trim()
     });
+
+    let perfilResumo = `Lead qualificado para ${(servico || '').trim()} em ${(bairro_cidade || '').trim()} (Urgência: ${urgencia}).`;
+    if (structuredLead.tipo_imovel) perfilResumo += ` Imóvel: ${structuredLead.tipo_imovel}.`;
+    if (structuredLead.principal_preocupacao) perfilResumo += ` Foco/Preocupação: ${structuredLead.principal_preocupacao}.`;
+    if (structuredLead.faixa_investimento) perfilResumo += ` Investimento pretendido: ${structuredLead.faixa_investimento}.`;
+    if (detalhes) perfilResumo += ` Detalhes: ${detalhes.trim()}`;
 
     await CustomerService.appendToDossier(
       tenantId,
       remoteJid,
-      `Lead qualificado para ${servico.trim()} em ${bairro_cidade.trim()} (Urgência: ${urgencia}). Detalhes: ${detalhes || 'N/A'}`,
+      perfilResumo,
       { ultimo_lead: structuredLead }
     );
 
@@ -452,6 +478,11 @@ export class AiEngineService {
       const cleanPhone = notifPhone.replace(/\D/g, '');
       const clientPhone = remoteJid.replace(/@.*$/, '').replace(/\D/g, '');
 
+      let camposExtras = '';
+      if (structuredLead.tipo_imovel) camposExtras += `\n🏠 *Imóvel:* ${structuredLead.tipo_imovel}`;
+      if (structuredLead.principal_preocupacao) camposExtras += `\n🎯 *Preocupação:* ${structuredLead.principal_preocupacao}`;
+      if (structuredLead.faixa_investimento) camposExtras += `\n💰 *Investimento Pretendido:* ${structuredLead.faixa_investimento}`;
+
       const alertMessage =
 `🚨 *NOVO LEAD QUALIFICADO (IA)* 🚨
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -459,7 +490,7 @@ export class AiEngineService {
 👤 *Cliente:* ${nome}
 📱 *WhatsApp:* +${clientPhone}
 🛠️ *Serviço:* ${servico}
-📍 *Local:* ${bairro_cidade}
+📍 *Local:* ${bairro_cidade}${camposExtras}
 ⚡ *Urgência:* ${urgencia.toUpperCase()}
 📝 *Detalhes:* ${detalhes || 'Nenhuma observação extra informada.'}
 ⏰ *Data/Hora:* ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}

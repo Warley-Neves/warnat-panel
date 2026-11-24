@@ -119,6 +119,10 @@ export class PromptCompilerService {
       isCftv = false;
     }
 
+    const isWarNatTech = nomeEmpresaLower.includes('warnat tech') || 
+                         nomeEmpresaLower.includes('warnat-tech') || 
+                         tenant?.id === '3300fe19-9979-4339-969f-741f6e6bbe15';
+
     const sobreEmpresa = aiConfig.sobre_empresa || 
       (isCftv
         ? `Especialistas em Sistemas de Câmeras de Segurança e CFTV (Residencial, Comercial e Condominial) em ${regiaoAtendimento}, com atendimento técnico ágil liderado por ${responsavelTecnico}.`
@@ -409,6 +413,37 @@ Durante a conversa, identifique com naturalidade:
 VOCÊ DEVE CHAMAR A FERRAMENTA "salvar_lead_qualificado"! Ela registra o cliente no CRM e notifica a equipe imediatamente no WhatsApp.`;
     }
 
+    const regraQualificacaoTexto = isWarNatTech
+      ? `================================================================================
+REGRA CRÍTICA DE QUALIFICAÇÃO OBRIGATÓRIA DA WARNAT TECH (4 DADOS ESSENCIAIS)
+================================================================================
+Antes do especialista técnico ${responsavelTecnico} aparecer para a visita técnica ou atendimento presencial/humano, o fluxo automático DEVE coletar com naturalidade estes 4 dados essenciais de qualificação:
+1. Bairro/cidade em BH ou RMBH onde será realizada a instalação ou manutenção.
+2. Tipo de imóvel: se é casa, apartamento ou comércio/empresa.
+3. Principal preocupação com a segurança: ex.: prevenção a roubos/invasão, visão noturna colorida, acesso/monitoramento pelo celular, pontos cegos, etc.
+4. Faixa de investimento pretendida: para orientar a solução ideal (linha econômica/custo-benefício vs intermediária vs alta definição/avançada).
+
+DIRETRIZ DE CONDUTA NO DIÁLOGO:
+- Conduza essa coleta com simpatia, naturalidade e fluidez ao longo do atendimento (JAMAIS faça um interrogatório robótico ou envie todas as perguntas coladas de uma só vez!).
+- Ao entender o que o cliente precisa e antes de fechar a visita, pergunte pelo local e tipo de imóvel (ex: "Para eu verificar direitinho o deslocamento e o projeto: em qual bairro e cidade seria? É casa, apartamento ou comércio?").
+- Em seguida, pergunte sobre o foco principal e a faixa de investimento (ex: "E qual é o seu principal foco hoje? Visão noturna, acesso pelo celular, prevenção a invasões? Tem alguma faixa de investimento que você está planejando?").
+- Identifique também o NOME do cliente e o nível de urgência.
+
+👉 Assim que você souber o Nome, o Serviço e as informações essenciais coletadas (Bairro/Cidade, Tipo de Imóvel, Principal Preocupação e Faixa de Investimento):
+VOCÊ DEVE CHAMAR A FERRAMENTA "salvar_lead_qualificado"! Ela registra o cliente no CRM com todos os 4 dados essenciais e notifica a equipe técnica imediatamente no WhatsApp antes da visita técnica.`
+      : `================================================================================
+REGRA CRÍTICA DE QUALIFICAÇÃO OBRIGATÓRIA (TOOL CALLING)
+================================================================================
+Durante a conversa, identifique com naturalidade:
+1. O NOME do cliente.
+2. O SERVIÇO exato (Nova Instalação CFTV ou Manutenção de Câmeras).
+3. A LOCALIZAÇÃO (bairro e cidade onde será o serviço).
+4. O NÍVEL DE URGÊNCIA (baixa, media, alta ou imediata).
+5. DETALHES relevantes (quantidade de câmeras, defeito relatado, etc.).
+
+👉 Assim que você souber o Nome, o Serviço e o Bairro/Cidade do cliente:
+VOCÊ DEVE CHAMAR A FERRAMENTA "salvar_lead_qualificado"! Ela registra o cliente no CRM e notifica a equipe técnica imediatamente.`;
+
     return `Você é a ${nomeAssistente}, assistente virtual da ${nomeEmpresa} - Especialistas em Sistemas de Câmeras de Segurança e CFTV em ${regiaoAtendimento}.
 Você conversa no WhatsApp de forma natural, acolhedora, profissional, educada e ágil, em nome da equipe do responsável técnico e especialista ${responsavelTecnico}.
 
@@ -501,7 +536,8 @@ PASSO 2: O CLIENTE CONFIRMA QUE É NOVA INSTALAÇÃO (CÂMERAS NOVAS DO ZERO):
 
 No momento, temos disponibilidade na nossa agenda para *[Dia da Semana] ([Data])* às *[Horário 1]* ou às *[Horário 2]*. Caso abra uma vaga em outro dia ou horário, a gente entra em contato com você!
 
-Algum desses horários fica bom para você?"
+Algum desses horários fica bom para você?"${isWarNatTech ? `
+- DIRETRIZ DE QUALIFICAÇÃO WARNAT TECH: Enquanto combina ou logo após apresentar os horários da visita técnica de avaliação gratuita, aproveite para coletar os 4 dados essenciais (bairro/cidade em BH ou RMBH, tipo de imóvel, principal preocupação e faixa de investimento pretendida) antes do especialista ${responsavelTecnico} aparecer no local.` : ''}
 
 PASSO 3: O CLIENTE CONFIRMA QUE É MANUTENÇÃO / REPARO (CÂMERAS EXISTENTES):
 (Exemplos: "É manutenção", "Minhas câmeras pararam de gravar", "Quero conserto de câmeras", "Trocar DVR/câmera queimada")
@@ -511,7 +547,8 @@ PASSO 3: O CLIENTE CONFIRMA QUE É MANUTENÇÃO / REPARO (CÂMERAS EXISTENTES):
 
 Consultei a agenda da nossa equipe técnica e no momento temos disponibilidade para o *[Dia da Semana] ([Data])* às *[Horário 1]* ou às *[Horário 2]*. Caso abra uma vaga em outro dia ou horário, a gente entra em contato com você!
 
-Qual desses horários funciona melhor para você?"
+Qual desses horários funciona melhor para você?"${isWarNatTech ? `
+- DIRETRIZ DE QUALIFICAÇÃO WARNAT TECH: Enquanto combina ou logo após apresentar os horários da visita técnica de manutenção, colete os 4 dados essenciais (bairro/cidade em BH ou RMBH, tipo de imóvel, defeito/preocupação e faixa de investimento pretendida) antes do especialista ${responsavelTecnico} aparecer no local.` : ''}
 
 PASSO 4: SE O CLIENTE SOLICITAR QUALQUER SERVIÇO FORA DO ESCOPO DE CÂMERAS:
 (Exemplos: Pintura, buffet, eletrodomésticos, alarmes de carros, móveis, etc.)
@@ -573,18 +610,7 @@ REGRAS RÍGIDAS DE OURO DA AGENDA (ZERO CONFLITO / ANTI-CHOQUE)
    - Logo depois de confirmar um agendamento, peça de forma simpática o ENDEREÇO COMPLETO do local (rua, número, bairro e ponto de referência) e o nome completo.
    - Assim que o cliente informar o endereço, chame a ferramenta "save_client_details" para gravar na agenda e no CRM, e confirme que está tudo anotado.
 
-================================================================================
-REGRA CRÍTICA DE QUALIFICAÇÃO OBRIGATÓRIA (TOOL CALLING)
-================================================================================
-Durante a conversa, identifique com naturalidade:
-1. O NOME do cliente.
-2. O SERVIÇO exato (Nova Instalação CFTV ou Manutenção de Câmeras).
-3. A LOCALIZAÇÃO (bairro e cidade onde será o serviço).
-4. O NÍVEL DE URGÊNCIA (baixa, media, alta ou imediata).
-5. DETALHES relevantes (quantidade de câmeras, defeito relatado, etc.).
-
-👉 Assim que você souber o Nome, o Serviço e o Bairro/Cidade do cliente:
-VOCÊ DEVE CHAMAR A FERRAMENTA "salvar_lead_qualificado"! Ela registra o cliente no CRM e notifica a equipe técnica imediatamente.
+${regraQualificacaoTexto}
 
 REGRAS DE FUNCIONAMENTO DO TENANT:
 ${regrasAgendamentoTexto}

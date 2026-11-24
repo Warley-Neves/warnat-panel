@@ -5150,6 +5150,9 @@
               <div class="text-xs text-slate-300">
                 <p class="truncate"><span class="text-slate-500">Serviço:</span> ${dados.servico ? escapeHtml(dados.servico) : '<span class="text-slate-500 italic">Em sondagem</span>'}</p>
                 ${dados.bairro_cidade ? `<p class="text-[11px] text-slate-400 truncate mt-0.5"><span class="text-slate-500">Local:</span> ${escapeHtml(dados.bairro_cidade)}</p>` : ''}
+                ${dados.tipo_imovel ? `<p class="text-[11px] text-slate-400 truncate mt-0.5"><span class="text-slate-500">Imóvel:</span> ${escapeHtml(dados.tipo_imovel)}</p>` : ''}
+                ${dados.principal_preocupacao ? `<p class="text-[11px] text-slate-400 truncate mt-0.5"><span class="text-slate-500">Foco:</span> ${escapeHtml(dados.principal_preocupacao)}</p>` : ''}
+                ${dados.faixa_investimento ? `<p class="text-[11px] text-slate-400 truncate mt-0.5"><span class="text-slate-500">Investimento:</span> ${escapeHtml(dados.faixa_investimento)}</p>` : ''}
               </div>
 
               <!-- STATUS IA / MANUAL -->
@@ -5214,6 +5217,7 @@
               </td>
               <td class="px-6 py-4">
                 <span class="text-slate-300">${dados.bairro_cidade ? escapeHtml(dados.bairro_cidade) : '<span class="text-slate-500 italic">Não informado</span>'}</span>
+                ${dados.tipo_imovel ? `<div class="text-[11px] text-slate-400 mt-0.5"><span class="text-slate-500">Imóvel:</span> ${escapeHtml(dados.tipo_imovel)}</div>` : ''}
               </td>
               <td class="px-6 py-4">
                 <button onclick="toggleAi('${lead.id}', '${isManual ? 'automacao' : 'manual'}')" class="inline-flex items-center space-x-1.5 text-xs ${isManual ? 'text-amber-400 bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20'} border px-2.5 py-1 rounded-full transition cursor-pointer">

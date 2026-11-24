@@ -476,12 +476,20 @@ class SettingsStore {
     const r = await this.pool.query('SELECT tenant_id, config, version, updated_at, updated_by FROM warnat_panel.tenant_settings WHERE tenant_id = $1', [tenantId]);
     return r.rows[0] || null;
   }
+
+  /** Encerra o pool de conexões (usado em testes). */
+  async close() {
+    if (this.pool) {
+      await this.pool.end().catch(() => {});
+    }
+  }
 }
 
 const store = new SettingsStore();
 
 module.exports = {
   store,
+  closeStore: () => store.close(),
   DEFAULT_TENANT,
   DAY_NAMES,
   DAY_SHORT,

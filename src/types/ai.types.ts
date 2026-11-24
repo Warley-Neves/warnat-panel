@@ -8,6 +8,9 @@ export interface LeadQualificationArgs {
   nome: string;
   servico: string;
   bairro_cidade: string;
+  tipo_imovel?: string;
+  principal_preocupacao?: string;
+  faixa_investimento?: string;
   urgencia?: LeadUrgency;
   detalhes?: string;
 }
@@ -16,6 +19,9 @@ export interface StructuredLeadData {
   nome: string;
   servico: string;
   bairro_cidade: string;
+  tipo_imovel?: string;
+  principal_preocupacao?: string;
+  faixa_investimento?: string;
   urgencia: LeadUrgency;
   detalhes: string;
   qualificado_em: string;
